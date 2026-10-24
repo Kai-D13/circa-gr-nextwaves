@@ -98,7 +98,7 @@ muts = [
 
 
 def run_tests(base):
-    pr = subprocess.Popen(["node", "--test", "tests/*.test.js"], cwd=base, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+    pr = subprocess.Popen(["node", "--test", "--test-timeout=60000", "tests/*.test.js"], cwd=base, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
     try:
         out, _ = pr.communicate(timeout=TIMEOUT_S)
         return pr.returncode, out

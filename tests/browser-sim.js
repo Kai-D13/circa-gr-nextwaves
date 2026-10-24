@@ -157,8 +157,10 @@ function createBrowser(server, opts = {}) {
       setItem: (k, v) => t.ss.set(k, String(v)),
       removeItem: (k) => t.ss.delete(k),
     };
+    // Trang đã rời đi (tải lại / điều hướng): như trình duyệt thật, lời gọi mới không đi, lời gọi đang chờ không bao giờ trả về.
     win.fetch = (url, init) =>
       new Promise((resolve, reject) => {
+        if (c.dead) return;
         const i = init || {};
         const sig = i.signal || null;
         if (sig && sig.aborted) return reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
@@ -168,9 +170,12 @@ function createBrowser(server, opts = {}) {
         new Promise((r) => setImmediate(r))
           .then(() => server(req))
           .then((r) => {
+            if (c.dead) return;
             const text = r.json === undefined ? "" : JSON.stringify(r.json);
             resolve({ ok: r.status >= 200 && r.status < 300, status: r.status, text: async () => text });
-          }, reject);
+          }, (err) => {
+            if (!c.dead) reject(err);
+          });
       });
     win.chrome = {
       runtime: { sendMessage: (msg) => (c.dead ? new Promise(() => {}) : sendMessage(t, msg)) },
@@ -188,12 +193,14 @@ function createBrowser(server, opts = {}) {
       tuning,
       ui: {
         createPanel: () => ({
+          // Trang đã rời đi không vẽ được lên tab (không để khung / nút của trang cũ đè trang mới).
           show: (v) => {
+            if (c.dead) return;
             t.view = v;
             t.views.push(v);
           },
           hide: () => {
-            t.view = null;
+            if (!c.dead) t.view = null;
           },
         }),
       },

@@ -603,7 +603,8 @@ test("Lượt 'Xác nhận nhận hàng' của phiếu gửi khác → bỏ qua,
     srv.st.nwReceived = true;
     const focusBefore = pos.focusCount;
     nw.post({ mark: "cgn/nw-hook", type: "receive-scan", payload: { envId: "STG", shipmentId: "00000000-0000-0000-0000-000000000099", httpStatus: 200, response: {}, sentEpcs: 3 } });
-    await until(() => viewTitle(nw) === "Lượt nhận vừa rồi thuộc phiếu gửi khác");
+    // Chờ theo hành vi (nhật ký), không theo tiêu đề khung: lần đọc lại đang chạy có thể vẽ đè khung "đang có N UID đã nhận".
+    await until(() => b.session(KEY).log.some((l) => l.type === "receive_scan_other_shipment"));
     await settle();
     assert.equal(b.session(KEY).state, "nw_ready");
     assert.equal(b.session(KEY).scanOk, undefined);
