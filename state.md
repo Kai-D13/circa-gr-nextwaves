@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **24/10/2026 (lần 10, PM audit mã)**. Giai đoạn: **batch v0.1-staging trên nhánh `batch/v0.1-staging` (gói `FF5CD95B`), chưa qua gate merge/ghi; T1 chỉ đọc có thể thử trên staging**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **24/10/2026 (lần 11, dev sửa theo PM audit)**. Giai đoạn: **v0.1.1 trên nhánh `batch/v0.1-staging` (commit `d124453`, gói `D8CD9AFD`), chờ PM audit lại; chưa qua gate merge / ghi; T1 chỉ đọc thử bằng v0.1.1**. Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -43,6 +43,11 @@ Cập nhật: **24/10/2026 (lần 10, PM audit mã)**. Giai đoạn: **batch v0.
     - Service worker và hook nạp được trên Edge thật.
   - Chưa thử với dữ liệu thật phần sau khi nhận (K1), và chưa kiểm hợp đồng ghi W1 (P1).
 - **Lần 10 (24/10, PM audit):** PM chạy lại 48/48 test local; ZIP và bản giải nén khớp 16/16 file của `a08d541`. Audit `docs/pm/AUDIT-BATCH-v0.1-STG-20261024.md` kết luận **chưa qua gate merge/ghi**: tìm PO trên tập ứng viên có thể chưa đầy đủ, UID có sẵn sai lô vẫn bị coi đã điền, chế độ `auto` không có phép từng lượt, kiểm cửa hàng trực tiếp GR chưa bắt buộc đủ trường, và lease một tab có thể hết hạn khi PUT còn chạy. K1 và W1 thật vẫn thiếu bằng chứng.
+- **Lần 11 (24/10 khuya, dev sửa):** v0.1.1 `d124453`, gói `D8CD9AFD` (`C:\circa-gr-nextwaves-v0.1.1`). Báo cáo `docs/dev/FIX-AUDIT-BATCH-v0.1-STG.md`.
+  - **Bỏ chế độ ghi lâu dài.** Ghi W1 chỉ khi operator **cấp phép một lần cho một mã GR** trong popup (30 phút) và bấm nút mang mã kế hoạch. Production chỉ đọc.
+  - Đã sửa P1.1–P1.5 và P2.1–P2.3; khoá ghi P3 (SO nhiều GR / Nextwaves nhiều đơn cùng SO).
+  - 73 test, đột biến 32/32 (dev tự báo; `scripts/mutate-v0.1.1.py` để PM chạy lại).
+  - Vẫn chưa có bằng chứng staging thật: K1, W1, hợp đồng "đã nhận" theo đường inter-tenant.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -381,6 +386,14 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
   - Thử trên PO00006750 / GR03878 nếu được; "Build và test chính xác".
   - Dev build batch v0.1-staging (nhánh `batch/v0.1-staging`, commit `a08d541`, gói `FF5CD95B`, giải nén `C:\circa-gr-nextwaves-v0.1.0`). Báo cáo: `docs/dev/BATCH-v0.1-STG.md`.
 
+- 24/10/2026 (lần 10–11):
+  - PM audit `a08d541`: chưa cho merge / ghi; 5 finding P1, 3 finding P2; chốt P2 nhận thiếu, P3 nhiều GR, P4, P6, P7.
+  - Dev sửa → v0.1.1 `d124453` (gói `D8CD9AFD`). Quyết định thiết kế để PM duyệt:
+    - cấp phép ghi một lần / một GR / 30 phút, chỉ từ popup;
+    - lease 90 s > hết giờ PUT 30 s (= `grpc-timeout` của app POS);
+    - hạ nhiệt 60 s sau kết quả ghi không rõ;
+    - bằng chứng "đã nhận" = lượt 2xx của phiên + biên nhận mới (cấu trúc `receipts` theo mẫu thật PO88508353) + `receivedEpcs` phiếu gửi.
+
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
 2. Operator mở session PM Codex bằng `docs/PROMPT-PM-CODEX.md`. PM chốt hướng §3 / §6 và ra spec v0.1 staging chia batch.
@@ -393,7 +406,19 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-11. **Hiện hành (sau batch v0.1, 24/10 khuya):**
+12. **Hiện hành (sau v0.1.1, 24/10 khuya):**
+    - **PM:** audit lại theo `docs/dev/FIX-AUDIT-BATCH-v0.1-STG.md`.
+      - DIFF `git diff a08d541 d124453 -- src tests package.json`.
+      - Chạy lại `npm test` và (tuỳ chọn) `python -I scripts/mutate-v0.1.1.py` trên nhánh.
+      - Duyệt các quyết định thiết kế lần 11 (§8).
+    - **Operator — T1 chỉ đọc bằng v0.1.1:**
+      - cài `C:\circa-gr-nextwaves-v0.1.1`, Staging, **không cấp phép điền**, mở GR03878;
+      - chụp hai khung (khung Nextwaves có dòng `total`), Copy response `inter-tenant-orders/receiving?…q=SOBD1593858`.
+    - Operator / Nextwaves / Buymed gỡ **K1** → lượt nhận thật. Dev cần các response sau để thay phần dựng lại:
+      - 2xx `receive-scan`;
+      - `purchase-orders/<id>` và `inter-tenant-shipments/<id>` sau khi nhận.
+    - W1: chỉ khi gate trên đạt và PM audit lại. Operator chỉ định 1 GR staging rồi cấp phép một lần trong popup.
+11. (cũ, thay bằng mục 12) Sau batch v0.1:
      - PM đã audit nhánh `batch/v0.1-staging` theo `docs/pm/AUDIT-BATCH-v0.1-STG-20261024.md`; **chưa cho merge hoặc ghi POS**. Dev sửa P1.1–P1.5, báo gate để PM audit lại.
     - Operator thử **T1 (chỉ đọc)** trên laptop này: cài `C:\circa-gr-nextwaves-v0.1.0`, Staging, điền phiếu = Tắt, mở GR03878 (§6 file báo cáo).
     - Operator / Nextwaves / Buymed gỡ **K1** (hoặc tạo SO thử có dòng theo đơn vị gốc) → **T3**: lượt nhận thành công thật.

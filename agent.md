@@ -130,9 +130,10 @@ src/                 thư mục extension (Load unpacked / nội dung ZIP)
   lib/               logic thuần, chạy được cả Node test: env, keys, pos-model, nw-model, match, plan, apply
   pos/               pos-hook.js (MAIN, chỉ quan sát), pos-content.js (luồng POS + W1)
   nw/                nw-hook.js (MAIN, chỉ quan sát), nw-content.js (tìm / kiểm đơn, đọc kết quả nhận)
-  popup/, ui/        cấu hình môi trường + chế độ điền; khung trạng thái Shadow DOM
-tests/               node --test: lib, hook (node:vm), chạy trọn luồng trên trình duyệt giả (browser-sim.js)
+  popup/, ui/        cấu hình môi trường + cấp phép điền từng lần; khung trạng thái Shadow DOM
+tests/               node --test: lib, resolve, hook (node:vm), chạy trọn luồng trên trình duyệt giả (browser-sim.js)
 scripts/pack.py      src/ → dist/circa-gr-nextwaves-v<ver>.zip + SHA-256 (8 ký tự đầu = mã gói)
+scripts/mutate-*.py  đột biến có chủ đích cho các hàng rào (chạy trên bản sao tạm, không sửa src/)
 dist/                gói phát hành (không đưa vào git); bản giải nén để cài: C:\circa-gr-nextwaves-v<ver>
 ```
 

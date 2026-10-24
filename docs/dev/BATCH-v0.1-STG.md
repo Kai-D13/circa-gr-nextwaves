@@ -1,5 +1,7 @@
 # Batch v0.1-staging — báo cáo dev gửi PM audit (24/10/2026)
 
+> **Đã thay bằng v0.1.1** (`d124453`, gói `D8CD9AFD`) sau PM audit — xem `docs/dev/FIX-AUDIT-BATCH-v0.1-STG.md`. Không cài bản `FF5CD95B` nữa; phần "chế độ điền phiếu" (writeMode) dưới đây đã bỏ, thay bằng cấp phép từng lần.
+
 Người viết: dev-team. Mã nằm trên nhánh **`batch/v0.1-staging`** (commit `a08d541`), **chưa merge `main`**, chờ PM audit.
 Batch này làm theo chỉ đạo trực tiếp của operator ngày 24/10 ("Build và test chính xác", thử trên PO00006750 / GR03878).
 Nó đi trước spec v0.2 của PM. Logic theo `docs/dev/LOGIC-v0.3.md` §9 và các quyết định a–d của operator (`state.md` §8, lần 9).
