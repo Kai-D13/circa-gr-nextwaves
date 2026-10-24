@@ -34,6 +34,9 @@ function createBrowser(server, opts = {}) {
   let nextTabId = 1;
   let bgListener = null;
   const installedListeners = [];
+  // Sau close(): không mở tab / nạp trang, không tạo timer, không chuyển message hay sự kiện storage.
+  // (Một message background đang dở lúc test kết thúc có thể mở tab mới → timer mới không ai dọn → tiến trình test sống mãi.)
+  let closed = false;
 
   const storage = {
     get: async (keys) => {
@@ -48,7 +51,7 @@ function createBrowser(server, opts = {}) {
         changes[k] = { oldValue: clone(store[k]), newValue: clone(v) };
         store[k] = clone(v);
       }
-      for (const l of storageListeners.slice()) setImmediate(() => l(clone(changes), "local"));
+      if (!closed) for (const l of storageListeners.slice()) setImmediate(() => !closed && l(clone(changes), "local"));
     },
   };
 
@@ -56,6 +59,7 @@ function createBrowser(server, opts = {}) {
     const track = (h) => (owner.add(h), allTimers.add(h), h);
     return {
       setTimeout: (fn, ms, ...a) => {
+        if (closed) return null;
         const h = setTimeout(() => {
           owner.delete(h);
           allTimers.delete(h);
@@ -64,7 +68,7 @@ function createBrowser(server, opts = {}) {
         return track(h);
       },
       clearTimeout: (h) => clearTimeout(h),
-      setInterval: (fn, ms) => track(setInterval(fn, ms)),
+      setInterval: (fn, ms) => (closed ? null : track(setInterval(fn, ms))),
       clearInterval: (h) => clearInterval(h),
     };
   }
@@ -73,10 +77,11 @@ function createBrowser(server, opts = {}) {
     // Như Chrome: content script có sender.tab + url + origin của trang; popup không có tab.
     const sender = tab ? { tab: { id: tab.id, url: tab.url }, url: tab.url, origin: new URL(tab.url).origin } : { url: "chrome-extension://cgn-test/popup/popup.html" };
     // Test có thể thay câu trả lời của background cho một số message (mô phỏng background lỗi).
+    if (closed) return new Promise(() => {});
     const forced = opts.interceptBg ? opts.interceptBg(clone(msg), tab) : undefined;
     if (forced !== undefined) return Promise.resolve(clone(forced));
     // Như IPC thật: message tới background ở lượt sự kiện sau (macrotask), không phải ngay trong microtask.
-    return new Promise((resolve) => setImmediate(() => bgListener(clone(msg), sender, (resp) => resolve(clone(resp)))));
+    return new Promise((resolve) => setImmediate(() => !closed && bgListener(clone(msg), sender, (resp) => resolve(clone(resp)))));
   }
 
   // ---- background ----
@@ -125,6 +130,7 @@ function createBrowser(server, opts = {}) {
   function load(t) {
     kill(t.ctx);
     t.view = null;
+    if (closed) return;
     const files = isolatedScriptsFor(t.url);
     if (!files) return;
     const c = { dead: false, timers: new Set(), listeners: [] };
@@ -244,6 +250,7 @@ function createBrowser(server, opts = {}) {
     // Như chrome.runtime.onInstalled (vd. {reason: "update", previousVersion}).
     fireInstalled: (details) => installedListeners.forEach((l) => l(clone(details))),
     close: () => {
+      closed = true;
       OPEN.delete(api);
       for (const t of tabs.values()) kill(t.ctx);
       for (const h of allTimers) {
