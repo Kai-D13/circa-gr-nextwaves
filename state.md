@@ -229,6 +229,7 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
 - R7. Staging không thử được chuỗi SO (PO tạo tay). Đường SO chỉ được chứng minh ở production.
 - R8. Unit Nextwaves trước khi nhận chỉ có `productTitle` + `lineId` dòng giao, không có productId. Gán theo tên là rủi ro, cần API khác (D3).
 - R9. Dấu vân tay E không phân biệt được hai đơn trùng hệt hàng và số lượng → phải để người dùng chọn.
+- R10. Kiểm trực tiếp mẫu inter-tenant staging 24/10: `units[].lineId` của 5 nhóm UID không trùng bất kỳ `lines[].lineId` nào trong 3 dòng PO; `units[]` không có product ID/SKU/lô. Không được ghép UID với dòng PO bằng hai `lineId` này hoặc tên hàng. Cần D3 chỉ ra quan hệ shipment line → sản phẩm/lô trước khi áp UID tự động.
 
 ## 8. Nhật ký quyết định
 - 20/10/2026: phân tích capture luồng nhận hàng; brainstorm chuỗi khoá ba bên.
@@ -250,3 +251,4 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
 2. Operator mở session PM Codex bằng `docs/PROMPT-PM-CODEX.md`. PM chốt hướng §3 / §6 và ra spec v0.1 staging chia batch.
 3. Operator gửi D1–D5 (staging, Copy response) và trả lời Q1–Q7 khi PM cần.
 4. Dev chỉ dựng `src/`, `tests/`, `scripts/` khi spec batch đầu được duyệt.
+5. PM đã soạn `docs/SPEC-STG-v0.1.md` ngày 24/10/2026: B1 chỉ đọc có thể giao dev; B2–B3 chỉ đọc qua gate; B4 ghi POS có gate và cần operator cho phép từng lần. Các quyết định nghiệp vụ trong spec là **đề xuất**, chưa phải quyết định đã chốt.
