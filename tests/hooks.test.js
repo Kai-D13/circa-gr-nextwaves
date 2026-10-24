@@ -70,7 +70,7 @@ function loadHook(origin, file) {
 
 const flush = () => new Promise((r) => setImmediate(r));
 
-test("pos-hook: báo header xác thực của API POS (chỉ 4 header cần), không trùng; chào lại → gửi lại", () => {
+test("pos-hook: báo header của API POS (chỉ các header cần), không trùng; chào lại → gửi lại", () => {
   const h = loadHook("https://pos.stg.circa-v2.buymed.tech", "pos/pos-hook.js");
   assert.deepEqual(h.posted.map((m) => m.type), ["ready"]);
   for (let i = 0; i < 2; i++) {
@@ -79,13 +79,14 @@ test("pos-hook: báo header xác thực của API POS (chỉ 4 header cần), kh
     x.setRequestHeader("Authorization", "Bearer abc");
     x.setRequestHeader("x-store-id", "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d");
     x.setRequestHeader("x-client-id", "1");
+    x.setRequestHeader("grpc-timeout", "30S");
     x.setRequestHeader("X-Other", "khong-lay");
     x.send();
     assert.equal(x.sent, null, "lời gọi gốc vẫn chạy");
   }
   const auths = h.posted.filter((m) => m.type === "auth");
   assert.equal(auths.length, 1);
-  assert.deepEqual(auths[0], { mark: "cgn/pos-hook", type: "auth", payload: { envId: "STG", headers: { authorization: "Bearer abc", "x-client-id": "1", "x-store-id": "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d" } } });
+  assert.deepEqual(auths[0], { mark: "cgn/pos-hook", type: "auth", payload: { envId: "STG", headers: { authorization: "Bearer abc", "x-client-id": "1", "x-store-id": "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d", "grpc-timeout": "30S" } } });
   // URL ngoài API (tra QR) không báo.
   const q = h.xhr();
   q.open("GET", "/thuocsi-warehouse/qrcode?code=X");

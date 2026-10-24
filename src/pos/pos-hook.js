@@ -1,6 +1,6 @@
 /*
  * MAIN world trên trang POS. CHỈ QUAN SÁT, không gọi API, không ghi gì:
- *  - bắt header xác thực mà chính app POS gửi tới API (authorization, x-client-id, x-store-id) → báo content script;
+ *  - bắt header mà chính app POS gửi tới API (authorization, x-client-id, x-store-id, grpc-timeout…) → báo content script;
  *  - báo kết quả lời gọi đổi trạng thái phiếu nhận (PUT …/goods-receipt/<id>/status/<S>) để biết dược sĩ đã bấm HOÀN THÀNH.
  * Token chỉ đi trong bộ nhớ trang (trang vốn đã có token này); không ghi ra đâu cả.
  */
@@ -12,7 +12,7 @@
   if (!L) return;
   const MARK = "cgn/pos-hook";
   const ENVS = Object.values(L.ENVS);
-  const WANTED = ["authorization", "x-client-id", "x-store-id", "accept-language"];
+  const WANTED = ["authorization", "x-client-id", "x-store-id", "grpc-timeout", "accept-language"];
   let lastAuthKey = "";
   let lastAuth = null;
 
