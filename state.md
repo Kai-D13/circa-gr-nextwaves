@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **24/10/2026 (lần 13, dev sửa P1.6 / P1.7)**. Giai đoạn: **v0.1.2 trên nhánh `batch/v0.1-staging` (mã `6eeb3c0`, đầu nhánh `5d117d2`, gói `525BCE84`), chờ PM audit lại; chưa qua gate merge / ghi; T1 chỉ đọc có thể thử**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **24/10/2026 (lần 14, PM audit v0.1.2)**. Giai đoạn: **v0.1.2 trên nhánh `batch/v0.1-staging` (mã `6eeb3c0`, đầu nhánh `5d117d2`, gói `525BCE84`); P1.6/P1.7 đạt gate source/test local; chưa qua gate merge / ghi; T1 chỉ đọc có thể thử**. Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -53,6 +53,7 @@ Cập nhật: **24/10/2026 (lần 13, dev sửa P1.6 / P1.7)**. Giai đoạn: **
   - P1.6: tìm GR theo SO phải đủ `total / page / limit` và đủ trường từng dòng (không lọc rồi đếm). Thiếu → khoá ghi (đường GR) hoặc dừng (đường `/chi-tiet-so`).
   - P1.7: `session:update` chỉ đổi `state`. Khớp đơn Nextwaves qua `session:nwMatched` một lần, từ trang Nextwaves. Message ghi kiểm nguồn gửi.
   - 78 test; đột biến 47/47 trên `5d117d2` (lần đầu 46/47, đã thêm test). Nextwaves và POS đều **fail closed ở một trang** (chưa phân trang).
+- **Lần 14 (24/10, PM audit v0.1.2):** `docs/pm/AUDIT-v0.1.2-STG-20261024.md`. PM chạy lại 78/78 test, kiểm ZIP và bản cài 17/17 file khớp source; P1.6/P1.7 đóng ở mức source/test local. Dev tự báo 47/47 đột biến, PM chưa chạy lại. T1 chỉ đọc bằng v0.1.2 có thể chạy; chưa qua gate merge/ghi vì K1, response thật sau nhận và W1 còn thiếu. P2.4: trước khi nâng cấp giữ cùng extension ID, cần xử lý phiên active từ bản cũ thiếu khoá.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -415,14 +416,13 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-14. **Hiện hành (sau v0.1.2, 24/10 khuya):**
-    - **PM:** audit lại theo `docs/dev/FIX-AUDIT-v0.1.1-STG.md`.
-      - DIFF `git diff d124453 5d117d2 -- src tests package.json scripts`.
-      - Chạy lại `npm test` và (tuỳ chọn) `python -I scripts/mutate-v0.1.2.py` trên nhánh.
+15. **Hiện hành (sau PM audit v0.1.2, 24/10):**
     - **Operator — T1 chỉ đọc** (dev đề xuất cài v0.1.2 `C:\circa-gr-nextwaves-v0.1.2`; PM cho phép cả v0.1.1):
       - Staging, **không cấp phép điền**, mở GR03878;
       - gửi ảnh khung hai tab, Copy response `inter-tenant-orders/receiving?…q=SOBD1593858` và `goods-receipt/search?query=so_thuocsi=1593858…` (giữ `total / page / limit`, bỏ token).
     - K1 → lượt nhận thật (2xx `receive-scan`, GET PO, GET shipment, GET `/receiving` sau nhận). W1 chỉ sau đó và PM audit lại.
+    - **Dev:** trước khi nâng cấp giữ cùng extension ID, xử lý phiên active từ bản cũ thiếu khoá (P2.4); kiểm thử phiên cũ. Chưa merge mã ghi.
+14. (cũ, thay bằng mục 15) PM audit lại v0.1.2 theo `docs/dev/FIX-AUDIT-v0.1.1-STG.md`; kết quả ở `docs/pm/AUDIT-v0.1.2-STG-20261024.md`.
 13. (cũ, thay bằng mục 14) Sau PM audit lại v0.1.1:
     - **Dev:** sửa P1.6/P1.7 theo `docs/pm/AUDIT-v0.1.1-STG-20261024.md`, gửi DIFF và test nguyên văn; runtime đổi thì version/ZIP/SHA-256 mới. PM audit lại trước merge.
     - **Operator — T1 chỉ đọc bằng v0.1.1:**
