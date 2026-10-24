@@ -1,5 +1,7 @@
 # Spec v0.1 — GR POS ↔ PO Nextwaves, staging
 
+> **Lưu ý 24/10/2026:** Đây là spec ban đầu, trước dữ liệu GR03878 và các quyết định operator a–d. Các đề xuất tìm bằng fingerprint và gõ UID vào ô quét đã được thay bằng khoá `thuocsi_delivery_code`/SO và W1 (`PUT …/detail`); xem `state.md` §8 và `docs/pm/AUDIT-BATCH-v0.1-STG-20261024.md`. Không dùng tài liệu này làm gate ghi hiện hành.
+
 Ngày: 24/10/2026. Trạng thái: **PM giao được B1 chỉ đọc; B2–B4 phụ thuộc gate; chưa cho phép thao tác ghi**. Các quyết định nghiệp vụ ở §2 là đề xuất để operator/stakeholder chốt. Phạm vi thử: POS staging, cửa hàng 2222, Nextwaves `circa-stg`, kho `82bf85e4-84e2-4158-ae27-1aaa6fe1bc57`. Cặp đối chiếu: GR03877 / PO00006745 ↔ PO28237814. Production chỉ là nguồn đối chiếu, chưa là môi trường nghiệm thu.
 
 ## 1. Bằng chứng và giới hạn

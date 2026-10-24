@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **24/10/2026 (lần 9, đã có mã)**. Giai đoạn: **batch v0.1-staging trên nhánh `batch/v0.1-staging` (gói `FF5CD95B`), chờ PM audit + thử staging**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **24/10/2026 (lần 10, PM audit mã)**. Giai đoạn: **batch v0.1-staging trên nhánh `batch/v0.1-staging` (gói `FF5CD95B`), chưa qua gate merge/ghi; T1 chỉ đọc có thể thử trên staging**. Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -42,6 +42,7 @@ Cập nhật: **24/10/2026 (lần 9, đã có mã)**. Giai đoạn: **batch v0.1
     - 48 test, gồm chạy trọn luồng trên trình duyệt giả; đột biến 8/8 bị bắt.
     - Service worker và hook nạp được trên Edge thật.
   - Chưa thử với dữ liệu thật phần sau khi nhận (K1), và chưa kiểm hợp đồng ghi W1 (P1).
+- **Lần 10 (24/10, PM audit):** PM chạy lại 48/48 test local; ZIP và bản giải nén khớp 16/16 file của `a08d541`. Audit `docs/pm/AUDIT-BATCH-v0.1-STG-20261024.md` kết luận **chưa qua gate merge/ghi**: tìm PO trên tập ứng viên có thể chưa đầy đủ, UID có sẵn sai lô vẫn bị coi đã điền, chế độ `auto` không có phép từng lượt, kiểm cửa hàng trực tiếp GR chưa bắt buộc đủ trường, và lease một tab có thể hết hạn khi PUT còn chạy. K1 và W1 thật vẫn thiếu bằng chứng.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -393,7 +394,7 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
 11. **Hiện hành (sau batch v0.1, 24/10 khuya):**
-    - PM audit nhánh `batch/v0.1-staging` theo `docs/dev/BATCH-v0.1-STG.md`; chốt P1–P7 (§7 của file đó). Đạt thì operator merge.
+     - PM đã audit nhánh `batch/v0.1-staging` theo `docs/pm/AUDIT-BATCH-v0.1-STG-20261024.md`; **chưa cho merge hoặc ghi POS**. Dev sửa P1.1–P1.5, báo gate để PM audit lại.
     - Operator thử **T1 (chỉ đọc)** trên laptop này: cài `C:\circa-gr-nextwaves-v0.1.0`, Staging, điền phiếu = Tắt, mở GR03878 (§6 file báo cáo).
     - Operator / Nextwaves / Buymed gỡ **K1** (hoặc tạo SO thử có dòng theo đơn vị gốc) → **T3**: lượt nhận thành công thật.
       Dev cần capture lượt đó (response 2xx `receive-scan`, `purchase-orders/<id>` và `inter-tenant-shipments/<id>` sau khi nhận) để thay phần dựng lại trong test.
