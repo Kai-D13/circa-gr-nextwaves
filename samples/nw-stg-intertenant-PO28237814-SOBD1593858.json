@@ -1,0 +1,290 @@
+{
+    "id": "f930f66d-679a-4ed8-9c8e-b48aea91a8be",
+    "documentId": "b43e161c-81ce-4fbf-b247-1933ef98e10a",
+    "direction": "outbound",
+    "status": "shipped",
+    "linkId": "c486adfc-7b47-4916-8cee-95ba777b4b58",
+    "counterparty": {
+        "tenantSlug": "buymed-stag",
+        "name": "buymed-stag"
+    },
+    "purchaseOrderId": "55bd221f-65de-4a4d-8a77-40c568a6f176",
+    "purchaseOrderNumber": "PO28237814",
+    "lineCount": 3,
+    "totalQuantity": 12,
+    "currency": "VND",
+    "totalAmount": 0,
+    "fulfilmentComplete": true,
+    "needsAttention": false,
+    "createdAt": "2026-10-19T09:20:10.095Z",
+    "sentAt": "2026-10-19T09:20:09.899Z",
+    "acceptedAt": "2026-10-19T09:20:10.119Z",
+    "rejectedAt": null,
+    "shippedAt": "2026-10-19T09:20:30.121Z",
+    "receivedAt": null,
+    "updatedAt": "2026-10-19T09:20:30.263Z",
+    "origin": "seller",
+    "awaitingBuyer": false,
+    "notes": null,
+    "orderedAt": "2026-10-19T09:20:09.899Z",
+    "expectedAt": null,
+    "amounts": {
+        "subtotal": 0,
+        "discountAmount": 0,
+        "taxAmount": 0,
+        "totalAmount": 0
+    },
+    "warehouse": {
+        "id": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57",
+        "name": "CIRCA FLORITA"
+    },
+    "rejectReason": null,
+    "cancelReason": null,
+    "sentByName": "Admin User",
+    "acceptedByName": null,
+    "rejectedByName": null,
+    "cancelledAt": null,
+    "lines": [
+        {
+            "lineId": "cce78af3-573f-4ee7-873b-c00449d50a94",
+            "position": 0,
+            "product": {
+                "sourceProductId": "50812c0e-99a6-4a51-bf30-0d62459c61e9",
+                "sourceProductNumber": "CIRCA-1110",
+                "name": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                "sku": "CIRCA-1110",
+                "gtin": null,
+                "barcode": null,
+                "brand": null,
+                "baseUnit": "hộp",
+                "trackBatch": true
+            },
+            "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+            "mappedProduct": {
+                "id": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+                "title": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                "sku": "CIRCA-1110",
+                "barcode": null
+            },
+            "supplierProductId": "50812c0e-99a6-4a51-bf30-0d62459c61e9",
+            "quantity": 6,
+            "unit": "vỉ",
+            "unitCost": 0,
+            "localQuantity": 12,
+            "localUnit": "hộp",
+            "localUnitPrice": 0,
+            "shippedQuantity": null,
+            "labelledQuantity": null,
+            "receivedQuantity": null,
+            "missingQuantity": null
+        },
+        {
+            "lineId": "fa853109-5771-4987-9fa7-9580c28bfe6b",
+            "position": 1,
+            "product": {
+                "sourceProductId": "3a05ef50-41ad-4e3f-b45c-d64adbe99776",
+                "sourceProductNumber": "CIRCA-2431732",
+                "name": "Kem xua muỗi Soffell hương cam",
+                "sku": "CIRCA-2431732",
+                "gtin": null,
+                "barcode": null,
+                "brand": null,
+                "baseUnit": "chai",
+                "trackBatch": false
+            },
+            "productId": "3b250a6b-d64b-46fb-b389-b02f6f1c6368",
+            "mappedProduct": {
+                "id": "3b250a6b-d64b-46fb-b389-b02f6f1c6368",
+                "title": "Kem xua muỗi Soffell hương cam",
+                "sku": "CIRCA-2431732",
+                "barcode": null
+            },
+            "supplierProductId": "3a05ef50-41ad-4e3f-b45c-d64adbe99776",
+            "quantity": 2,
+            "unit": "chai",
+            "unitCost": 0,
+            "localQuantity": 2,
+            "localUnit": "chai",
+            "localUnitPrice": 0,
+            "shippedQuantity": null,
+            "labelledQuantity": null,
+            "receivedQuantity": null,
+            "missingQuantity": null
+        },
+        {
+            "lineId": "05249507-0e18-4258-b20e-c459dc18f777",
+            "position": 2,
+            "product": {
+                "sourceProductId": "4a0f6df3-8b7d-4993-ab39-e1664034f5dd",
+                "sourceProductNumber": "CIRCA-5451",
+                "name": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                "sku": "CIRCA-5451",
+                "gtin": null,
+                "barcode": null,
+                "brand": null,
+                "baseUnit": "hộp",
+                "trackBatch": true
+            },
+            "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+            "mappedProduct": {
+                "id": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+                "title": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                "sku": "CIRCA-5451",
+                "barcode": null
+            },
+            "supplierProductId": "4a0f6df3-8b7d-4993-ab39-e1664034f5dd",
+            "quantity": 4,
+            "unit": "túi",
+            "unitCost": 0,
+            "localQuantity": 40,
+            "localUnit": "hộp",
+            "localUnitPrice": 0,
+            "shippedQuantity": null,
+            "labelledQuantity": null,
+            "receivedQuantity": null,
+            "missingQuantity": null
+        }
+    ],
+    "shipments": [
+        {
+            "id": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+            "status": "pending",
+            "direction": "inbound",
+            "dispatchedAt": null,
+            "receivedAt": null
+        }
+    ],
+    "purchaseOrderStatus": "CONFIRMED",
+    "availableActions": [],
+    "timeline": [
+        {
+            "event": "sent",
+            "at": "2026-10-19T09:20:09.899Z",
+            "actorName": "Admin User"
+        },
+        {
+            "event": "accepted",
+            "at": "2026-10-19T09:20:10.119Z",
+            "actorName": null
+        },
+        {
+            "event": "shipped",
+            "at": "2026-10-19T09:20:30.121Z",
+            "actorName": null
+        }
+    ],
+    "acknowledgedAt": "2026-10-19T09:20:10.119Z",
+    "receipts": [],
+    "refId": "SOBD1593858-1056745",
+    "units": [
+        {
+            "shipmentId": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+            "shipmentStatus": "pending",
+            "lineId": "edba6bf3-cb98-4dc8-be8c-463da68b0c9c",
+            "productTitle": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+            "epc": "E280F302000000017032E72B",
+            "uid": "1792145819958AA1"
+        },
+        {
+            "shipmentId": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+            "shipmentStatus": "pending",
+            "lineId": "edba6bf3-cb98-4dc8-be8c-463da68b0c9c",
+            "productTitle": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+            "epc": "E280F302000000017032E72A",
+            "uid": "1792146199352AA1"
+        },
+        {
+            "shipmentId": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+            "shipmentStatus": "pending",
+            "lineId": "edba6bf3-cb98-4dc8-be8c-463da68b0c9c",
+            "productTitle": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+            "epc": "E280F302000000017032C72A",
+            "uid": "1792378987066AA1"
+        },
+        {
+            "shipmentId": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+            "shipmentStatus": "pending",
+            "lineId": "2eab3586-4f49-4ef8-b1e8-ffe692afb9b3",
+            "productTitle": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+            "epc": "E280F302000000017032872B",
+            "uid": "1792379244469AA1"
+        },
+        {
+            "shipmentId": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+            "shipmentStatus": "pending",
+            "lineId": "2eab3586-4f49-4ef8-b1e8-ffe692afb9b3",
+            "productTitle": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+            "epc": "E280F3020000000170328729",
+            "uid": "1792379253612AA1"
+        },
+        {
+            "shipmentId": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+            "shipmentStatus": "pending",
+            "lineId": "2eab3586-4f49-4ef8-b1e8-ffe692afb9b3",
+            "productTitle": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+            "epc": "E280F3020000000170328728",
+            "uid": "1792379520375AA1"
+        },
+        {
+            "shipmentId": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+            "shipmentStatus": "pending",
+            "lineId": "27650f8f-cdf4-46eb-aa7d-952c54e25405",
+            "productTitle": "Kem xua muỗi Soffell hương cam",
+            "epc": "E280F302000000017032C729",
+            "uid": "1792379018917AA1"
+        },
+        {
+            "shipmentId": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+            "shipmentStatus": "pending",
+            "lineId": "27650f8f-cdf4-46eb-aa7d-952c54e25405",
+            "productTitle": "Kem xua muỗi Soffell hương cam",
+            "epc": "E280F302000000017032C728",
+            "uid": "1792379055069AA1"
+        },
+        {
+            "shipmentId": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+            "shipmentStatus": "pending",
+            "lineId": "9796be24-7371-42fe-a724-455ec3cb1ebe",
+            "productTitle": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+            "epc": "E280F302000000017032A72A",
+            "uid": "1792379177779AA1"
+        },
+        {
+            "shipmentId": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+            "shipmentStatus": "pending",
+            "lineId": "9796be24-7371-42fe-a724-455ec3cb1ebe",
+            "productTitle": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+            "epc": "E280F302000000017032A728",
+            "uid": "1792379219323AA1"
+        },
+        {
+            "shipmentId": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+            "shipmentStatus": "pending",
+            "lineId": "592c7d5e-7eda-4bb5-9031-3578882bc703",
+            "productTitle": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+            "epc": "E280F302000000017431E72B",
+            "uid": "1792379615766AA1"
+        },
+        {
+            "shipmentId": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+            "shipmentStatus": "pending",
+            "lineId": "592c7d5e-7eda-4bb5-9031-3578882bc703",
+            "productTitle": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+            "epc": "E280F302000000017431E72A",
+            "uid": "1792379622167AA1"
+        }
+    ]
+}

@@ -1,0 +1,18 @@
+# build / release output (phát hành qua ZIP + SHA-256, không đưa vào git)
+dist/
+*.zip
+
+# Node
+node_modules/
+
+# dữ liệu thật có thể chứa token / cookie — không bao giờ commit
+*.har
+net-capture-*/
+*.env
+.env*
+
+# rác hệ điều hành / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
