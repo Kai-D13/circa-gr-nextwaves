@@ -768,6 +768,12 @@ test("P1.7: session:nwMatched — chỉ từ trang Nextwaves, chỉ khi phiên c
     const start = { type: "session:start", envId: "STG", grId: "99999999-0000-4000-8000-000000000000", grCode: "GR09999", posId: STORE, soBase: "SOBD1", warehouseId: H.STG_CTX.warehouseId, returnUrl: `${POS}/` };
     for (const r of [await b.sendFromPopup(start), await b.sendFromTab(nw, start)]) assert.match(r.error, /nguồn gửi không hợp lệ/);
     assert.equal(b.session("STG:99999999-0000-4000-8000-000000000000"), null);
+    // session:update kèm state hợp lệ: chỉ state được ghi, các trường đi kèm bị bỏ.
+    const before = b.session(KEY);
+    await b.sendFromTab(nw, { type: "session:update", key: KEY, patch: { state: "done", nwWriteLocks: [], writeLocks: ["x"], nwPoId: "x", shipmentIds: ["x"], scanOk: { httpStatus: 200 } } });
+    const after = b.session(KEY);
+    assert.equal(after.state, "done");
+    assert.deepEqual([after.nwWriteLocks, after.writeLocks, after.nwPoId, after.shipmentIds, after.scanOk], [before.nwWriteLocks, before.writeLocks, before.nwPoId, before.shipmentIds, undefined]);
   } finally {
     b.close();
   }
