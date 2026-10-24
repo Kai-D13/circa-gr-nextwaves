@@ -2,7 +2,8 @@
 // Trình duyệt giả cho test chạy thật src/background.js + content script trong node:vm:
 //  - chrome.storage.local dùng chung (onChanged gửi tới mọi ngữ cảnh), chrome.runtime.sendMessage → listener của background;
 //  - tab: mỗi lần nạp / tải lại trang = ngữ cảnh vm mới, nạp đúng danh sách script ISOLATED trong src/manifest.json (trừ ui/panel.js → panel giả ghi lại view);
-//  - fetch → server giả do test cấp; hook MAIN world được mô phỏng bằng tab.post({mark, type, payload}).
+//  - fetch → server giả do test cấp (có thể trả chậm; AbortController của content cắt được phía client,
+//    còn server giả vẫn xử lý như server thật); hook MAIN world được mô phỏng bằng tab.post({mark, type, payload}).
 const vm = require("node:vm");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -10,7 +11,8 @@ const path = require("node:path");
 const SRC = path.join(__dirname, "..", "src");
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(SRC, "manifest.json"), "utf8"));
 const clone = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
-const TUNING = { pollMs: 10, collectTries: 3, collectDelayMs: 5, reloadDelayMs: 5, qrConcurrency: 4 };
+const TUNING = { pollMs: 10, collectTries: 3, collectDelayMs: 5, reloadDelayMs: 5, qrConcurrency: 4, httpTimeoutMs: 2000, leaseRenewMs: 50 };
+const BG_TUNING = { grantTtlMs: 60000, leaseMs: 2000, retryCooldownMs: 0 };
 
 function isolatedScriptsFor(url) {
   const origin = new URL(url).origin;
@@ -22,7 +24,9 @@ function run(ctx, file) {
   vm.runInContext(fs.readFileSync(path.join(SRC, file), "utf8"), ctx, { filename: file });
 }
 
-function createBrowser(server) {
+function createBrowser(server, opts = {}) {
+  const tuning = Object.assign({}, TUNING, opts.tuning || {});
+  const bgTuning = Object.assign({}, BG_TUNING, opts.bgTuning || {});
   const store = {};
   const storageListeners = [];
   const tabs = new Map();
@@ -72,6 +76,7 @@ function createBrowser(server) {
   const bgTimers = new Set();
   const bg = Object.assign({ console, URL, URLSearchParams }, timerApi(bgTimers));
   bg.self = bg;
+  bg.__CGN__ = { tuning: bgTuning };
   bg.importScripts = (...files) => files.forEach((f) => run(bg, f));
   bg.chrome = {
     storage: { local: storage, onChanged: { addListener: (l) => storageListeners.push(l) } },
@@ -112,7 +117,7 @@ function createBrowser(server) {
     const files = isolatedScriptsFor(t.url);
     if (!files) return;
     const c = { dead: false, timers: new Set(), listeners: [] };
-    const win = Object.assign({ console, URL, URLSearchParams }, timerApi(c.timers));
+    const win = Object.assign({ console, URL, URLSearchParams, AbortController }, timerApi(c.timers));
     win.window = win;
     win.location = {
       get href() {
@@ -141,13 +146,20 @@ function createBrowser(server) {
       setItem: (k, v) => t.ss.set(k, String(v)),
       removeItem: (k) => t.ss.delete(k),
     };
-    win.fetch = async (url, init) => {
-      const i = init || {};
-      const req = { tab: t.id, method: String(i.method || "GET").toUpperCase(), url: String(url), headers: clone(i.headers || {}), body: i.body === undefined ? null : JSON.parse(i.body) };
-      const r = await server(req);
-      const text = r.json === undefined ? "" : JSON.stringify(r.json);
-      return { ok: r.status >= 200 && r.status < 300, status: r.status, text: async () => text };
-    };
+    win.fetch = (url, init) =>
+      new Promise((resolve, reject) => {
+        const i = init || {};
+        const sig = i.signal || null;
+        if (sig && sig.aborted) return reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+        if (sig) sig.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })), { once: true });
+        const req = { tab: t.id, method: String(i.method || "GET").toUpperCase(), url: String(url), headers: clone(i.headers || {}), body: i.body === undefined ? null : JSON.parse(i.body) };
+        Promise.resolve()
+          .then(() => server(req))
+          .then((r) => {
+            const text = r.json === undefined ? "" : JSON.stringify(r.json);
+            resolve({ ok: r.status >= 200 && r.status < 300, status: r.status, text: async () => text });
+          }, reject);
+      });
     win.chrome = {
       runtime: { sendMessage: (msg) => (c.dead ? new Promise(() => {}) : sendMessage(t, msg)) },
       storage: {
@@ -161,7 +173,7 @@ function createBrowser(server) {
       },
     };
     win.__CGN__ = {
-      tuning: TUNING,
+      tuning,
       ui: {
         createPanel: () => ({
           show: (v) => {
@@ -209,6 +221,7 @@ function createBrowser(server) {
     setConfig: (cfg) => storage.set({ config: cfg }),
     session: (key) => clone((store.sessions || {})[key] || null),
     sendFromPopup: (msg) => sendMessage(null, msg),
+    sendFromTab: (t, msg) => sendMessage(t, msg),
     close: () => {
       for (const t of tabs.values()) kill(t.ctx);
       for (const h of allTimers) {

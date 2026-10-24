@@ -1,21 +1,35 @@
 /*
- * Service worker: cấu hình + phiên nhận hàng + mở / chuyển tab. Không gọi API POS / Nextwaves, không giữ token.
+ * Service worker: cấu hình + phiên nhận hàng + cấp phép ghi + mở / chuyển tab. Không gọi API POS / Nextwaves, không giữ token.
  *
  * Phiên (chrome.storage.local "sessions", khoá "<ENV>:<grId>"):
  *   waiting_nw → nw_ready → received → applying → applied → done
- *   (applying → apply_stopped → applying khi bấm Thử lại) — mọi chuyển trạng thái do content script báo về sau khi tự kiểm.
+ *   (applying → apply_stopped → applying khi có cấp phép mới) — chuyển trạng thái do content script báo về sau khi tự kiểm.
+ *
+ * Ghi GR (PM audit 24/10 P1.3 / P1.5):
+ *  - Không có chế độ ghi lâu dài. Operator cấp phép MỘT lần cho MỘT phiếu (mã GR) trong popup, có hạn GRANT_TTL_MS.
+ *    Chỉ popup (không phải trang web / content script) tạo được cấp phép; production không nhận cấp phép.
+ *  - Tab POS giành quyền bằng `claimApply` kèm mã GR + mã kế hoạch: tiêu cấp phép, nhận lease (chủ = token của tab).
+ *  - Lease phải được gia hạn trong lúc ghi; trước mỗi PUT tab gọi `renewLease` — mất lease thì dừng.
+ *    Lease hết hạn (tab đóng / treo) mới cho tab khác giành; LEASE_MS > thời hạn một PUT (grpc-timeout 30S + hết giờ phía client).
+ *  - Chỉ chủ lease kết thúc được lượt ghi (`finishApply`). Kết quả không rõ (mất kết nối) → chờ RETRY_COOLDOWN_MS mới cho ghi lại.
  */
 importScripts("lib/env.js", "lib/keys.js");
 const E = self.__CGN__.env;
 const K = self.__CGN__.keys;
+const T = Object.assign({ grantTtlMs: 30 * 60 * 1000, leaseMs: 90 * 1000, retryCooldownMs: 60 * 1000 }, self.__CGN__.tuning || {});
 
-const DEFAULT_CONFIG = Object.freeze({ mode: "", url: "", writeMode: "off" });
+const DEFAULT_CONFIG = Object.freeze({ mode: "", url: "" });
 const ACTIVE = new Set(["waiting_nw", "nw_ready", "received", "applying", "applied", "apply_stopped"]);
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
-const APPLY_STALE_MS = 2 * 60 * 1000;
 const LOG_MAX = 200;
+// Trường do background tự quản; session:update từ content script không được đụng.
+const GUARDED = new Set([
+  "key", "envId", "grId", "posId", "warehouseId", "writeLocks", "scanOk", "nwResult",
+  "lease", "applyToken", "authorization", "applyResult", "applyError", "retryNotBefore", "createdAt", "updatedAt", "log",
+]);
+const UPDATE_STATES = new Set(["nw_ready", "applied", "done"]);
 
-// Mọi thao tác đọc-sửa-ghi "sessions" chạy nối tiếp (hai tab gửi cùng lúc không ghi đè nhau).
+// Mọi thao tác đọc-sửa-ghi storage chạy nối tiếp (hai tab gửi cùng lúc không ghi đè nhau).
 let queue = Promise.resolve();
 function serial(fn) {
   const run = queue.then(fn, fn);
@@ -24,22 +38,55 @@ function serial(fn) {
 }
 
 const keyOf = (envId, grId) => `${envId}:${String(grId || "").toLowerCase()}`;
+const grantKey = (envId, grCode) => `${envId}:${String(grCode || "").trim().toUpperCase()}`;
 
 async function getConfig() {
   const { config } = await chrome.storage.local.get("config");
-  return Object.assign({}, DEFAULT_CONFIG, config || {});
+  const c = Object.assign({}, DEFAULT_CONFIG, config || {});
+  return { mode: c.mode, url: c.url }; // bỏ mọi trường cũ (writeMode "auto" của v0.1.0 không còn tác dụng)
 }
 
 async function setConfig(patch) {
   const cur = await getConfig();
-  const next = Object.assign({}, cur, patch || {});
-  if (!["off", "confirm", "auto"].includes(next.writeMode)) next.writeMode = "off";
+  const next = { mode: patch && "mode" in patch ? patch.mode : cur.mode, url: patch && "url" in patch ? patch.url : cur.url };
   if (next.mode && !E.envById(next.mode)) next.mode = "";
   if (next.url && !E.envFromAnyUrl(next.url)) throw new Error("URL không thuộc môi trường đã biết (STG / PRD)");
   await chrome.storage.local.set({ config: next });
   return next;
 }
 
+// ---------- cấp phép ghi ----------
+async function getGrants() {
+  const { grants } = await chrome.storage.local.get("grants");
+  const all = grants || {};
+  const now = Date.now();
+  for (const k of Object.keys(all)) if (!(all[k].expiresAt > now)) delete all[k];
+  return all;
+}
+
+async function createGrant(msg, sender) {
+  if (sender && sender.tab) throw new Error("Chỉ cấp phép từ popup extension");
+  const env = E.envById(msg.envId);
+  if (!env) throw new Error("Môi trường không hợp lệ");
+  if (!env.writeEnabled) throw new Error(`${env.label}: chỉ đọc, chưa qua gate ghi`);
+  const grCode = String(msg.grCode || "").trim().toUpperCase();
+  if (!/^GR\d+$/.test(grCode)) throw new Error("Mã phiếu nhận phải dạng GR + số, ví dụ GR03878");
+  const all = await getGrants();
+  const now = Date.now();
+  all[grantKey(env.id, grCode)] = { envId: env.id, grCode, createdAt: now, expiresAt: now + T.grantTtlMs };
+  await chrome.storage.local.set({ grants: all });
+  return all[grantKey(env.id, grCode)];
+}
+
+async function revokeGrant(key, sender) {
+  if (sender && sender.tab) throw new Error("Chỉ thu hồi từ popup extension");
+  const all = await getGrants();
+  delete all[key];
+  await chrome.storage.local.set({ grants: all });
+  return true;
+}
+
+// ---------- phiên ----------
 async function getSessions() {
   const { sessions } = await chrome.storage.local.get("sessions");
   return sessions || {};
@@ -60,6 +107,20 @@ async function updateSession(key, patch, logEvent) {
   all[key] = s;
   await saveSessions(all);
   return s;
+}
+
+// session:update từ content script: không đụng trường do background quản, chỉ chuyển sang vài trạng thái.
+async function contentUpdate(key, patch, logEvent) {
+  const p = Object.assign({}, patch || {});
+  for (const k of Object.keys(p)) if (GUARDED.has(k)) delete p[k];
+  if ("state" in p) {
+    const s = (await getSessions())[key];
+    if (!s) return null;
+    if (!UPDATE_STATES.has(p.state)) throw new Error(`Không chuyển trạng thái ${p.state} qua session:update`);
+    if (s.state === "applying" && p.state !== "done") throw new Error("Phiên đang ghi");
+    if (p.state === "applied" && !["received", "apply_stopped"].includes(s.state)) throw new Error(`Không chuyển ${s.state} → applied`);
+  }
+  return updateSession(key, p, logEvent);
 }
 
 async function openOrFocus(tabId, url) {
@@ -83,6 +144,7 @@ async function startSession(msg, sender) {
   const env = E.envById(msg.envId);
   if (!env) throw new Error("env");
   if (!K.soBase(msg.soBase)) throw new Error("soBase");
+  if (!msg.posId || !E.storeAllowed(env, msg.posId)) throw new Error("store");
   const key = keyOf(env.id, msg.grId);
   const all = await getSessions();
   const cur = all[key];
@@ -94,18 +156,20 @@ async function startSession(msg, sender) {
     grCode: msg.grCode,
     poPosId: msg.poPosId,
     poPosCode: msg.poPosCode,
-    posId: msg.posId,
+    posId: String(msg.posId).toLowerCase(),
     deliveryCode: msg.deliveryCode,
     soBase: K.soBase(msg.soBase),
     warehouseId: msg.warehouseId || null,
     fingerprint: msg.fingerprint || [],
+    writeLocks: Array.isArray(msg.writeLocks) ? msg.writeLocks.map(String) : [], // khoá ghi phía POS (khoá cứng, content không xoá được)
+    nwWriteLocks: [], // khoá ghi phía Nextwaves (tab Nextwaves đặt khi khớp đơn)
     returnUrl: msg.returnUrl,
     posTabId: sender && sender.tab ? sender.tab.id : null,
     nwTabId: null,
     state: "waiting_nw",
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    log: [{ at: new Date().toISOString(), type: "start", deliveryCode: msg.deliveryCode }],
+    log: [{ at: new Date().toISOString(), type: "start", deliveryCode: msg.deliveryCode, writeLocks: msg.writeLocks || [] }],
   };
   all[key] = s;
   await saveSessions(all);
@@ -128,21 +192,77 @@ async function findByNw(envId, po) {
   return list[0] || null;
 }
 
-// Một tab POS giành quyền ghi GR của phiên. Phiên "applying" quá APPLY_STALE_MS (tab đóng giữa chừng) được giành lại;
-// apply.js luôn đọc lại GR trước mỗi PUT nên lần chạy sau không ghi trùng.
-async function claimApply(key, token) {
+// Lý do không được ghi phiên này (rỗng = được, nếu có cấp phép).
+function writeBlockers(s) {
+  const env = E.envById(s.envId);
+  const out = [];
+  if (!env || !env.writeEnabled) out.push("env_read_only");
+  if (!s.warehouseId) out.push("warehouse_unmapped");
+  for (const l of [].concat(s.writeLocks || [], s.nwWriteLocks || [])) out.push(l);
+  return out;
+}
+
+async function claimApply(msg) {
+  const all = await getSessions();
+  const s = all[msg.key];
+  const now = Date.now();
+  const no = (reason) => ({ ok: false, reason });
+  if (!s) return no("no_session");
+  const blockers = writeBlockers(s);
+  if (blockers.length) return no(blockers[0]);
+  const leaseExpired = s.state === "applying" && !(s.lease && s.lease.expiresAt > now);
+  if (!(s.state === "received" || s.state === "apply_stopped" || leaseExpired)) return no(s.state === "applying" ? "lease_held" : `state_${s.state}`);
+  if (s.retryNotBefore && s.retryNotBefore > now) return no("cooldown");
+  if (!msg.token || !/^[0-9A-F]{8}$/.test(String(msg.planHash || ""))) return no("bad_request");
+  if (String(msg.grCode || "").toUpperCase() !== String(s.grCode || "").toUpperCase()) return no("gr_mismatch");
+  const grants = await getGrants();
+  const gk = grantKey(s.envId, s.grCode);
+  const grant = grants[gk];
+  if (!grant) return no("no_grant");
+  delete grants[gk];
+  await chrome.storage.local.set({ grants });
+  await updateSession(
+    msg.key,
+    {
+      state: "applying",
+      applyToken: msg.token,
+      lease: { token: msg.token, expiresAt: now + T.leaseMs },
+      authorization: { grCode: s.grCode, planHash: msg.planHash, grantedAt: grant.createdAt, usedAt: now },
+      applyError: null,
+    },
+    { type: "apply_claimed", planHash: msg.planHash, takeover: leaseExpired }
+  );
+  return { ok: true, leaseMs: T.leaseMs };
+}
+
+async function renewLease(key, token) {
   const all = await getSessions();
   const s = all[key];
-  if (!s) return false;
-  const stale = s.state === "applying" && Date.now() - (s.updatedAt || 0) > APPLY_STALE_MS;
-  if (!(s.state === "received" || s.state === "apply_stopped" || stale)) return false;
-  await updateSession(key, { state: "applying", applyToken: token, applyError: null }, { type: "apply_claimed" });
+  const now = Date.now();
+  if (!s || s.state !== "applying" || !s.lease || s.lease.token !== token || !(s.lease.expiresAt > now)) return false;
+  s.lease = { token, expiresAt: now + T.leaseMs };
+  all[key] = s;
+  await chrome.storage.local.set({ sessions: all }); // không đổi updatedAt / log: gia hạn không phải thay đổi phiên
   return true;
 }
 
+async function finishApply(msg) {
+  const s = (await getSessions())[msg.key];
+  if (!s || s.state !== "applying" || s.applyToken !== msg.token) return false;
+  const ok = !!msg.ok;
+  const patch = ok
+    ? { state: "applied", applyToken: null, lease: null, applyResult: msg.result || null, applyError: null, retryNotBefore: null }
+    : { state: "apply_stopped", applyToken: null, lease: null, applyError: msg.error || { reason: "unknown" }, retryNotBefore: msg.uncertain ? Date.now() + T.retryCooldownMs : null };
+  await updateSession(msg.key, patch, ok ? { type: "applied" } : { type: "apply_stopped", reason: patch.applyError.reason, status: patch.applyError.status || null });
+  return true;
+}
+
+// Nextwaves đã nhận đủ: chỉ nhận khi phiên đang nw_ready và đã ghi nhận lượt "Xác nhận nhận hàng" 2xx (PM P2.1).
 async function received(key, payload) {
+  const cur = (await getSessions())[key];
+  if (!cur) return null;
+  if (cur.state !== "nw_ready" || !cur.scanOk) throw new Error("Chưa có lượt xác nhận nhận hàng 2xx của phiên");
   const s = await updateSession(key, { state: "received", nwResult: payload }, { type: "nw_received", units: (payload.units || []).length });
-  if (!s) return null;
   // Đưa dược sĩ về tab POS; tab đã đóng hoặc đã rời trang thì mở lại đúng trang bắt đầu phiên.
   let posTabId = s.posTabId;
   try {
@@ -175,6 +295,14 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         return getConfig();
       case "config:set":
         return setConfig(msg.patch);
+      case "grant:create":
+        return createGrant(msg, sender);
+      case "grant:revoke":
+        return revokeGrant(msg.key, sender);
+      case "grant:list":
+        return Object.values(await getGrants());
+      case "grant:get":
+        return (await getGrants())[grantKey(msg.envId, msg.grCode)] || null;
       case "session:get":
         return (await getSessions())[keyOf(msg.envId, msg.grId)] || null;
       case "session:start":
@@ -182,13 +310,26 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       case "session:findByNw":
         return findByNw(msg.envId, msg.po);
       case "session:update":
-        return updateSession(msg.key, msg.patch, msg.log);
+        return contentUpdate(msg.key, msg.patch, msg.log);
       case "session:log":
         return updateSession(msg.key, null, msg.log);
+      case "session:scanOk": {
+        const s = (await getSessions())[msg.key];
+        if (!s || s.state !== "nw_ready") return null;
+        return updateSession(msg.key, { scanOk: msg.scan }, Object.assign({ type: "scan_ok" }, msg.scan));
+      }
       case "session:received":
         return received(msg.key, msg.payload);
+      case "session:writeBlockers": {
+        const s = (await getSessions())[msg.key];
+        return s ? writeBlockers(s) : ["no_session"];
+      }
       case "session:claimApply":
-        return claimApply(msg.key, msg.token);
+        return claimApply(msg);
+      case "session:renewLease":
+        return renewLease(msg.key, msg.token);
+      case "session:finishApply":
+        return finishApply(msg);
       case "session:focusPos":
         return focusPos(msg.key);
       case "session:reopenNw": {
@@ -201,6 +342,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       }
       case "session:cancel": {
         const all = await getSessions();
+        const s = all[msg.key];
+        if (s && s.state === "applying" && s.lease && s.lease.expiresAt > Date.now()) throw new Error("Phiên đang ghi — chờ xong mới huỷ");
         delete all[msg.key];
         await saveSessions(all);
         return true;

@@ -10,7 +10,12 @@
   const upper = (s) => String(s || "").toUpperCase();
   const unitName = (s) => String(s || "").trim().toLowerCase();
 
-  // GET /inter-tenant-orders/receiving?q=…
+  // GET /inter-tenant-orders/receiving?q=… — một trang: {items, total}. Thiếu `items` mảng hoặc `total` số → null (không đoán).
+  function normalizeReceivingSearchPage(json) {
+    if (!json || !Array.isArray(json.items) || typeof json.total !== "number" || !Number.isFinite(json.total)) return null;
+    return { items: normalizeReceivingSearch(json), total: json.total };
+  }
+
   function normalizeReceivingSearch(json) {
     const items = json && Array.isArray(json.items) ? json.items : [];
     return items.map((it) => ({
@@ -107,6 +112,14 @@
         receivedQuantity: Number(it.receivedQuantity) || 0,
         receivedUnits: (Array.isArray(it.receivedUnits) ? it.receivedUnits : []).map((u) => ({ epc: upper(u.epc), uid: String(u.unitUid || ""), receiptId: lower(u.receiptId) })),
       })),
+      // Biên nhận (mẫu thật PO88508353): receipts[] {id, warehouseId, receivedAt, items[] {epcs[]}}.
+      receipts: (Array.isArray(json.receipts) ? json.receipts : []).map((r) => ({
+        id: lower(r.id),
+        number: String(r.receiptNumber || ""),
+        warehouseId: lower(r.warehouseId),
+        receivedAt: String(r.receivedAt || ""),
+        epcs: (Array.isArray(r.items) ? r.items : []).flatMap((x) => (Array.isArray(x.epcs) ? x.epcs.map(upper) : [])),
+      })),
     };
   }
 
@@ -123,11 +136,17 @@
 
   // Sau khi nhận: UID đã nhận + đơn vị + lô (theo dòng giao) + đối chiếu với danh sách dự kiến.
   // expected: normalizeReceiving(...) chụp TRƯỚC khi nhận; shipments: normalizeShipment(...) đọc SAU khi nhận.
-  function buildReceivedUnits(poDetail, shipments, expected) {
+  // opts (PM audit 24/10 P2.1 — bằng chứng "đã nhận", fail closed, hợp đồng chờ response thật):
+  //   - mỗi UID phải thuộc một biên nhận của PO, biên nhận chứa đúng EPC, cùng kho (opts.warehouseId);
+  //   - EPC phải nằm trên dòng giao của đúng phiếu gửi đã khớp, và phiếu gửi phải ghi nhận EPC đó (receivedEpcs);
+  //   - opts.receiptIdsBefore: phải có ít nhất một biên nhận mới so với lúc khớp đơn (lượt nhận này).
+  function buildReceivedUnits(poDetail, shipments, expected, opts) {
+    const o = opts || {};
     const problems = [];
-    if (!poDetail) return { units: [], problems: ["po_unreadable"], missing: [], unexpected: [] };
+    if (!poDetail) return { units: [], problems: ["po_unreadable"], missing: [], unexpected: [], receiptIds: [] };
     const lineByEpc = new Map();
     for (const s of shipments || []) for (const l of s.lines) for (const e of l.epcs) lineByEpc.set(e, l);
+    const receiptById = new Map((poDetail.receipts || []).map((r) => [r.id, r]));
     const expectedEpcs = new Set();
     const expectedUnitByEpc = new Map();
     for (const s of (expected && expected.shipments) || []) {
@@ -152,6 +171,15 @@
         if (!unit) problems.push(`unit_unknown:${ru.epc}`);
         if (productFromLine && it.posProductId && productFromLine !== it.posProductId) problems.push(`product_conflict:${ru.epc}`);
         if (exp && exp.uid && ru.uid && exp.uid !== ru.uid) problems.push(`uid_conflict:${ru.epc}`);
+        if (!line) problems.push(`epc_not_in_shipment:${ru.epc}`);
+        else if (!Array.isArray(line.receivedEpcs) || !line.receivedEpcs.includes(ru.epc)) problems.push(`shipment_not_received:${ru.epc}`);
+        const receipt = ru.receiptId ? receiptById.get(ru.receiptId) : null;
+        if (!ru.receiptId) problems.push(`receipt_missing:${ru.epc}`);
+        else if (!receipt) problems.push(`receipt_unknown:${ru.epc}`);
+        else {
+          if (!receipt.epcs.includes(ru.epc)) problems.push(`receipt_epc_mismatch:${ru.epc}`);
+          if (o.warehouseId && receipt.warehouseId !== o.warehouseId) problems.push(`receipt_warehouse_mismatch:${ru.epc}`);
+        }
         units.push({
           epc: ru.epc,
           uid: ru.uid || (exp && exp.uid) || "",
@@ -165,10 +193,12 @@
     const missing = [...expectedEpcs].filter((e) => !seen.has(e));
     const unexpected = expectedEpcs.size ? [...seen].filter((e) => !expectedEpcs.has(e)) : [];
     for (const u of units) if (!u.uid) problems.push(`uid_missing:${u.epc}`);
-    return { units, problems, missing, unexpected };
+    const receiptIds = [...new Set(poDetail.items.flatMap((it) => it.receivedUnits.map((r) => r.receiptId)).filter(Boolean))];
+    if (Array.isArray(o.receiptIdsBefore) && units.length && !receiptIds.some((id) => !o.receiptIdsBefore.includes(id))) problems.push("no_new_receipt");
+    return { units, problems, missing, unexpected, receiptIds };
   }
 
-  const lib = { normalizeReceivingSearch, normalizeReceiving, normalizeOrderOfPo, normalizeShipment, normalizePoDetail, verifyOrder, buildReceivedUnits };
+  const lib = { normalizeReceivingSearchPage, normalizeReceivingSearch, normalizeReceiving, normalizeOrderOfPo, normalizeShipment, normalizePoDetail, verifyOrder, buildReceivedUnits };
   root.__CGN__ = root.__CGN__ || {};
   root.__CGN__.nw = lib;
   if (typeof module !== "undefined" && module.exports) module.exports = lib;

@@ -156,7 +156,7 @@ test("nw-hook: receive-scan qua fetch; API tích hợp / host lạ không báo",
 test("tra QR POS: đúng UID → sản phẩm / lô / hạn; không có / nhiều bản ghi khác nhau → không đoán", () => {
   const real = H.sample("pos-stg-qrcode-uid-circa.json");
   const r = pos.normalizeQrLookup(real[0].response, "1792145819958AA1");
-  assert.deepEqual([r.ok, r.productId, r.lot, r.expiredDate], [true, 1110, "261009DHAUS", "12-12-2028"]);
+  assert.deepEqual([r.ok, r.productId, r.lot, r.expiredDate], [true, "1110", "261009DHAUS", "12-12-2028"]);
   assert.equal(pos.normalizeQrLookup(real[0].response, "KHAC").reason, "not_found");
   assert.equal(pos.normalizeQrLookup({ status: "OK", data: [] }, "X").reason, "not_found");
   assert.equal(pos.normalizeQrLookup({ status: "NOT_FOUND", data: [] }, "X").reason, "NOT_FOUND");

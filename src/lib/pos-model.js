@@ -45,6 +45,8 @@
             quantity: Number(dt.quantity),
             received: Number(dt.received_quantity) || 0,
             qrCodes: [...new Set(Array.isArray(dt.thuocsi_qr_codes) ? dt.thuocsi_qr_codes.map(String) : [])],
+            // Số mã thô (trước khi bỏ trùng): lớn hơn qrCodes.length nghĩa là mã đã bị nối hai lần.
+            qrCodeCount: Array.isArray(dt.thuocsi_qr_codes) ? dt.thuocsi_qr_codes.length : 0,
           })),
         };
       }),
@@ -73,15 +75,18 @@
 
   const isReceivable = (gr) => !!gr && RECEIVABLE.has(gr.status);
 
-  // GR + PO → {ok, soBase, deliveryCode, errors[]}. Một mã giao ↔ một PO ↔ một GR (operator chốt 24/10).
-  function resolveDelivery(gr, po) {
+  // GR + PO (+ cửa hàng đang đăng nhập) → {ok, soBase, deliveryCode, errors[]}.
+  // Một mã giao ↔ một PO ↔ một GR (operator chốt 24/10). Cửa hàng: x-store-id, GR.pos_info.id, PO.pos_id phải có đủ và trùng nhau (PM P1.4).
+  function resolveDelivery(gr, po, storeId) {
     const errors = [];
     if (!gr) errors.push("gr_unreadable");
     if (!po) errors.push("po_unreadable");
     if (errors.length) return { ok: false, errors };
     if (gr.poId !== po.id) errors.push("po_mismatch");
     if (!po.grIds.includes(gr.id)) errors.push("gr_not_in_po");
-    if (gr.posId && po.posId && gr.posId !== po.posId) errors.push("store_mismatch");
+    const store = lower(storeId);
+    if (!store || !gr.posId || !po.posId) errors.push("store_missing");
+    else if (gr.posId !== store || po.posId !== store) errors.push("store_mismatch");
     if (po.deliveryCodes.length === 0) errors.push("no_delivery_code");
     if (po.deliveryCodes.length > 1) errors.push("many_delivery_codes");
     const deliveryCode = po.deliveryCodes.length === 1 ? po.deliveryCodes[0] : "";
@@ -98,6 +103,7 @@
 
   // GET <posOrigin>/thuocsi-warehouse/qrcode?code=<uid> → {ok, productId, lot, expiredDate} | {ok:false, reason}.
   // Chỉ nhận bản ghi có uniqueId / shortId đúng UID; nhiều bản ghi khác nhau → không đoán.
+  // Thiếu productId / lô / hạn (DD-MM-YYYY) → không dùng được (PM P2.2): không suy sản phẩm từ tên hay thứ tự.
   function normalizeQrLookup(json, uid) {
     if (!json || typeof json !== "object") return { ok: false, reason: "unreadable" };
     if (json.status && json.status !== "OK") return { ok: false, reason: String(json.status) };
@@ -108,7 +114,11 @@
     const sig = (d) => [d.productId, String(d.lot || "").toUpperCase(), d.expiredDate].join("|");
     if (new Set(hits.map(sig)).size > 1) return { ok: false, reason: "ambiguous" };
     const d = hits[0];
-    return { ok: true, productId: d.productId === undefined || d.productId === null ? null : d.productId, lot: String(d.lot || ""), expiredDate: String(d.expiredDate || ""), status: String(d.status || "") };
+    const productId = d.productId === undefined || d.productId === null ? "" : String(d.productId).trim();
+    const lot = String(d.lot || "").trim();
+    const expiredDate = String(d.expiredDate || "").trim();
+    if (!/^\d+$/.test(productId) || !lot || !/^\d{1,2}-\d{1,2}-\d{4}$/.test(expiredDate)) return { ok: false, reason: "incomplete" };
+    return { ok: true, productId, lot, expiredDate, status: String(d.status || "") };
   }
 
   const lib = { normalizeGr, normalizePo, normalizeGrSearch, isReceivable, resolveDelivery, grFingerprintSource, normalizeQrLookup, RECEIVABLE };

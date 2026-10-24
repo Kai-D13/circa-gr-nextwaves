@@ -1,8 +1,10 @@
 /*
  * Màn quét Nextwaves /vi/purchases/receive?po=<SO | số PO> (ISOLATED world). Chỉ chạy khi có phiên do tab POS mở.
- *  1. Tìm đơn liên kết theo SO (GET …/inter-tenant-orders/receiving?q=<SO>), kiểm refId / bên bán / kho, kiểm dấu vân tay với GR.
+ *  1. Tìm đơn liên kết theo SO trên TOÀN BỘ ứng viên (lib/resolve.js, PM audit 24/10 P1.1); kiểm refId / bên bán / kho / dấu vân tay.
  *  2. Chờ dược sĩ bấm "Xác nhận nhận hàng" (hook thấy POST …/receive-scan).
- *  3. 2xx → đọc lại PO + phiếu gửi → danh sách UID đã nhận (sản phẩm, đơn vị, lô) → nhận đủ thì báo background đưa về POS.
+ *  3. 2xx → ghi nhận lượt này vào phiên → đọc lại PO + phiếu gửi → UID đã nhận (sản phẩm, đơn vị, lô) kèm bằng chứng biên nhận
+ *     (biên nhận mới, đúng kho, chứa đúng EPC; phiếu gửi ghi nhận EPC — PM P2.1) → nhận đủ thì báo background đưa về POS.
+ *  Mở lại trang mà phiên chưa có lượt 2xx: chỉ đọc và hiển thị, không tự chuyển về POS.
  * Chỉ GET API thường của Nextwaves. Không gọi /integrations/circa/*, không gọi API ghi, không bấm nút hộ dược sĩ.
  */
 (function () {
@@ -13,20 +15,13 @@
   const C = globalThis.__CGN__;
   const E = C.env;
   const N = C.nw;
-  const M = C.match;
-  const T = Object.assign({ pollMs: 700, collectTries: 6, collectDelayMs: 1500, maxCandidates: 10 }, C.tuning || {});
+  const R = C.resolve;
+  const T = Object.assign({ pollMs: 700, collectTries: 6, collectDelayMs: 1500, httpTimeoutMs: 30000 }, C.tuning || {});
   const HOOK = "cgn/nw-hook";
   const ME = "cgn/nw-content";
   const panel = C.ui.createPanel("GR ← Nextwaves");
   const OPEN = new Set(["waiting_nw", "nw_ready"]);
 
-  const VERIFY_MSG = {
-    order_unreadable: "không đọc được đơn",
-    so_mismatch: "refId không cùng SO",
-    counterparty_mismatch: "bên bán không phải Buymed của môi trường này",
-    warehouse_mismatch: "kho nhận không phải kho của cửa hàng",
-    order_cancelled: "đơn đã huỷ / từ chối",
-  };
   // Mã lỗi nhận hàng của Nextwaves (từ bundle web) → câu cho dược sĩ. Extension không tự xử lý, chỉ báo.
   const NW_REASON = {
     tagged_unit_unsupported: "Dòng có thẻ không nhận được theo đơn vị này (Nextwaves chỉ nhận theo đơn vị gốc)",
@@ -47,7 +42,7 @@
   let running = false;
   let again = false;
   let collecting = false;
-  let ctx = null; // {env, key, po, nwPoId, nwPoNumber, shipmentIds, expected, grCode}
+  let ctx = null; // {env, key, po, nwPoId, nwPoNumber, shipmentIds, expected, grCode, soBase, fingerprint, receiptIdsBefore, warehouseId}
   let note = null; // thông báo gần nhất của lượt nhận (giữ khi vẽ lại)
   let pendingScan = null; // lượt "Xác nhận nhận hàng" đến trước khi khớp xong đơn → xử lý ngay sau khi khớp
 
@@ -59,16 +54,23 @@
   const logTo = (key, log) => bg("session:log", { key, log }).catch(() => {});
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  // Lỗi mạng / hết giờ → NÉM; người gọi coi là "không đọc được" (chặn, không bỏ qua).
   async function nwGet(env, url) {
-    const res = await fetch(url, { method: "GET", headers: Object.assign({}, authByEnv[env.id] || {}), cache: "no-store" });
-    const text = await res.text();
-    let json = null;
+    const ac = typeof AbortController === "function" ? new AbortController() : null;
+    const timer = ac ? setTimeout(() => ac.abort(), T.httpTimeoutMs) : null;
     try {
-      json = text ? JSON.parse(text) : null;
-    } catch (_) {
-      json = null;
+      const res = await fetch(url, { method: "GET", headers: Object.assign({}, authByEnv[env.id] || {}), cache: "no-store", signal: ac ? ac.signal : undefined });
+      const text = await res.text();
+      let json = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch (_) {
+        json = null;
+      }
+      return { ok: res.ok, status: res.status, json };
+    } finally {
+      if (timer) clearTimeout(timer);
     }
-    return { ok: res.ok, status: res.status, json };
   }
 
   function httpError(what, r) {
@@ -130,9 +132,9 @@
     }
     if (!authByEnv[env.id]) return panel.show({ tone: "busy", title: "Đang chờ Nextwaves tải dữ liệu…", lines: [] });
 
-    if (s.nwPoId && s.expected && Array.isArray(s.shipmentIds)) {
-      // Đã khớp đơn ở lần mở trước: giữ ảnh chụp "dự kiến" chụp TRƯỚC khi nhận, không tìm lại.
-      ctx = { env, key: s.key, po: page.po, nwPoId: s.nwPoId, nwPoNumber: s.nwPoNumber, shipmentIds: s.shipmentIds, expected: s.expected, grCode: s.grCode, soBase: s.soBase, fingerprint: s.fpRows || [] };
+    if (s.nwPoId && s.expected && Array.isArray(s.shipmentIds) && Array.isArray(s.receiptIdsBefore)) {
+      // Đã khớp đơn ở lần mở trước: giữ ảnh chụp "dự kiến" + biên nhận chụp TRƯỚC khi nhận, không tìm lại.
+      ctx = ctxFromSession(env, s, page.po);
     } else {
       const found = await resolveOrder(env, s, page.po);
       if (!found) return;
@@ -143,64 +145,96 @@
       pendingScan = null;
       return onReceiveScan(p);
     }
-    if (!note) await collect({ onLoad: true });
+    if (!note) {
+      if (s.scanOk) await collect({}); // tải lại trang giữa lúc đọc kết quả của lượt 2xx đã ghi nhận
+      else await peekReceived();
+    }
     renderReady();
+  }
+
+  function ctxFromSession(env, s, po) {
+    return {
+      env,
+      key: s.key,
+      po,
+      nwPoId: s.nwPoId,
+      nwPoNumber: s.nwPoNumber,
+      shipmentIds: s.shipmentIds,
+      expected: s.expected,
+      grCode: s.grCode,
+      soBase: s.soBase,
+      fingerprint: s.fpRows || [],
+      receiptIdsBefore: s.receiptIdsBefore,
+      warehouseId: s.warehouseId,
+      nwWriteLocks: s.nwWriteLocks || [],
+      nwSearch: s.nwSearch || null,
+    };
   }
 
   async function resolveOrder(env, s, po) {
     panel.show({ tone: "busy", title: `Đang tìm đơn Nextwaves cho ${s.soBase}…`, lines: [] });
-    const r = await nwGet(env, E.api.nwReceivingSearch(env, s.soBase));
+    let search;
+    try {
+      search = await nwGet(env, E.api.nwReceivingSearch(env, s.soBase));
+    } catch (err) {
+      search = { ok: false, status: 0 };
+    }
+    const r = await R.resolveNwOrder({
+      search,
+      ctx: { soBase: s.soBase, buymedSlug: env.buymedSlug, warehouseId: s.warehouseId },
+      fingerprintSource: s.fingerprint,
+      getOrder: (poId) => nwGet(env, E.api.nwOrderOfPo(env, poId)),
+      getReceiving: (poId) => nwGet(env, E.api.nwReceiving(env, poId)),
+    });
     if (!r.ok) {
-      panel.show({ tone: "err", title: "Không tìm được đơn Nextwaves", lines: [httpError("Tìm đơn theo SO", r)], buttons: [{ label: "Thử lại", onClick: refresh }] });
-      return null;
-    }
-    const candidates = N.normalizeReceivingSearch(r.json)
-      .filter((c) => c.slug === env.buymedSlug && (!s.warehouseId || c.warehouseId === s.warehouseId))
-      .slice(0, T.maxCandidates);
-    const good = [];
-    const reports = [];
-    for (const c of candidates) {
-      const o = await nwGet(env, E.api.nwOrderOfPo(env, c.poId));
-      const order = o.ok ? N.normalizeOrderOfPo(o.json) : null;
-      const v = N.verifyOrder(order, { soBase: s.soBase, buymedSlug: env.buymedSlug, warehouseId: s.warehouseId });
-      if (!v.ok) {
-        reports.push([c.poNumber, v.errors.map((x) => VERIFY_MSG[x] || x).join(", ")]);
-        continue;
-      }
-      const rc = await nwGet(env, E.api.nwReceiving(env, c.poId));
-      const receiving = rc.ok ? N.normalizeReceiving(rc.json) : null;
-      if (!receiving) {
-        reports.push([c.poNumber, rc.ok ? "không đọc được danh sách nhận" : httpError("receiving", rc)]);
-        continue;
-      }
-      const fp = M.fingerprint(s.fingerprint, receiving);
-      if (!fp.ok) {
-        const bad = fp.rows.filter((x) => !x.ok).map((x) => `SP ${x.productId}: GR ${x.grBase} ≠ NW ${x.nwBase}${x.problems.length ? ` (${x.problems.join(", ")})` : ""}`);
-        reports.push([c.poNumber, `lệch số lượng — ${bad.join("; ")}`]);
-        continue;
-      }
-      good.push({ order, receiving, fp });
-    }
-    if (good.length !== 1) {
-      logTo(s.key, { type: "nw_match_failed", candidates: candidates.length, good: good.length });
+      logTo(s.key, { type: "nw_match_failed", reason: r.reason, total: r.total, read: r.read, candidates: r.candidates, verified: r.verified, poNumber: r.poNumber || null, detail: r.detail || null });
+      const facts = [`SO ${s.soBase}: kết quả tìm total = ${r.total === null ? "?" : r.total}, đã đọc ${r.read}; ứng viên Buymed cùng kho ${r.candidates}; refId đúng SO ${r.verified}.`];
+      if (r.poNumber) facts.push(`Đơn ${r.poNumber}${r.detail ? `: ${r.detail}` : ""}`);
       panel.show({
         tone: "err",
-        title: good.length ? `Có ${good.length} đơn Nextwaves cùng khớp ${s.grCode} — không tự chọn` : `Không có đơn Nextwaves khớp phiếu ${s.grCode}`,
-        lines: [`SO ${s.soBase}: tìm thấy ${candidates.length} đơn liên kết của Buymed cho kho này.`, "Extension sẽ không chuyển kết quả về POS. Báo lại operator."],
-        table: reports.length ? { head: ["Đơn Nextwaves", "Lý do loại"], rows: reports } : null,
+        title: r.message,
+        lines: facts.concat(["Extension không đi tiếp. Báo lại operator."]),
+        table: r.reports.length ? { head: ["Đơn Nextwaves", "Lý do loại"], rows: r.reports } : null,
         buttons: [{ label: "Thử lại", onClick: refresh }],
       });
       return null;
     }
-    const g = good[0];
+    const g = r.chosen;
+    // Biên nhận đã có TRƯỚC lượt nhận: để nhận ra biên nhận mới của lượt này (P2.1).
+    let pd;
+    try {
+      pd = await nwGet(env, E.api.nwPoDetail(env, g.order.poId));
+    } catch (err) {
+      pd = { ok: false, status: 0 };
+    }
+    const poDetail = pd.ok ? N.normalizePoDetail(pd.json) : null;
+    if (!poDetail) {
+      panel.show({ tone: "err", title: "Không đọc được PO Nextwaves", lines: [httpError("Đọc PO", pd)], buttons: [{ label: "Thử lại", onClick: refresh }] });
+      return null;
+    }
     const fpRows = g.fp.rows.map((x) => ({ productId: x.productId, grBase: x.grBase, nwBase: x.nwBase }));
     const shipmentIds = g.receiving.shipments.map((x) => x.id);
-    await bg("session:update", {
+    const receiptIdsBefore = poDetail.receipts.map((x) => x.id);
+    const preReceived = poDetail.items.reduce((n, it) => n + it.receivedUnits.length, 0);
+    const s2 = await bg("session:update", {
       key: s.key,
-      patch: { state: "nw_ready", nwPoId: g.order.poId, nwPoNumber: g.order.poNumber, nwOrderId: g.order.orderId, nwRefId: g.order.refId, shipmentIds, expected: g.receiving, fpRows },
-      log: { type: "nw_matched", nwPoNumber: g.order.poNumber, refId: g.order.refId, shipments: shipmentIds.length },
+      patch: {
+        state: "nw_ready",
+        nwPoId: g.order.poId,
+        nwPoNumber: g.order.poNumber,
+        nwOrderId: g.order.orderId,
+        nwRefId: g.order.refId,
+        shipmentIds,
+        expected: g.receiving,
+        fpRows,
+        receiptIdsBefore,
+        nwWriteLocks: r.writeLocks,
+        nwSearch: { total: r.total, read: r.read, candidates: r.candidates, verified: r.verified },
+      },
+      log: { type: "nw_matched", nwPoNumber: g.order.poNumber, refId: g.order.refId, shipments: shipmentIds.length, total: r.total, candidates: r.candidates, verified: r.verified, receiptsBefore: receiptIdsBefore.length, preReceived, writeLocks: r.writeLocks },
     });
-    return { env, key: s.key, po, nwPoId: g.order.poId, nwPoNumber: g.order.poNumber, shipmentIds, expected: g.receiving, grCode: s.grCode, soBase: s.soBase, fingerprint: fpRows };
+    if (preReceived > 0) note = { tone: "warn", title: "Đơn đã có hàng nhận trước khi mở phiên", text: `Nextwaves đã ghi nhận ${preReceived} UID trước lượt này. Extension chỉ chuyển về POS sau một lượt “Xác nhận nhận hàng” mới trong phiên.` };
+    return ctxFromSession(env, s2, po);
   }
 
   function expectedCount(c) {
@@ -212,57 +246,100 @@
     const key = ctx.key;
     const lines = [`Phiếu ${ctx.grCode} ↔ Nextwaves ${ctx.nwPoNumber} (${ctx.soBase}) — ${expectedCount(ctx)} UID dự kiến.`];
     if (note) lines.push(note.text);
-    else lines.push("Đặt hàng lên reader rồi bấm “Xác nhận nhận hàng”. Nhận đủ xong extension tự đưa về POS và điền phiếu.");
+    else lines.push("Đặt hàng lên reader rồi bấm “Xác nhận nhận hàng”. Nhận đủ xong extension đưa về POS và lập kế hoạch điền phiếu.");
+    const q = ctx.nwSearch;
+    if (q) lines.push(`Tìm theo ${ctx.soBase}: total ${q.total}, đã đọc ${q.read}; ứng viên Buymed cùng kho ${q.candidates}; refId đúng SO ${q.verified}.`);
+    if (ctx.nwWriteLocks && ctx.nwWriteLocks.length) lines.push("Lưu ý: Nextwaves có nhiều đơn cùng SO — điền phiếu POS sẽ bị khoá (chỉ xem).");
     panel.show({
       tone: note ? note.tone : "info",
       title: note ? note.title : "Sẵn sàng nhận hàng",
       lines,
       table: ctx.fingerprint && ctx.fingerprint.length ? { head: ["Sản phẩm POS", "SL GR (gốc)", "SL Nextwaves (gốc)"], rows: ctx.fingerprint.map((r) => [r.productId, String(r.grBase), String(r.nwBase)]) } : null,
       buttons: [
-        { label: "Đọc lại kết quả nhận", secondary: true, onClick: () => collect({}).then(renderReady) },
+        { label: "Đọc lại kết quả nhận", secondary: true, onClick: () => collectOrPeek() },
         { label: "Về POS", secondary: true, onClick: () => bg("session:focusPos", { key }) },
       ],
     });
   }
 
-  // Đọc kết quả đã nhận. onLoad: chỉ một lần đọc, im lặng nếu chưa nhận gì (mở lại trang sau khi đã bấm xác nhận).
+  async function collectOrPeek() {
+    if (!ctx) return;
+    const s = await bg("session:findByNw", { envId: ctx.env.id, po: ctx.po });
+    if (s && s.scanOk) await collect({});
+    else await peekReceived();
+    renderReady();
+  }
+
+  // Đọc kết quả nhận để HIỂN THỊ (chưa có lượt 2xx trong phiên): không bao giờ chuyển về POS.
+  async function peekReceived() {
+    if (!ctx) return;
+    const c = ctx;
+    let pd;
+    try {
+      pd = await nwGet(c.env, E.api.nwPoDetail(c.env, c.nwPoId));
+    } catch (_) {
+      return;
+    }
+    const po = pd.ok ? N.normalizePoDetail(pd.json) : null;
+    if (!po) return;
+    const n = po.items.reduce((m, it) => m + it.receivedUnits.length, 0);
+    if (n > 0) note = { tone: "warn", title: `Nextwaves đang có ${n} UID đã nhận`, text: "Phiên chưa thấy lượt “Xác nhận nhận hàng” 2xx nào — extension không tự chuyển về POS." };
+  }
+
+  // Đọc kết quả của lượt 2xx đã ghi nhận; đủ bằng chứng thì báo background đưa về POS.
   async function collect(opts) {
     if (!ctx || collecting) return;
     collecting = true;
     const c = ctx; // trang có thể đổi giữa chừng → dùng bản chụp
     const { env, key } = c;
-    const tries = opts.onLoad ? 1 : T.collectTries;
+    const tries = opts.tries || T.collectTries;
     let rec = null;
     let err = null;
     try {
       for (let i = 0; i < tries; i++) {
         if (i > 0) await sleep(T.collectDelayMs);
         err = null;
-        const pd = await nwGet(env, E.api.nwPoDetail(env, c.nwPoId));
-        if (!pd.ok) {
+        let pd;
+        try {
+          pd = await nwGet(env, E.api.nwPoDetail(env, c.nwPoId));
+        } catch (e) {
+          err = `Đọc PO Nextwaves: ${String((e && e.message) || e)}`;
+          continue;
+        }
+        const poDetail = pd.ok ? N.normalizePoDetail(pd.json) : null;
+        if (!poDetail) {
           err = httpError("Đọc PO Nextwaves", pd);
           continue;
         }
         const shipments = [];
         for (const id of c.shipmentIds) {
-          const r = await nwGet(env, E.api.nwShipment(env, id));
+          let r;
+          try {
+            r = await nwGet(env, E.api.nwShipment(env, id));
+          } catch (e) {
+            err = `Đọc phiếu gửi Nextwaves: ${String((e && e.message) || e)}`;
+            break;
+          }
           const sh = r.ok ? N.normalizeShipment(r.json) : null;
-          if (!sh) err = httpError("Đọc phiếu gửi Nextwaves", r);
-          else shipments.push(sh);
+          if (!sh || sh.id !== id) {
+            err = httpError("Đọc phiếu gửi Nextwaves", r);
+            break;
+          }
+          shipments.push(sh);
         }
         if (err) continue;
-        rec = N.buildReceivedUnits(N.normalizePoDetail(pd.json), shipments, c.expected);
-        if (opts.onLoad || (rec.units.length > 0 && rec.missing.length === 0)) break;
+        rec = N.buildReceivedUnits(poDetail, shipments, c.expected, { receiptIdsBefore: c.receiptIdsBefore, warehouseId: c.warehouseId });
+        if (rec.units.length > 0 && rec.missing.length === 0 && rec.problems.length === 0) break;
       }
     } finally {
       collecting = false;
     }
     if (err) {
-      if (!opts.onLoad) note = { tone: "err", title: "Không đọc được kết quả nhận", text: err };
+      note = { tone: "err", title: "Không đọc được kết quả nhận", text: err };
       return;
     }
     if (!rec || rec.units.length === 0) {
-      if (!opts.onLoad) note = { tone: "warn", title: "Nextwaves chưa ghi nhận UID nào", text: "Chờ vài giây rồi bấm “Đọc lại kết quả nhận”." };
+      note = { tone: "warn", title: "Nextwaves chưa ghi nhận UID nào", text: "Chờ vài giây rồi bấm “Đọc lại kết quả nhận”." };
       return;
     }
     const expected = expectedCount(c);
@@ -270,7 +347,7 @@
       logTo(key, { type: "nw_result_problem", problems: rec.problems.slice(0, 50), unexpected: rec.unexpected.slice(0, 50) });
       note = {
         tone: "err",
-        title: "Kết quả nhận không khớp dữ liệu đơn",
+        title: "Kết quả nhận chưa đủ bằng chứng / không khớp dữ liệu đơn",
         text: [rec.problems.length ? `Vấn đề: ${rec.problems.slice(0, 10).join(", ")}` : "", rec.unexpected.length ? `EPC ngoài danh sách dự kiến: ${rec.unexpected.slice(0, 10).join(", ")}` : ""].filter(Boolean).join("\n") + "\nExtension không chuyển về POS. Báo lại operator.",
       };
       return;
@@ -284,9 +361,9 @@
       };
       return;
     }
-    note = { tone: "ok", title: `Đã nhận đủ ${rec.units.length} UID`, text: `Đang chuyển về POS để điền phiếu ${c.grCode}…` };
+    note = { tone: "ok", title: `Đã nhận đủ ${rec.units.length} UID`, text: `Đang chuyển về POS để lập kế hoạch điền phiếu ${c.grCode}…` };
     renderReady();
-    await bg("session:received", { key, payload: { units: rec.units, nwPoNumber: c.nwPoNumber, at: Date.now() } });
+    await bg("session:received", { key, payload: { units: rec.units, nwPoNumber: c.nwPoNumber, receiptIds: rec.receiptIds, at: Date.now() } });
     ctx = null;
     note = null;
     refresh();
@@ -312,6 +389,7 @@
       reason: resp && resp.params && resp.params.reason ? String(resp.params.reason) : null,
     });
     if (p.httpStatus >= 200 && p.httpStatus < 300) {
+      await bg("session:scanOk", { key: ctx.key, scan: { shipmentId: p.shipmentId, httpStatus: p.httpStatus, sentEpcs: p.sentEpcs === undefined ? null : p.sentEpcs, at: Date.now() } });
       note = { tone: "busy", title: "Nextwaves đã nhận — đang đọc kết quả…", text: `${p.sentEpcs === null || p.sentEpcs === undefined ? "?" : p.sentEpcs} thẻ đã gửi.` };
       renderReady();
       await collect({});

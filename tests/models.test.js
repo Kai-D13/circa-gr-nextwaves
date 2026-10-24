@@ -23,14 +23,31 @@ test("GR03878: đọc dòng, đơn vị dòng và hệ số đơn vị", () => {
 
 test("GR03878 ↔ PO00006750: mã giao SOBD1593858-F, liên kết hai chiều đạt", () => {
   const po = pos.normalizePo(H.sample("po-stg-PO00006750-SOBD1593858.json"));
-  const r = pos.resolveDelivery(gr78(), po);
+  const r = pos.resolveDelivery(gr78(), po, H.STORE_2222);
   assert.deepEqual(r, { ok: true, deliveryCode: "SOBD1593858-F", soBase: "SOBD1593858", errors: [] });
+});
+
+test("P1.4: cửa hàng phải có đủ x-store-id, GR.pos_info.id, PO.pos_id và trùng nhau", () => {
+  const po = pos.normalizePo(H.sample("po-stg-PO00006750-SOBD1593858.json"));
+  assert.deepEqual(pos.resolveDelivery(gr78(), po, "").errors, ["store_missing"]);
+  assert.deepEqual(pos.resolveDelivery(gr78(), po, null).errors, ["store_missing"]);
+  const g = gr78();
+  g.posId = "";
+  assert.deepEqual(pos.resolveDelivery(g, po, H.STORE_2222).errors, ["store_missing"]);
+  const p2 = H.clone(po);
+  p2.posId = "";
+  assert.deepEqual(pos.resolveDelivery(gr78(), p2, H.STORE_2222).errors, ["store_missing"]);
+  assert.deepEqual(pos.resolveDelivery(gr78(), po, "00000000-0000-0000-0000-00000000abcd").errors, ["store_mismatch"]);
+  const p3 = H.clone(po);
+  p3.posId = "00000000-0000-0000-0000-00000000abcd";
+  assert.deepEqual(pos.resolveDelivery(gr78(), p3, H.STORE_2222).errors, ["store_mismatch"]);
+  assert.equal(pos.resolveDelivery(gr78(), po, H.STORE_2222.toUpperCase()).ok, true);
 });
 
 test("GR03877 tạo tay (PO IMPORT_STOCK, không mã giao) → dừng no_delivery_code", () => {
   // PO00006745 không có file mẫu; dựng lại đúng các trường operator gửi 24/10 (state.md §2.1).
   const po = pos.normalizePo({ data: { id: "b191075a-f48a-44f0-accc-f940bfef1c82", code: "PO00006745", pos_id: "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d", source_type: "IMPORT_STOCK", sale_order_number: "", thuocsi_delivery_code: [], goods_receipts: [{ id: "cea7a4d0-58ad-468a-9644-8d2d09446def" }] } });
-  const r = pos.resolveDelivery(gr77(), po);
+  const r = pos.resolveDelivery(gr77(), po, H.STORE_2222);
   assert.equal(r.ok, false);
   assert.deepEqual(r.errors, ["no_delivery_code"]);
 });
@@ -39,14 +56,14 @@ test("GR không nằm trong PO / PO khác / nhiều mã giao → chặn", () => 
   const po = pos.normalizePo(H.sample("po-stg-PO00006750-SOBD1593858.json"));
   const other = H.clone(po);
   other.grIds = [];
-  assert.ok(pos.resolveDelivery(gr78(), other).errors.includes("gr_not_in_po"));
+  assert.ok(pos.resolveDelivery(gr78(), other, H.STORE_2222).errors.includes("gr_not_in_po"));
   const many = H.clone(po);
   many.deliveryCodes = ["SOBD1593858-F", "SOBD1593858-2"];
-  assert.ok(pos.resolveDelivery(gr78(), many).errors.includes("many_delivery_codes"));
+  assert.ok(pos.resolveDelivery(gr78(), many, H.STORE_2222).errors.includes("many_delivery_codes"));
   const wrongSo = H.clone(po);
   wrongSo.saleOrderNumber = "999";
-  assert.ok(pos.resolveDelivery(gr78(), wrongSo).errors.includes("sale_order_number_mismatch"));
-  assert.ok(pos.resolveDelivery(gr77(), po).errors.includes("po_mismatch"));
+  assert.ok(pos.resolveDelivery(gr78(), wrongSo, H.STORE_2222).errors.includes("sale_order_number_mismatch"));
+  assert.ok(pos.resolveDelivery(gr77(), po, H.STORE_2222).errors.includes("po_mismatch"));
 });
 
 test("tìm GR theo SO (đường /chi-tiet-so) → GR03878", () => {
@@ -55,6 +72,10 @@ test("tìm GR theo SO (đường /chi-tiet-so) → GR03878", () => {
 });
 
 test("Nextwaves: tìm receiving theo SO, đọc đơn liên kết và kiểm SO / đối tác / kho", () => {
+  const page = nw.normalizeReceivingSearchPage(H.sample("nw-stg-receiving-search-q-SOBD1593859.json"));
+  assert.deepEqual([page.total, page.items.length], [1, 1]);
+  assert.equal(nw.normalizeReceivingSearchPage({ items: [] }), null, "thiếu total → không đọc");
+  assert.equal(nw.normalizeReceivingSearchPage({ total: 0 }), null, "thiếu items → không đọc");
   const found = nw.normalizeReceivingSearch(H.sample("nw-stg-receiving-search-q-SOBD1593859.json"));
   assert.equal(found.length, 1);
   assert.equal(found[0].poNumber, "PO60017570");
@@ -79,11 +100,16 @@ test("Nextwaves: /receiving thật (PO76458756, PO60017570) và dòng giao có l
   assert.equal(sh.lines.find((l) => l.posProductId === "2431732").batch, null);
 });
 
-test("PO Nextwaves sau khi nhận (mẫu thật PO88508353): 25 receivedUnits", () => {
+test("PO Nextwaves sau khi nhận (mẫu thật PO88508353): 25 receivedUnits, biên nhận chứa đúng EPC", () => {
   const po = nw.normalizePoDetail(H.sample("nw-stg-po-PO88508353-received.json"));
   assert.equal(po.status, "RECEIVED");
   assert.equal(po.items.reduce((n, i) => n + i.receivedUnits.length, 0), 25);
   assert.equal(po.items[0].posProductId, "1111");
+  assert.equal(po.receipts.length, 1);
+  const r = po.receipts[0];
+  assert.equal(r.warehouseId, H.STG_CTX.warehouseId);
+  const all = po.items.flatMap((i) => i.receivedUnits);
+  assert.ok(all.every((u) => u.receiptId === r.id && r.epcs.includes(u.epc)), "mọi receivedUnit thuộc biên nhận và có trong epcs của biên nhận");
 });
 
 test("dấu vân tay: GR03878 khớp PO28237814 (dựng lại) nhưng KHÔNG khớp PO76458756 / PO60017570 (thật)", () => {
@@ -95,13 +121,13 @@ test("dấu vân tay: GR03878 khớp PO28237814 (dựng lại) nhưng KHÔNG kh�
   assert.equal(match.fingerprint(src, nw.normalizeReceiving(H.sample("nw-stg-receiving-PO60017570.json"))).ok, false);
 });
 
-test("dựng UID đã nhận: đơn vị và lô theo dòng giao, không thiếu / không lạ", () => {
-  const rec = nw.buildReceivedUnits(
-    nw.normalizePoDetail(H.poDetailPO28237814Received()),
-    [nw.normalizeShipment(H.sample("nw-stg-shipment-34e67fb9-PO28237814.json"))],
-    nw.normalizeReceiving(H.receivingPO28237814())
-  );
+const RCV_OPTS = { receiptIdsBefore: [], warehouseId: H.STG_CTX.warehouseId };
+const shipRcv = () => [nw.normalizeShipment(H.shipmentPO28237814Received())];
+
+test("dựng UID đã nhận: đơn vị và lô theo dòng giao, không thiếu / không lạ, có bằng chứng biên nhận", () => {
+  const rec = nw.buildReceivedUnits(nw.normalizePoDetail(H.poDetailPO28237814Received()), shipRcv(), nw.normalizeReceiving(H.receivingPO28237814()), RCV_OPTS);
   assert.deepEqual(rec.problems, []);
+  assert.deepEqual(rec.receiptIds, [H.RECEIPT_ID]);
   assert.deepEqual(rec.missing, []);
   assert.deepEqual(rec.unexpected, []);
   assert.equal(rec.units.length, 12);
@@ -113,7 +139,45 @@ test("dựng UID đã nhận: nhận thiếu → missing; EPC lạ → unexpecte
   const po = nw.normalizePoDetail(H.poDetailPO28237814Received());
   po.items[0].receivedUnits.pop();
   po.items[0].receivedUnits.push({ epc: "E280F302000000017032A729", uid: "1792379169035AA1", receiptId: "x" });
-  const rec = nw.buildReceivedUnits(po, [nw.normalizeShipment(H.sample("nw-stg-shipment-34e67fb9-PO28237814.json"))], nw.normalizeReceiving(H.receivingPO28237814()));
+  const rec = nw.buildReceivedUnits(po, shipRcv(), nw.normalizeReceiving(H.receivingPO28237814()));
   assert.equal(rec.missing.length, 1);
   assert.deepEqual(rec.unexpected, ["E280F302000000017032A729"]);
+});
+
+test("P2.1: thiếu bằng chứng nhận → problems (phiếu gửi chưa ghi nhận EPC, biên nhận thiếu / lạ / sai kho, không có biên nhận mới)", () => {
+  const exp = nw.normalizeReceiving(H.receivingPO28237814());
+  const codes = (rec) => [...new Set(rec.problems.map((p) => p.split(":")[0]))].sort();
+  const poOk = () => nw.normalizePoDetail(H.poDetailPO28237814Received());
+  // Phiếu gửi đọc lại chưa có receivedEpcs (như trước khi nhận).
+  const before = [nw.normalizeShipment(H.sample("nw-stg-shipment-34e67fb9-PO28237814.json"))];
+  assert.deepEqual(codes(nw.buildReceivedUnits(poOk(), before, exp, RCV_OPTS)), ["shipment_not_received"]);
+  // Không đọc được phiếu gửi nào.
+  assert.deepEqual(codes(nw.buildReceivedUnits(poOk(), [], exp, RCV_OPTS)), ["epc_not_in_shipment"]);
+  // Biên nhận thiếu / không có trong receipts / không chứa EPC / khác kho.
+  const p1 = poOk();
+  p1.items[0].receivedUnits[0].receiptId = "";
+  assert.deepEqual(codes(nw.buildReceivedUnits(p1, shipRcv(), exp, RCV_OPTS)), ["receipt_missing"]);
+  const p2 = poOk();
+  p2.receipts = [];
+  assert.deepEqual(codes(nw.buildReceivedUnits(p2, shipRcv(), exp, RCV_OPTS)), ["receipt_unknown"]);
+  const p3 = poOk();
+  p3.receipts[0].epcs = p3.receipts[0].epcs.slice(1);
+  assert.deepEqual(codes(nw.buildReceivedUnits(p3, shipRcv(), exp, RCV_OPTS)), ["receipt_epc_mismatch"]);
+  assert.deepEqual(codes(nw.buildReceivedUnits(poOk(), shipRcv(), exp, { receiptIdsBefore: [], warehouseId: "kho-khac" })), ["receipt_warehouse_mismatch"]);
+  // Biên nhận đã có từ trước khi khớp đơn → không phải lượt này.
+  assert.deepEqual(codes(nw.buildReceivedUnits(poOk(), shipRcv(), exp, { receiptIdsBefore: [H.RECEIPT_ID], warehouseId: H.STG_CTX.warehouseId })), ["no_new_receipt"]);
+});
+
+test("P2.2: tra QR phải có productId số, lô, hạn DD-MM-YYYY", () => {
+  const d = H.sample("pos-stg-qrcode-uid-circa.json")[0].response.data[0];
+  const one = (patch) => pos.normalizeQrLookup({ status: "OK", data: [Object.assign({}, d, patch)] }, d.uniqueId);
+  assert.equal(one({}).ok, true);
+  assert.equal(one({}).productId, "1110");
+  assert.equal(one({ productId: null }).reason, "incomplete");
+  assert.equal(one({ productId: undefined }).reason, "incomplete");
+  assert.equal(one({ productId: "abc" }).reason, "incomplete");
+  assert.equal(one({ lot: "" }).reason, "incomplete");
+  assert.equal(one({ expiredDate: "" }).reason, "incomplete");
+  assert.equal(one({ expiredDate: "2028-12-12" }).reason, "incomplete");
+  assert.equal(one({ uniqueId: "KHAC", shortId: "KHAC" }).reason, "not_found");
 });

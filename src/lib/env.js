@@ -15,6 +15,8 @@
       nwUiOrigin: "https://circa-stg.nextwaves.app",
       nwApiBase: "https://api-circa-stg.nextwaves.app/api",
       buymedSlug: "buymed-stag",
+      // Ghi GR (W1) chỉ có ở staging, và chỉ khi operator cấp phép từng lần (PM audit 24/10 P1.3).
+      writeEnabled: true,
       // Staging chỉ chạy với cửa hàng 2222 (operator chốt 24/10/2026).
       storeAllowlist: Object.freeze(["64a8663b-0c9e-49c6-9626-0a4c7c4bd53d"]),
       warehouseByStore: Object.freeze({ "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57" }),
@@ -27,6 +29,8 @@
       nwUiOrigin: "https://circa.nextwaves.app",
       nwApiBase: "https://api-circa.nextwaves.app/api",
       buymedSlug: "buymed",
+      // Production chỉ đọc cho tới gate production (PM audit 24/10 P1.3 / P7).
+      writeEnabled: false,
       // Production: theo tài khoản đang đăng nhập, không giới hạn cửa hàng.
       storeAllowlist: null,
       warehouseByStore: Object.freeze({ "c476efb2-415c-429a-978e-d389b4b06607": "eb5e2b4f-6f92-413b-90ef-6be1730b94c0" }),
