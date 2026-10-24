@@ -229,7 +229,7 @@ function createBrowser(server, opts = {}) {
     return t;
   }
 
-  return {
+  const api = {
     store,
     openTab,
     tabs: () => [...tabs.values()].filter((t) => !t.closed),
@@ -244,6 +244,7 @@ function createBrowser(server, opts = {}) {
     // Như chrome.runtime.onInstalled (vd. {reason: "update", previousVersion}).
     fireInstalled: (details) => installedListeners.forEach((l) => l(clone(details))),
     close: () => {
+      OPEN.delete(api);
       for (const t of tabs.values()) kill(t.ctx);
       for (const h of allTimers) {
         clearTimeout(h);
@@ -251,7 +252,14 @@ function createBrowser(server, opts = {}) {
       }
     },
   };
+  OPEN.add(api);
+  return api;
 }
+
+// Mọi trình duyệt giả đang mở. Test bị cắt vì quá giờ thì `finally` của nó có thể không bao giờ chạy;
+// gọi closeAll() trong afterEach để timer của trình duyệt đó không giữ tiến trình test sống mãi.
+const OPEN = new Set();
+const closeAll = () => [...OPEN].forEach((b) => b.close());
 
 async function until(fn, timeoutMs = 4000) {
   const t0 = Date.now();
@@ -265,4 +273,4 @@ async function until(fn, timeoutMs = 4000) {
 
 const settle = (ms = 80) => new Promise((r) => setTimeout(r, ms));
 
-module.exports = { createBrowser, until, settle };
+module.exports = { createBrowser, until, settle, closeAll };

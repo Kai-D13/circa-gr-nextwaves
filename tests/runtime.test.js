@@ -4,7 +4,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const H = require("./helpers.js");
-const { createBrowser, until, settle } = require("./browser-sim.js");
+const { createBrowser, until, settle, closeAll } = require("./browser-sim.js");
+
+// Test bị cắt vì quá giờ (--test-timeout) vẫn đóng trình duyệt giả của nó → file test luôn kết thúc được.
+test.afterEach(() => closeAll());
 
 const POS = "https://pos.stg.circa-v2.buymed.tech";
 const NW = "https://circa-stg.nextwaves.app";
