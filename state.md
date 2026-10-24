@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **24/10/2026 (lần 2, sau khi người dùng trả lời S1–S4)**. Giai đoạn: **khảo sát, chưa có mã**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **24/10/2026 (lần 3, có GR03878 sinh từ SO trên staging)**. Giai đoạn: **khảo sát + spec PM v0.1 đề xuất, chưa có mã**. Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -12,7 +12,12 @@ Cập nhật: **24/10/2026 (lần 2, sau khi người dùng trả lời S1–S4)
 - **Phát hiện chính (lần 2):**
   - PO staging của GR03877 là `IMPORT_STOCK` tạo tay, **không có SO**, nên chuỗi SO không dùng được trên staging.
   - Cặp (`product_id`, số lượng đơn vị gốc) khớp **8/8 dòng** ở cả hai môi trường. Đây là "dấu vân tay" để tìm hoặc kiểm PO Nextwaves khi thiếu SO (§3).
-- Đang chờ người dùng gửi dữ liệu §6 (lấy qua giao diện, không cần token).
+- **Phát hiện chính (lần 3, §2.2):**
+  - Staging đã có GR03878 sinh từ SO 1593858 (PO00006750). SO trùng `refId` của PO28237814, nên **chuỗi SO chạy được trên staging**.
+  - Dấu vân tay khớp cả GR03877 lẫn GR03878 (R9 đã xảy ra). Vì vậy dấu vân tay chỉ để kiểm, không dùng làm cách tìm.
+  - GR03878 có 2/3 dòng mà **số UID ≠ số lượng dòng** (6 UID cho 2 hộp; 4 UID cho 2 hộp), R11.
+  - Phản hồi dev cho PM: `docs/dev/DEV-REVIEW-SPEC-STG-v0.1.md`.
+- Đang chờ người dùng gửi dữ liệu §6 (lấy qua giao diện, không cần token), nhất là D4 tra QR cả 12 UID.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -84,6 +89,33 @@ NW stg   inter-tenant f930f66d (outbound, counterparty buymed-stag, status shipp
 - Nextwaves `localUnit` ghi "hộp" nhưng con số là đơn vị gốc POS (viên): 6 vỉ × 2 = 12, 4 túi × 10 = 40. **Không dùng nhãn `localUnit`**, chỉ dùng con số.
 - `units[].lineId` là mã **dòng giao hàng** (5 dòng), khác mã dòng đơn `lines[].lineId` (3 dòng).
   Unit chỉ có `productTitle`, **không có productId**. Muốn gán UID → sản phẩm trước khi nhận phải có API khác (§6 D3).
+
+### 2.2 Cặp thử staging có SO (operator gửi 24/10 chiều) — đề xuất làm cặp chính
+
+```
+POS stg  GR03878 2de6c0ec (2222, WAITING_TO_RECEIVE, created_by "Hệ thống")      samples/gr-stg-GR03878-20261024.json
+          └─ PO00006750 f7678788: source_type SO_THUOCSI, sale_order_number "1593858",          samples/po-stg-PO00006750-SOBD1593858.json
+             thuocsi_delivery_code ["SOBD1593858-F"], list_po_code_with_same_thuocsi_id [PO00006749, PO00006750],
+             origin_po_id 9b1ff47a…, goods_receipts [GR03878]
+NW stg   PO28237814 (refId SOBD1593858-1056745) — như §2.1                                    samples/nw-stg-po-PO28237814-detail.json
+```
+
+| SP | GR03878 | Lô POS (mỗi lô 1 đơn vị dòng) | Nextwaves | UID | 1 UID = |
+|---|---|---|---|---|---|
+| 1110 | 2 hộp (1 hộp = 6 viên), base 12 | A1-121229, 261009DHAUS-121228 | 6 vỉ, local 12 | 6 (2 dòng giao × 3) | 1 vỉ = 1/3 hộp |
+| 5451 | 2 hộp (1 hộp = 20 viên), base 40 | 261009KSDHAU-121228, A1-121228 | 4 túi, local 40 | 4 (2 × 2) | 1 túi = 1/2 hộp |
+| 2431732 | 2 chai, base 2 | 261016KHASUFDB-060627, A98-060627 | 2 chai | 2 (1 dòng giao) | 1 chai |
+
+- Cùng SO, POS lại sinh 2 PO (PO00006749 là PO gốc; chỉ PO00006750 có GR), giống production (R2).
+- Dấu vân tay `(product_id, base_quantity)` của GR03878 **trùng hệt** GR03877 (R9).
+- Giả thuyết: mỗi dòng giao Nextwaves là một lô (3 vỉ = 1 hộp / lô; 2 túi = 1 hộp / lô). Chưa xác nhận (D3 / D4).
+  Soffell: 2 lô POS nhưng 1 dòng giao → lô từng UID chỉ lấy được từ tra QR.
+- PO Nextwaves chi tiết (`GET /purchase-orders/<id>`):
+  - `items[].externalLineKey` = `lines[].lineId` của inter-tenant (3/3).
+  - `quantity` tính theo đơn vị gốc (12 / 40 / 2); `receivedUnits` rỗng trước khi nhận.
+  - `externalProductId` **null 2/3** → chỉ dùng `productSku` "CIRCA-<id>".
+  - Kho "CIRCA FLORITA" code WH-30145 (`buymedCustomerId` 30145).
+- Seller POS staging của PO này: `CC4DM8DN9F1` (khác `CXH7DN9F1YA` của PO00006745).
 
 ## 3. Bài toán GR → PO Nextwaves
 
@@ -226,10 +258,15 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
 - R4. JWT Nextwaves sống 1 giờ.
 - R5. QR nhân đôi sau COMPLETED (§1).
 - R6. Dữ liệu staging không giữ bất biến đơn vị của production (§5.3). Test xanh trên staging chưa đủ chứng minh production.
-- R7. Staging không thử được chuỗi SO (PO tạo tay). Đường SO chỉ được chứng minh ở production.
+- R7. ~~Staging không thử được chuỗi SO~~ — **đã hết** (24/10 chiều): GR03878 / PO00006750 có SO 1593858 (§2.2). GR03877 vẫn là ca không SO.
 - R8. Unit Nextwaves trước khi nhận chỉ có `productTitle` + `lineId` dòng giao, không có productId. Gán theo tên là rủi ro, cần API khác (D3).
 - R9. Dấu vân tay E không phân biệt được hai đơn trùng hệt hàng và số lượng → phải để người dùng chọn.
 - R10. Kiểm trực tiếp mẫu inter-tenant staging 24/10: `units[].lineId` của 5 nhóm UID không trùng bất kỳ `lines[].lineId` nào trong 3 dòng PO; `units[]` không có product ID/SKU/lô. Không được ghép UID với dòng PO bằng hai `lineId` này hoặc tên hàng. Cần D3 chỉ ra quan hệ shipment line → sản phẩm/lô trước khi áp UID tự động.
+- R11. **1 UID ≠ 1 đơn vị dòng GR** (GR03878: 1110 và 5451, §2.2).
+  - Mã quét GR của POS production cộng +1 đơn vị dòng mỗi lần quét, không quy đổi theo đơn vị của QR.
+  - Nếu staging cũng vậy, gõ lại UID vào ô quét sẽ chặn hoặc lệch lô.
+  - Cần PM chọn cách ghi (`docs/dev/DEV-REVIEW-SPEC-STG-v0.1.md` §2). Cờ `is_rfid_unit` của POS cũng không khớp đơn vị tem (5451).
+- R12. Reader RFID dùng chung. Trên máy POS production, `circa-qr-scan-log` giữ cổng serial của reader ở tab POS. Nếu web Nextwaves cũng đọc reader qua Web Serial thì hai bên có thể giành cổng. Chưa biết Nextwaves đọc reader bằng gì.
 
 ## 8. Nhật ký quyết định
 - 20/10/2026: phân tích capture luồng nhận hàng; brainstorm chuỗi khoá ba bên.
@@ -246,9 +283,21 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
   - Vai trò: operator / dev-team Claude Code / PM Codex (`agent.md` §2–3).
   - Repo GitHub đang **public** (kiểm API 24/10) → chưa push, chờ operator.
 
+- 24/10/2026 (lần 4, operator chốt):
+  - Repo **public**. Dev thay tên nhân viên trong `samples/` bằng `<nhân viên>`, viết lại lịch sử cục bộ trước lần push đầu.
+  - Operator đăng nhập GitHub cho lần push đầu.
+  - PM đọc và làm việc trực tiếp trên `C:\QR_code\circa-gr-nextwaves` (máy local).
+  - Máy thử staging = laptop này.
+  - Operator gửi cặp GR03878 / PO00006750 (có SO) + PO Nextwaves chi tiết. Dev gửi phản hồi spec `docs/dev/DEV-REVIEW-SPEC-STG-v0.1.md`.
+
 ## 9. Việc tiếp theo
-1. Operator quyết repo public / private trước lần push đầu (samples + tài liệu có dữ liệu nội bộ).
+1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
 2. Operator mở session PM Codex bằng `docs/PROMPT-PM-CODEX.md`. PM chốt hướng §3 / §6 và ra spec v0.1 staging chia batch.
 3. Operator gửi D1–D5 (staging, Copy response) và trả lời Q1–Q7 khi PM cần.
 4. Dev chỉ dựng `src/`, `tests/`, `scripts/` khi spec batch đầu được duyệt.
 5. PM đã soạn `docs/SPEC-STG-v0.1.md` ngày 24/10/2026: B1 chỉ đọc có thể giao dev; B2–B3 chỉ đọc qua gate; B4 ghi POS có gate và cần operator cho phép từng lần. Các quyết định nghiệp vụ trong spec là **đề xuất**, chưa phải quyết định đã chốt.
+6. PM xem `docs/dev/DEV-REVIEW-SPEC-STG-v0.1.md` (F1–F8):
+   - Đổi cặp thử chính sang GR03878?
+   - Đường SO trên staging.
+   - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
+   - Chốt spec v0.2 hoặc giao B1.

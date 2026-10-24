@@ -42,6 +42,9 @@ Báo cáo phải tách bốn mức bằng chứng: **đã kiểm từ source / g
 | 24/10 | Repo làm việc: `https://github.com/Kai-D13/circa-gr-nextwaves` (nhánh mặc định `main`) |
 | 24/10 | **Một gói duy nhất.** Môi trường chọn trong cấu hình extension: chế độ STG / PRD hoặc nhập URL. Extension tự nhận môi trường theo trang đang mở và chỉ chạy khi khớp chế độ đã chọn |
 | 24/10 | Phạm vi cửa hàng: production theo tài khoản đăng nhập; staging chỉ cửa hàng 2222 (§5) |
+| 24/10 | Repo GitHub để **public**. Mẫu trong `samples/` phải bỏ token / cookie và thay tên nhân viên bằng `<nhân viên>` trước khi commit |
+| 24/10 | PM (Codex) đọc và làm việc **trực tiếp trên máy local**, cùng thư mục `C:\QR_code\circa-gr-nextwaves` với dev |
+| 24/10 | Máy thử staging = **laptop này** (cùng máy dev / PM) |
 
 Hệ quả của "một gói":
 - `manifest.json` phải khai quyền cho host của **cả hai** môi trường.
@@ -104,6 +107,11 @@ Hiện có (24/10):
 | `state.md` | Trạng thái, sự thật đã kiểm, khác biệt stg / prd, câu hỏi mở, việc tiếp theo |
 | `AGENTS.md`, `CLAUDE.md` | Trỏ về `agent.md` + `state.md` (Codex / Claude Code tự đọc) |
 | `docs/PROMPT-PM-CODEX.md` | Prompt mở session PM (Codex) |
+| `docs/SPEC-STG-v0.1.md` | Spec staging v0.1 của PM (đề xuất) |
+| `docs/dev/` | Báo cáo / phản hồi của dev gửi PM (ví dụ `DEV-REVIEW-SPEC-STG-v0.1.md`) |
+| `samples/README.md` | Danh sách mẫu: môi trường, API nguồn, ghi chú |
+| `samples/gr-stg-GR03878-20261024.json`, `samples/po-stg-PO00006750-SOBD1593858.json` | Cặp staging **có SO** 1593858 (đề xuất làm cặp thử chính) |
+| `samples/nw-stg-po-PO28237814-detail.json` | PO Nextwaves staging dạng chi tiết (`GET /purchase-orders/<id>`), chưa nhận |
 | `samples/gr-prod-GR83174-20261024.json` | GR production (WAITING_TO_RECEIVE, 10 dòng), không token |
 | `samples/gr-stg-GR03877-20261023.json` | GR staging (WAITING_TO_RECEIVE, 3 dòng), không token |
 | `samples/po-prod-PO01970951-SOBD38468903.json` | PO production của SO 38468903 (có `thuocsi_delivery_code`, `goods_receipts`) |
@@ -123,7 +131,13 @@ Công cụ ngoài repo: `C:\QR_code\requests\net-capture\` (extension Net Captur
 
 ## 7. Git
 
-- Repo: `https://github.com/Kai-D13/circa-gr-nextwaves`.
+- Repo: `https://github.com/Kai-D13/circa-gr-nextwaves` (**public**).
+- **PM và dev làm chung một thư mục local**, nên phải tránh sửa đè nhau:
+  - **PM** viết `docs/SPEC-*.md`, `docs/pm/*`, và có thể thêm dòng vào `state.md`.
+  - **Dev** viết mã, `tests/`, `scripts/`, `samples/`, `docs/dev/*`, và cập nhật `state.md` / `agent.md`.
+  - Không sửa file của bên kia. Thấy sai thì phản hồi bằng file của mình.
+  - Trước khi sửa `state.md`, chạy `git diff` để thấy phần bên kia vừa thêm.
+  - Dev commit file của PM **nguyên trạng**, trong commit riêng có tiền tố `PM:`.
 - Đề xuất quy trình nhánh (chờ PM / operator chốt):
   - Mỗi batch một nhánh `batch/<tên>` và một PR để PM audit.
   - Operator merge vào `main` khi PM cho qua.
