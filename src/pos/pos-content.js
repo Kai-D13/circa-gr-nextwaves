@@ -58,6 +58,7 @@
     nw_many_orders: "Nextwaves có nhiều đơn cùng SO — chưa chứng minh được đúng lần giao",
     lease_held: "Tab khác đang điền phiếu này",
     cooldown: "Lần ghi trước có kết quả chưa rõ — chờ thêm rồi thử lại",
+    session_outdated: "Phiên tạo bởi bản extension cũ — mở lại phiếu để tạo phiên mới",
     gr_mismatch: "Cấp phép không đúng phiếu",
   };
   const SO_CHECK_MSG = {

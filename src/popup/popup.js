@@ -84,6 +84,7 @@
       info.appendChild(el("b", `${s.envId} · ${s.grCode || s.grId}`));
       info.appendChild(el("span", STATE_LABEL[s.state] || s.state));
       info.appendChild(el("span", `${s.deliveryCode || s.soBase}${s.nwPoNumber ? ` → ${s.nwPoNumber}` : ""} · ${new Date(s.updatedAt).toLocaleString("vi-VN")}`));
+      if (!s.schema) info.appendChild(el("span", "Phiên của bản cũ — không dùng để điền; mở lại phiếu để tạo phiên mới"));
       const locks = [].concat(s.writeLocks || [], s.nwWriteLocks || []);
       if (locks.length) info.appendChild(el("span", `Khoá điền: ${locks.join(", ")}`));
       if (s.applyError) info.appendChild(el("span", `Dừng: ${s.applyError.reason}${s.applyError.status ? ` (HTTP ${s.applyError.status})` : ""}`));

@@ -33,6 +33,7 @@ function createBrowser(server, opts = {}) {
   const allTimers = new Set();
   let nextTabId = 1;
   let bgListener = null;
+  const installedListeners = [];
 
   const storage = {
     get: async (keys) => {
@@ -82,7 +83,11 @@ function createBrowser(server, opts = {}) {
   bg.importScripts = (...files) => files.forEach((f) => run(bg, f));
   bg.chrome = {
     storage: { local: storage, onChanged: { addListener: (l) => storageListeners.push(l) } },
-    runtime: { onMessage: { addListener: (l) => (bgListener = l) } },
+    runtime: {
+      onMessage: { addListener: (l) => (bgListener = l) },
+      onInstalled: { addListener: (l) => installedListeners.push(l) },
+      getManifest: () => clone(MANIFEST),
+    },
     tabs: {
       get: async (id) => {
         const t = tabs.get(id);
@@ -224,6 +229,8 @@ function createBrowser(server, opts = {}) {
     session: (key) => clone((store.sessions || {})[key] || null),
     sendFromPopup: (msg) => sendMessage(null, msg),
     sendFromTab: (t, msg) => sendMessage(t, msg),
+    // Như chrome.runtime.onInstalled (vd. {reason: "update", previousVersion}).
+    fireInstalled: (details) => installedListeners.forEach((l) => l(clone(details))),
     close: () => {
       for (const t of tabs.values()) kill(t.ctx);
       for (const h of allTimers) {

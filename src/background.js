@@ -18,6 +18,12 @@
  *  - khoá ghi phía POS đặt lúc tạo phiên (session:start, từ trang POS); khoá + dữ liệu đơn Nextwaves đặt MỘT lần (session:nwMatched,
  *    từ trang Nextwaves, khi phiên đang waiting_nw); không message nào xoá / hạ khoá;
  *  - message ghi kiểm nguồn gửi: claim / renew / finish từ trang POS, nwMatched / scanOk / received từ trang Nextwaves của môi trường.
+ *
+ * Nâng cấp giữ cùng extension ID (PM audit v0.1.2 P2.4):
+ *  - phiên và cấp phép mang `schema` = SESSION_SCHEMA. Thứ không có / khác schema là của bản cũ (trước v0.1.3), có thể thiếu khoá
+ *    P1.6 / P1.7 → không bao giờ được ghi (`session_outdated`), không được tìm lại (session:get / findByNw), không nhận khớp đơn /
+ *    lượt nhận; mở lại phiếu thì session:start thay bằng phiên mới (kiểm lại đủ khoá);
+ *  - onInstalled (update / install): xoá mọi phiên và cấp phép của bản cũ, ghi `lastUpgrade`.
  */
 importScripts("lib/env.js", "lib/keys.js");
 const E = self.__CGN__.env;
@@ -25,6 +31,10 @@ const K = self.__CGN__.keys;
 const T = Object.assign({ grantTtlMs: 30 * 60 * 1000, leaseMs: 90 * 1000, retryCooldownMs: 60 * 1000 }, self.__CGN__.tuning || {});
 
 const DEFAULT_CONFIG = Object.freeze({ mode: "", url: "" });
+// Tăng khi cấu trúc / bất biến của phiên đổi; phiên của schema khác bị coi là bản cũ (P2.4).
+const SESSION_SCHEMA = 1;
+const isCurrent = (x) => !!x && x.schema === SESSION_SCHEMA;
+const appVersion = () => (chrome.runtime.getManifest ? chrome.runtime.getManifest().version : "");
 const ACTIVE = new Set(["waiting_nw", "nw_ready", "received", "applying", "applied", "apply_stopped"]);
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const LOG_MAX = 200;
@@ -65,7 +75,7 @@ async function getGrants() {
   const { grants } = await chrome.storage.local.get("grants");
   const all = grants || {};
   const now = Date.now();
-  for (const k of Object.keys(all)) if (!(all[k].expiresAt > now)) delete all[k];
+  for (const k of Object.keys(all)) if (!(all[k].expiresAt > now) || !isCurrent(all[k])) delete all[k];
   return all;
 }
 
@@ -78,7 +88,7 @@ async function createGrant(msg, sender) {
   if (!/^GR\d+$/.test(grCode)) throw new Error("Mã phiếu nhận phải dạng GR + số, ví dụ GR03878");
   const all = await getGrants();
   const now = Date.now();
-  all[grantKey(env.id, grCode)] = { envId: env.id, grCode, createdAt: now, expiresAt: now + T.grantTtlMs };
+  all[grantKey(env.id, grCode)] = { schema: SESSION_SCHEMA, envId: env.id, grCode, createdAt: now, expiresAt: now + T.grantTtlMs };
   await chrome.storage.local.set({ grants: all });
   return all[grantKey(env.id, grCode)];
 }
@@ -151,6 +161,7 @@ async function nwMatched(msg, sender) {
   if (!s) throw new Error("Không có phiên");
   const env = E.envById(s.envId);
   requireOrigin(sender, env && env.nwUiOrigin, "session:nwMatched");
+  if (!isCurrent(s)) throw new Error("Phiên của bản cũ — mở lại phiếu trên POS");
   if (s.state !== "waiting_nw" || s.nwPoId) throw new Error("Phiên đã khớp đơn Nextwaves — không khớp lại / đổi được");
   const m = msg.match || {};
   const ok =
@@ -211,8 +222,11 @@ async function startSession(msg, sender) {
   const key = keyOf(env.id, msg.grId);
   const all = await getSessions();
   const cur = all[key];
-  if (cur && ACTIVE.has(cur.state)) return cur; // không mở thêm tab khi tải lại trang
+  if (cur && ACTIVE.has(cur.state) && isCurrent(cur)) return cur; // không mở thêm tab khi tải lại trang
+  const replaced = cur && !isCurrent(cur) ? { type: "replaced_outdated", oldState: cur.state, oldCreatedBy: cur.createdBy || null } : null;
   const s = {
+    schema: SESSION_SCHEMA,
+    createdBy: appVersion(),
     key,
     envId: env.id,
     grId: String(msg.grId).toLowerCase(),
@@ -232,7 +246,7 @@ async function startSession(msg, sender) {
     state: "waiting_nw",
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    log: [{ at: new Date().toISOString(), type: "start", deliveryCode: msg.deliveryCode, writeLocks: msg.writeLocks || [] }],
+    log: [replaced, { type: "start", deliveryCode: msg.deliveryCode, writeLocks: msg.writeLocks || [] }].filter(Boolean).map((l) => Object.assign({ at: new Date().toISOString() }, l)),
   };
   all[key] = s;
   await saveSessions(all);
@@ -247,6 +261,7 @@ async function findByNw(envId, po) {
   const base = K.soBase(p);
   const list = Object.values(all).filter(
     (s) =>
+      isCurrent(s) &&
       s.envId === envId &&
       ACTIVE.has(s.state) &&
       ((base && s.soBase === base) || (s.nwPoId && s.nwPoId === p.toLowerCase()) || (s.nwPoNumber && s.nwPoNumber.toUpperCase() === p.toUpperCase()))
@@ -259,6 +274,7 @@ async function findByNw(envId, po) {
 function writeBlockers(s) {
   const env = E.envById(s.envId);
   const out = [];
+  if (!isCurrent(s)) out.push("session_outdated");
   if (!env || !env.writeEnabled) out.push("env_read_only");
   if (!s.warehouseId) out.push("warehouse_unmapped");
   for (const l of [].concat(s.writeLocks || [], s.nwWriteLocks || [])) out.push(l);
@@ -334,6 +350,7 @@ async function received(key, payload, sender) {
   const cur = (await getSessions())[key];
   if (!cur) return null;
   requireOrigin(sender, E.envById(cur.envId).nwUiOrigin, "session:received");
+  if (!isCurrent(cur)) throw new Error("Phiên của bản cũ — mở lại phiếu trên POS");
   if (cur.state !== "nw_ready" || !cur.scanOk) throw new Error("Chưa có lượt xác nhận nhận hàng 2xx của phiên");
   const s = await updateSession(key, { state: "received", nwResult: payload }, { type: "nw_received", units: (payload.units || []).length });
   // Đưa dược sĩ về tab POS; tab đã đóng hoặc đã rời trang thì mở lại đúng trang bắt đầu phiên.
@@ -361,6 +378,30 @@ async function focusPos(key) {
   return updateSession(key, { posTabId });
 }
 
+// Nâng cấp / cài lại giữ cùng extension ID (P2.4): xoá phiên + cấp phép của bản cũ.
+async function dropOutdated(details) {
+  const all = await getSessions();
+  const removed = [];
+  for (const k of Object.keys(all)) {
+    if (!isCurrent(all[k])) {
+      removed.push({ key: k, state: all[k].state });
+      delete all[k];
+    }
+  }
+  const { grants } = await chrome.storage.local.get("grants");
+  const kept = {};
+  for (const [k, g] of Object.entries(grants || {})) if (isCurrent(g)) kept[k] = g;
+  const lastUpgrade = { at: new Date().toISOString(), reason: details.reason, from: details.previousVersion || null, to: appVersion(), removedSessions: removed, removedGrants: Object.keys(grants || {}).length - Object.keys(kept).length };
+  await chrome.storage.local.set({ sessions: all, grants: kept, lastUpgrade });
+  return lastUpgrade;
+}
+
+if (chrome.runtime.onInstalled) {
+  chrome.runtime.onInstalled.addListener((details) => {
+    if (details && (details.reason === "update" || details.reason === "install")) serial(() => dropOutdated(details));
+  });
+}
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   serial(async () => {
     switch (msg && msg.type) {
@@ -376,8 +417,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         return Object.values(await getGrants());
       case "grant:get":
         return (await getGrants())[grantKey(msg.envId, msg.grCode)] || null;
-      case "session:get":
-        return (await getSessions())[keyOf(msg.envId, msg.grId)] || null;
+      case "session:get": {
+        const s = (await getSessions())[keyOf(msg.envId, msg.grId)];
+        return isCurrent(s) ? s : null; // phiên bản cũ coi như không có → trang POS mở phiên mới
+      }
       case "session:start":
         return startSession(msg, sender);
       case "session:findByNw":
@@ -392,6 +435,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         const s = (await getSessions())[msg.key];
         if (!s || s.state !== "nw_ready") return null;
         requireOrigin(sender, E.envById(s.envId).nwUiOrigin, "session:scanOk");
+        if (!isCurrent(s)) throw new Error("Phiên của bản cũ — mở lại phiếu trên POS");
         const scan = msg.scan || {};
         if (!Array.isArray(s.shipmentIds) || !s.shipmentIds.includes(String(scan.shipmentId || "").toLowerCase())) throw new Error("session:scanOk: phiếu gửi không thuộc đơn đã khớp");
         if (!(scan.httpStatus >= 200 && scan.httpStatus < 300)) throw new Error("session:scanOk: không phải lượt 2xx");

@@ -778,3 +778,102 @@ test("P1.7: session:nwMatched — chỉ từ trang Nextwaves, chỉ khi phiên c
     b.close();
   }
 });
+
+// ---------- P2.4: phiên / cấp phép của bản cũ khi nâng cấp giữ cùng extension ID ----------
+
+// Biến phiên hiện hành thành "phiên bản cũ": không schema, khoá rỗng như bản trước P1.6 / P1.7; thêm cấp phép kiểu cũ.
+function makeOutdated(b, key) {
+  const s = b.store.sessions[key];
+  delete s.schema;
+  delete s.createdBy;
+  s.writeLocks = [];
+  s.nwWriteLocks = [];
+  const now = Date.now();
+  b.store.grants = { "STG:GR03878": { envId: "STG", grCode: "GR03878", createdAt: now, expiresAt: now + 3600000 } };
+}
+
+test("P2.4: phiên bản cũ (không schema, thiếu khoá) không được ghi / tìm lại / nhận lượt; mở lại phiếu → phiên mới kiểm lại khoá", async () => {
+  let soIncomplete = false;
+  const { b, srv, pos, nw } = await openToReceived({ server: { soSearch: (d) => { if (soIncomplete) d.total = 2; } } });
+  try {
+    await settle(50);
+    assert.deepEqual(b.session(KEY).writeLocks, []);
+    makeOutdated(b, KEY);
+    soIncomplete = true; // bản mới kiểm lại sẽ thấy danh sách GR chưa đủ
+    // Không ghi được, cấp phép kiểu cũ bị bỏ, không tìm lại được.
+    assert.deepEqual((await b.sendFromTab(pos, claimMsg("x"))).data, { ok: false, reason: "session_outdated" });
+    assert.equal((await b.sendFromPopup({ type: "grant:get", envId: "STG", grCode: "GR03878" })).data, null);
+    assert.equal((await b.sendFromTab(pos, { type: "session:get", envId: "STG", grId: GR_ID })).data, null);
+    assert.equal((await b.sendFromTab(nw, { type: "session:findByNw", envId: "STG", po: "SOBD1593858" })).data, null);
+    assert.match((await b.sendFromTab(nw, { type: "session:received", key: KEY, payload: { units: [] } })).error, /bản cũ/);
+    // Tải lại phiếu trên POS → phiên mới (schema hiện hành) thay phiên cũ, khoá tính lại theo P1.6.
+    const tabsBefore = b.tabs().length;
+    pos.reload();
+    pos.post(POS_AUTH);
+    const s2 = await until(() => {
+      const s = b.session(KEY);
+      return s && s.schema === 1 && s;
+    });
+    // Tab Nextwaves cũ (đã có header) có thể tự khớp đơn cho phiên mới ngay → waiting_nw hoặc nw_ready đều đúng.
+    assert.ok(["waiting_nw", "nw_ready"].includes(s2.state), s2.state);
+    assert.deepEqual(s2.writeLocks, ["so_gr_unknown"]);
+    assert.equal(s2.createdBy, "0.1.3");
+    assert.ok(s2.log.some((l) => l.type === "replaced_outdated" && l.oldState === "received"));
+    assert.equal(b.tabs().length, tabsBefore + 1, "mở lại màn quét Nextwaves cho phiên mới");
+    await grant(b);
+    await settle(50);
+    assert.equal(srv.st.puts.length, 0);
+  } finally {
+    b.close();
+  }
+});
+
+test("P2.4: trang Nextwaves không nhận phiên bản cũ (không tìm, không khớp đơn, không gọi API)", async () => {
+  const { b, srv, nw } = await openToReady();
+  try {
+    await settle(50);
+    makeOutdated(b, KEY);
+    b.store.sessions[KEY].state = "waiting_nw";
+    delete b.store.sessions[KEY].nwPoId;
+    const calls = srv.st.log.length;
+    nw.reload();
+    nw.post(NW_AUTH);
+    await settle(150);
+    assert.equal(nw.view, null, "không có phiên → không hiện khung");
+    assert.equal(srv.st.log.length, calls, "không gọi API Nextwaves");
+    const match = { nwPoId: "55bd221f-65de-4a4d-8a77-40c568a6f176", nwPoNumber: "PO28237814", nwOrderId: "f930f66d-679a-4ed8-9c8e-b48aea91a8be", nwRefId: "SOBD1593858-1056745", shipmentIds: [SHIP], expected: H.receivingPO28237814(), receiptIdsBefore: [], nwWriteLocks: [] };
+    assert.match((await b.sendFromTab(nw, { type: "session:nwMatched", key: KEY, match })).error, /bản cũ/);
+    b.store.sessions[KEY].state = "nw_ready";
+    b.store.sessions[KEY].shipmentIds = [SHIP];
+    assert.match((await b.sendFromTab(nw, { type: "session:scanOk", key: KEY, scan: { shipmentId: SHIP, httpStatus: 200 } })).error, /bản cũ/);
+    assert.equal(b.session(KEY).scanOk, undefined);
+  } finally {
+    b.close();
+  }
+});
+
+test("P2.4: onInstalled (update, cùng extension ID) xoá phiên + cấp phép của bản cũ, giữ của bản hiện hành, ghi lastUpgrade", async () => {
+  const { b } = await openToReady();
+  try {
+    await settle(50);
+    await grant(b); // cấp phép hiện hành (có schema)
+    const cur = JSON.parse(JSON.stringify(b.store.sessions[KEY]));
+    const oldKey = "STG:99999999-0000-4000-8000-0000000000aa";
+    b.store.sessions[oldKey] = Object.assign({}, cur, { key: oldKey, grId: "99999999-0000-4000-8000-0000000000aa", grCode: "GR09998", state: "received" });
+    delete b.store.sessions[oldKey].schema;
+    b.store.grants["STG:GR09998"] = { envId: "STG", grCode: "GR09998", createdAt: Date.now(), expiresAt: Date.now() + 3600000 };
+    b.fireInstalled({ reason: "update", previousVersion: "0.1.2" });
+    await until(() => b.store.lastUpgrade);
+    assert.deepEqual(Object.keys(b.store.sessions), [KEY]);
+    assert.deepEqual(Object.keys(b.store.grants), ["STG:GR03878"]);
+    const u = b.store.lastUpgrade;
+    assert.deepEqual([u.reason, u.from, u.to, u.removedSessions, u.removedGrants], ["update", "0.1.2", "0.1.3", [{ key: oldKey, state: "received" }], 1]);
+    // Lý do khác (vd. chrome_update) không đụng storage.
+    delete b.store.lastUpgrade;
+    b.fireInstalled({ reason: "chrome_update" });
+    await settle(50);
+    assert.equal(b.store.lastUpgrade, undefined);
+  } finally {
+    b.close();
+  }
+});

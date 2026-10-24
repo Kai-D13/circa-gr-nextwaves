@@ -1,10 +1,10 @@
-"""Đột biến có chủ đích cho các hàng rào của v0.1.2 (PM audit 24/10: P1.1–P1.7, P2.1–P2.3, P3).
+"""Đột biến có chủ đích cho các hàng rào của v0.1.3 (PM audit 24/10: P1.1–P1.7, P2.1–P2.4, P3).
 
 Mỗi ca gỡ đúng MỘT hàng rào trong src/, chạy `node --test "tests/*.test.js"`; bộ test phải hỏng (KILLED).
 Chạy trên BẢN SAO trong thư mục tạm — không sửa src/ của repo. Cần Node (node --test) trên PATH.
 
-  python -I scripts/mutate-v0.1.2.py            # mọi ca
-  python -I scripts/mutate-v0.1.2.py 24         # bắt đầu từ ca thứ 25
+  python -I scripts/mutate-v0.1.3.py            # mọi ca
+  python -I scripts/mutate-v0.1.3.py 24         # bắt đầu từ ca thứ 25
 """
 import os
 import shutil
@@ -79,6 +79,19 @@ muts = [
     ("src/background.js", 'requireOrigin(sender, env.posOrigin, "session:start");', "", "P1.7 tạo phiên từ trang bất kỳ"),
     ("src/background.js", 'if (!Array.isArray(s.shipmentIds) || !s.shipmentIds.includes(String(scan.shipmentId || "").toLowerCase())) throw new Error("session:scanOk: phiếu gửi không thuộc đơn đã khớp");', "", "P1.7 scanOk phiếu gửi lạ"),
     ("src/background.js", 'requireOrigin(sender, E.envById(cur.envId).nwUiOrigin, "session:received");', "", "P1.7 received từ trang bất kỳ"),
+    # P2.4 (phiên / cấp phép của bản cũ khi nâng cấp giữ cùng extension ID)
+    ("src/background.js", 'if (!isCurrent(s)) out.push("session_outdated");', "", "P2.4 phiên bản cũ vẫn được ghi"),
+    ("src/background.js", "if (cur && ACTIVE.has(cur.state) && isCurrent(cur)) return cur;", "if (cur && ACTIVE.has(cur.state)) return cur;", "P2.4 mở lại phiếu giữ phiên bản cũ"),
+    ("src/background.js", "return isCurrent(s) ? s : null; // phiên bản cũ", "return s || null; // phiên bản cũ", "P2.4 session:get trả phiên bản cũ"),
+    ("src/background.js", """      isCurrent(s) &&
+      s.envId === envId &&""", """      s.envId === envId &&""", "P2.4 trang Nextwaves tìm thấy phiên bản cũ"),
+    ("src/background.js", "if (!(all[k].expiresAt > now) || !isCurrent(all[k])) delete all[k];", "if (!(all[k].expiresAt > now)) delete all[k];", "P2.4 cấp phép kiểu cũ vẫn dùng được"),
+    ("src/background.js", """  if (!isCurrent(s)) throw new Error("Phiên của bản cũ — mở lại phiếu trên POS");
+  if (s.state !== "waiting_nw" || s.nwPoId)""", """  if (s.state !== "waiting_nw" || s.nwPoId)""", "P2.4 khớp đơn cho phiên bản cũ"),
+    ("src/background.js", '        if (!isCurrent(s)) throw new Error("Phiên của bản cũ — mở lại phiếu trên POS");', "", "P2.4 scanOk cho phiên bản cũ"),
+    ("src/background.js", '  if (!isCurrent(cur)) throw new Error("Phiên của bản cũ — mở lại phiếu trên POS");', "", "P2.4 received cho phiên bản cũ"),
+    ("src/background.js", 'if (details && (details.reason === "update" || details.reason === "install")) serial(() => dropOutdated(details));', "", "P2.4 nâng cấp không dọn phiên cũ"),
+    ("src/background.js", "  for (const [k, g] of Object.entries(grants || {})) if (isCurrent(g)) kept[k] = g;", "  for (const [k, g] of Object.entries(grants || {})) kept[k] = g;", "P2.4 nâng cấp giữ cấp phép cũ"),
 ]
 
 
