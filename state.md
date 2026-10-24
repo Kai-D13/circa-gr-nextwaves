@@ -17,6 +17,10 @@ Cập nhật: **24/10/2026 (lần 3, có GR03878 sinh từ SO trên staging)**. 
   - Dấu vân tay khớp cả GR03877 lẫn GR03878 (R9 đã xảy ra). Vì vậy dấu vân tay chỉ để kiểm, không dùng làm cách tìm.
   - GR03878 có 2/3 dòng mà **số UID ≠ số lượng dòng** (6 UID cho 2 hộp; 4 UID cho 2 hộp), R11.
   - Phản hồi dev cho PM: `docs/dev/DEV-REVIEW-SPEC-STG-v0.1.md`.
+- **Lần 4 (operator giải thích luồng thật, §2.3):**
+  - PO Nextwaves do Nextwaves tự sinh khi nhận SO, **không bao giờ** trùng PO POS. PO / GR POS chỉ sinh khi Buymed giao thành công ⇒ khoá nối là **SO**.
+  - API `/receiving` cho dòng giao kèm productId / sku / unit / UID ⇒ R10 đã giải.
+  - Dev viết logic chi tiết đề xuất: `docs/dev/LOGIC-v0.1.md`.
 - Đang chờ người dùng gửi dữ liệu §6 (lấy qua giao diện, không cần token), nhất là D4 tra QR cả 12 UID.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
@@ -116,6 +120,24 @@ NW stg   PO28237814 (refId SOBD1593858-1056745) — như §2.1                  
   - `externalProductId` **null 2/3** → chỉ dùng `productSku` "CIRCA-<id>".
   - Kho "CIRCA FLORITA" code WH-30145 (`buymedCustomerId` 30145).
 - Seller POS staging của PO này: `CC4DM8DN9F1` (khác `CXH7DN9F1YA` của PO00006745).
+
+### 2.3 Luồng thật (operator 24/10) và API `/receiving`
+
+1. thuocsi / Buymed tạo SO (hàng, product_id, UID, EPC; **chưa có PO POS**).
+2. Buymed đẩy SO sang Nextwaves → inter-tenant order (`refId` SOBD<số>-<hậu tố>) + **PO Nextwaves tự sinh** (không trùng PO POS).
+3. Buymed giao thành công → POS sinh PO (SO_THUOCSI, `sale_order_number`) + GR (Hệ thống).
+4. Dược sĩ mở GR → extension mở đúng PO Nextwaves → dược sĩ nhận bằng reader, bấm **"Xác nhận nhận hàng"** →
+   extension đưa kết quả về POS để hoàn tất GR / PO trên POS.
+
+`GET /api/v1/inter-tenant-orders/purchase-orders/<poId>/receiving` (mẫu `samples/nw-stg-receiving-PO76458756.json`, PO76458756, CONFIRMED, chưa nhận):
+- `{order (không có refId), purchaseOrderStatus, warehouse, shipments[], receipts[]}`.
+- `shipments[]`: `{id, shipmentNumber, status pending, needsAccept true, lines[]}`.
+- `lines[]`: `{lineId, productId, product{id, title, sku, barcode}, name, quantity, unit, tagged, units[{epc, unitUid}], qrUnitUids[]}`.
+- `quantity` = số UID ở 5/5 dòng. Mỗi UID = 1 `unit` của dòng giao.
+- ⇒ Gán UID → sản phẩm + đơn vị **trước khi nhận** bằng `productId` / `sku`, không cần dựa vào tên (R10 đã giải).
+- Dòng giao **không có trường lô**. Lô của UID vẫn phải lấy qua tra QR trên POS (D4).
+- PO76458756 (1110: 6 vỉ, 5451: 4 túi, Soffell **1** chai) **không khớp** GR03878 (Soffell 2 chai).
+  PO của GR03878 là PO28237814 (SO 1593858). Dấu vân tay đã phân biệt đúng.
 
 ## 3. Bài toán GR → PO Nextwaves
 
@@ -262,6 +284,7 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
 - R8. Unit Nextwaves trước khi nhận chỉ có `productTitle` + `lineId` dòng giao, không có productId. Gán theo tên là rủi ro, cần API khác (D3).
 - R9. Dấu vân tay E không phân biệt được hai đơn trùng hệt hàng và số lượng → phải để người dùng chọn.
 - R10. Kiểm trực tiếp mẫu inter-tenant staging 24/10: `units[].lineId` của 5 nhóm UID không trùng bất kỳ `lines[].lineId` nào trong 3 dòng PO; `units[]` không có product ID/SKU/lô. Không được ghép UID với dòng PO bằng hai `lineId` này hoặc tên hàng. Cần D3 chỉ ra quan hệ shipment line → sản phẩm/lô trước khi áp UID tự động.
+  → **Phần sản phẩm đã giải (24/10):** `/receiving` trả `shipments[].lines[]` có productId / sku / unit / units (§2.3). Phần **lô** vẫn mở (D4).
 - R11. **1 UID ≠ 1 đơn vị dòng GR** (GR03878: 1110 và 5451, §2.2).
   - Mã quét GR của POS production cộng +1 đơn vị dòng mỗi lần quét, không quy đổi theo đơn vị của QR.
   - Nếu staging cũng vậy, gõ lại UID vào ô quét sẽ chặn hoặc lệch lô.
@@ -290,6 +313,11 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
   - Máy thử staging = laptop này.
   - Operator gửi cặp GR03878 / PO00006750 (có SO) + PO Nextwaves chi tiết. Dev gửi phản hồi spec `docs/dev/DEV-REVIEW-SPEC-STG-v0.1.md`.
 
+- 24/10/2026 (lần 5):
+  - Operator giải thích luồng thật: PO Nextwaves ≠ PO POS; POS chỉ sinh PO / GR khi giao thành công; khoá là SO (§2.3).
+  - Extension làm **một** tính năng (`docs/dev/LOGIC-v0.1.md` §0).
+  - Gửi mẫu `/receiving` (PO76458756). Dev viết logic chi tiết đề xuất `docs/dev/LOGIC-v0.1.md` để PM audit.
+
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
 2. Operator mở session PM Codex bằng `docs/PROMPT-PM-CODEX.md`. PM chốt hướng §3 / §6 và ra spec v0.1 staging chia batch.
@@ -301,3 +329,5 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Đường SO trên staging.
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
+7. PM audit `docs/dev/LOGIC-v0.1.md` và chốt P1–P7 (§7 của file đó).
+   Operator lấy dữ liệu §8 của file đó: D4 cho 12 UID, `/receiving` của PO28237814, lời gọi "Xác nhận nhận hàng", D1.

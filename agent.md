@@ -138,6 +138,7 @@ Công cụ ngoài repo: `C:\QR_code\requests\net-capture\` (extension Net Captur
   - Không sửa file của bên kia. Thấy sai thì phản hồi bằng file của mình.
   - Trước khi sửa `state.md`, chạy `git diff` để thấy phần bên kia vừa thêm.
   - Dev commit file của PM **nguyên trạng**, trong commit riêng có tiền tố `PM:`.
+- Tài liệu (`state.md`, `agent.md`, `docs/`, `samples/`) push thẳng `main`. **Mã** đi theo nhánh `batch/<tên>`, PM audit xong mới merge.
 - Đề xuất quy trình nhánh (chờ PM / operator chốt):
   - Mỗi batch một nhánh `batch/<tên>` và một PR để PM audit.
   - Operator merge vào `main` khi PM cho qua.
