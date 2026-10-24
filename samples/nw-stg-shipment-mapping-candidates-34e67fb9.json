@@ -1,0 +1,164 @@
+{
+    "lines": [
+        {
+            "lineId": "edba6bf3-cb98-4dc8-be8c-463da68b0c9c",
+            "document": {
+                "sourceProductId": "50812c0e-99a6-4a51-bf30-0d62459c61e9",
+                "sourceProductNumber": "CIRCA-1110",
+                "name": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                "sku": "CIRCA-1110",
+                "gtin": null,
+                "barcode": null,
+                "brand": null,
+                "baseUnit": "hộp",
+                "trackBatch": true
+            },
+            "quantity": 3,
+            "unit": "vỉ",
+            "linked": {
+                "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+                "title": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                "sku": "CIRCA-1110",
+                "barcode": null,
+                "source": "line"
+            },
+            "candidates": [
+                {
+                    "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+                    "title": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                    "sku": "CIRCA-1110",
+                    "barcode": null,
+                    "matchedBy": "sku"
+                }
+            ]
+        },
+        {
+            "lineId": "2eab3586-4f49-4ef8-b1e8-ffe692afb9b3",
+            "document": {
+                "sourceProductId": "50812c0e-99a6-4a51-bf30-0d62459c61e9",
+                "sourceProductNumber": "CIRCA-1110",
+                "name": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                "sku": "CIRCA-1110",
+                "gtin": null,
+                "barcode": null,
+                "brand": null,
+                "baseUnit": "hộp",
+                "trackBatch": true
+            },
+            "quantity": 3,
+            "unit": "vỉ",
+            "linked": {
+                "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+                "title": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                "sku": "CIRCA-1110",
+                "barcode": null,
+                "source": "line"
+            },
+            "candidates": [
+                {
+                    "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+                    "title": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                    "sku": "CIRCA-1110",
+                    "barcode": null,
+                    "matchedBy": "sku"
+                }
+            ]
+        },
+        {
+            "lineId": "27650f8f-cdf4-46eb-aa7d-952c54e25405",
+            "document": {
+                "sourceProductId": "3a05ef50-41ad-4e3f-b45c-d64adbe99776",
+                "sourceProductNumber": "CIRCA-2431732",
+                "name": "Kem xua muỗi Soffell hương cam",
+                "sku": "CIRCA-2431732",
+                "gtin": null,
+                "barcode": null,
+                "brand": null,
+                "baseUnit": "chai",
+                "trackBatch": false
+            },
+            "quantity": 2,
+            "unit": "chai",
+            "linked": {
+                "productId": "3b250a6b-d64b-46fb-b389-b02f6f1c6368",
+                "title": "Kem xua muỗi Soffell hương cam",
+                "sku": "CIRCA-2431732",
+                "barcode": null,
+                "source": "line"
+            },
+            "candidates": [
+                {
+                    "productId": "3b250a6b-d64b-46fb-b389-b02f6f1c6368",
+                    "title": "Kem xua muỗi Soffell hương cam",
+                    "sku": "CIRCA-2431732",
+                    "barcode": null,
+                    "matchedBy": "sku"
+                }
+            ]
+        },
+        {
+            "lineId": "9796be24-7371-42fe-a724-455ec3cb1ebe",
+            "document": {
+                "sourceProductId": "4a0f6df3-8b7d-4993-ab39-e1664034f5dd",
+                "sourceProductNumber": "CIRCA-5451",
+                "name": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                "sku": "CIRCA-5451",
+                "gtin": null,
+                "barcode": null,
+                "brand": null,
+                "baseUnit": "hộp",
+                "trackBatch": true
+            },
+            "quantity": 2,
+            "unit": "túi",
+            "linked": {
+                "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+                "title": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                "sku": "CIRCA-5451",
+                "barcode": null,
+                "source": "line"
+            },
+            "candidates": [
+                {
+                    "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+                    "title": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                    "sku": "CIRCA-5451",
+                    "barcode": null,
+                    "matchedBy": "sku"
+                }
+            ]
+        },
+        {
+            "lineId": "592c7d5e-7eda-4bb5-9031-3578882bc703",
+            "document": {
+                "sourceProductId": "4a0f6df3-8b7d-4993-ab39-e1664034f5dd",
+                "sourceProductNumber": "CIRCA-5451",
+                "name": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                "sku": "CIRCA-5451",
+                "gtin": null,
+                "barcode": null,
+                "brand": null,
+                "baseUnit": "hộp",
+                "trackBatch": true
+            },
+            "quantity": 2,
+            "unit": "túi",
+            "linked": {
+                "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+                "title": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                "sku": "CIRCA-5451",
+                "barcode": null,
+                "source": "line"
+            },
+            "candidates": [
+                {
+                    "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+                    "title": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                    "sku": "CIRCA-5451",
+                    "barcode": null,
+                    "matchedBy": "sku"
+                }
+            ]
+        }
+    ]
+}

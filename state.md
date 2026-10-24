@@ -21,6 +21,11 @@ Cập nhật: **24/10/2026 (lần 3, có GR03878 sinh từ SO trên staging)**. 
   - PO Nextwaves do Nextwaves tự sinh khi nhận SO, **không bao giờ** trùng PO POS. PO / GR POS chỉ sinh khi Buymed giao thành công ⇒ khoá nối là **SO**.
   - API `/receiving` cho dòng giao kèm productId / sku / unit / UID ⇒ R10 đã giải.
   - Dev viết logic chi tiết đề xuất: `docs/dev/LOGIC-v0.1.md`.
+- **Lần 5 (capture 24/10 chiều, §2.4) — đổi hướng lớn:**
+  - **Nextwaves đã có tích hợp Circa**: liên kết PO Nextwaves ↔ GR Circa, đẩy hàng + UID và hoàn tất GR trên Circa.
+    Đề xuất extension **không ghi POS**; chỉ tìm đúng PO, chuyển màn, đảm bảo liên kết và kiểm kết quả.
+  - Không có nút: mở GR là tự chạy. Hai đường vào: trang GR và `/chi-tiet-so/<SO>`.
+  - Logic mới: `docs/dev/LOGIC-v0.2.md` (thay v0.1).
 - Đang chờ người dùng gửi dữ liệu §6 (lấy qua giao diện, không cần token), nhất là D4 tra QR cả 12 UID.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
@@ -138,6 +143,23 @@ NW stg   PO28237814 (refId SOBD1593858-1056745) — như §2.1                  
 - Dòng giao **không có trường lô**. Lô của UID vẫn phải lấy qua tra QR trên POS (D4).
 - PO76458756 (1110: 6 vỉ, 5451: 4 túi, Soffell **1** chai) **không khớp** GR03878 (Soffell 2 chai).
   PO của GR03878 là PO28237814 (SO 1593858). Dấu vân tay đã phân biệt đúng.
+
+### 2.4 Capture 24/10 chiều: hai đường vào POS, tích hợp Circa của Nextwaves, lô theo dòng giao
+
+Chi tiết: `docs/dev/LOGIC-v0.2.md`. Tóm tắt **[đã kiểm từ capture / JS]**:
+- **Đường vào (2)** "Nhập SO thuocsi":
+  - Danh sách GR → nhập SO → `GET goods-receipt/search?query=so_thuocsi=1593858,…` → `/chi-tiet-so/1593858` (màn nhập hàng cấp SO).
+  - Mẫu `samples/pos-stg-gr-search-so-1593858.json` trả đúng GR03878.
+- **Ô quét POS staging** (cả trang GR và `/chi-tiet-so`), giống production:
+  - bắt buộc chuỗi có `/qr/`; +1 đơn vị dòng mỗi lượt; không quy đổi.
+  - Tem Circa staging có dạng `https://qr.v2.circa.vn/item/<UID>` (không có `/qr/`), nên POS sẽ báo sai định dạng.
+- **Tích hợp Circa trong Nextwaves** (module `circa`, `circa-receipt-link`):
+  - Các API: `/integrations/circa/connection`, `pull-purchase-orders`, `goods-receipts`, `purchase-orders/<id>/link` (GET / PUT `{goodsReceiptId}` / DELETE), `scan/qr`.
+  - Chữ hiển thị: liên kết xong thì "Hàng nhận và UID sẽ được ghi vào phiếu này, và phiếu được hoàn tất trên Circa khi đơn nhận đủ".
+  - PO28237814: `eligible: true, linked: false`.
+- **Lô:** `GET /inter-tenant-shipments/<id>` có `batch {batchNumber, expiryDate}` từng dòng giao → `<batch>-<DDMMYY>` khớp 4/4 lô GR03878.
+  Soffell không có lô bên Nextwaves (POS có 2 lô).
+- PO76458756 thuộc SO 1593849 (operator). Danh sách tem quét có 2 UID ngoài PO28237814. Chuỗi máy quét bị rơi ký tự.
 
 ## 3. Bài toán GR → PO Nextwaves
 
@@ -318,6 +340,13 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
   - Extension làm **một** tính năng (`docs/dev/LOGIC-v0.1.md` §0).
   - Gửi mẫu `/receiving` (PO76458756). Dev viết logic chi tiết đề xuất `docs/dev/LOGIC-v0.1.md` để PM audit.
 
+- 24/10/2026 (lần 6, operator):
+  - Không có nút "Nhận bằng RFID": mở GR là extension tự chạy.
+  - Chế độ nhập hàng POS phải là "Scan QR tăng SL nhận" (ý nghĩa chờ làm rõ).
+  - Hai đường vào (GR, "Nhập SO thuocsi").
+  - PO28237814 giữ để thử.
+  - Dev phát hiện tích hợp Circa có sẵn của Nextwaves, viết `docs/dev/LOGIC-v0.2.md`.
+
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
 2. Operator mở session PM Codex bằng `docs/PROMPT-PM-CODEX.md`. PM chốt hướng §3 / §6 và ra spec v0.1 staging chia batch.
@@ -329,5 +358,8 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Đường SO trên staging.
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
-7. PM audit `docs/dev/LOGIC-v0.1.md` và chốt P1–P7 (§7 của file đó).
+7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
+8. PM audit `docs/dev/LOGIC-v0.2.md` và chốt Q-L, Q-A, Q-N, Q-M, Q-S, Q-K, Q-U (§6 của file đó).
+   Operator lấy dữ liệu §7 của file đó: trạng thái kết nối Circa, bộ chọn GR của PO28237814, phép thử nhận PO28237814 có liên kết GR03878.
+   Mục 7 cũ:
    Operator lấy dữ liệu §8 của file đó: D4 cho 12 UID, `/receiving` của PO28237814, lời gọi "Xác nhận nhận hàng", D1.

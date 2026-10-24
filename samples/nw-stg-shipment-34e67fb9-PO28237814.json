@@ -1,0 +1,308 @@
+{
+    "id": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+    "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+    "documentId": "14a7fb91-8620-418c-bc08-7355558375ae",
+    "direction": "inbound",
+    "status": "pending",
+    "linkId": "c486adfc-7b47-4916-8cee-95ba777b4b58",
+    "counterparty": {
+        "tenantSlug": "buymed-stag",
+        "name": "buymed-stag"
+    },
+    "link": {
+        "id": "c486adfc-7b47-4916-8cee-95ba777b4b58",
+        "status": "active",
+        "relationship": "same_owner",
+        "allowedModes": [
+            "transfer",
+            "sale"
+        ],
+        "allowReceiverSwitch": true,
+        "role": "target",
+        "counterparty": {
+            "tenantSlug": "buymed-stag",
+            "name": "buymed-stag"
+        },
+        "requestNote": null,
+        "responseNote": null,
+        "suspendedBy": null,
+        "createdAt": "2026-10-09T09:31:42.496Z",
+        "respondedAt": "2026-10-09T09:32:31.343Z",
+        "updatedAt": "2026-10-09T09:32:31.343Z",
+        "lastEventAt": "2026-10-09T09:32:31.449Z"
+    },
+    "proposedMode": "sale",
+    "resolvedMode": null,
+    "currency": "VND",
+    "notes": null,
+    "warehouse": null,
+    "documentHash": "89508b5ed5259e59d556999a481d37a385efae027240b9d4174f0782fddec7a7",
+    "unitsChunkCount": 0,
+    "unitsChunksReceived": 0,
+    "awaitingUnits": false,
+    "integrityError": false,
+    "rejectReason": null,
+    "cancelReason": null,
+    "stockRequest": null,
+    "returnStockRequest": null,
+    "purchaseOrder": {
+        "id": "55bd221f-65de-4a4d-8a77-40c568a6f176",
+        "poNumber": "PO28237814",
+        "status": "CONFIRMED"
+    },
+    "lines": [
+        {
+            "lineId": "edba6bf3-cb98-4dc8-be8c-463da68b0c9c",
+            "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+            "product": {
+                "id": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+                "title": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                "sku": "CIRCA-1110",
+                "barcode": null,
+                "productIdentifier": "CIRCA-1110",
+                "baseUnitOfMeasure": "hộp"
+            },
+            "document": {
+                "sourceProductId": "50812c0e-99a6-4a51-bf30-0d62459c61e9",
+                "sourceProductNumber": "CIRCA-1110",
+                "name": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                "sku": "CIRCA-1110",
+                "gtin": null,
+                "barcode": null,
+                "brand": null,
+                "baseUnit": "hộp",
+                "trackBatch": true
+            },
+            "mapping": {
+                "state": "mapped",
+                "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7"
+            },
+            "quantity": 3,
+            "unit": "vỉ",
+            "unitPrice": 0,
+            "taxRate": null,
+            "unitCost": null,
+            "batch": {
+                "batchNumber": "261009DHAUS",
+                "manufactureDate": null,
+                "expiryDate": "2028-12-12"
+            },
+            "epcs": [
+                "E280F302000000017032E72B",
+                "E280F302000000017032E72A",
+                "E280F302000000017032C72A"
+            ],
+            "epcCount": 3,
+            "receivedQuantity": null,
+            "receivedEpcs": null,
+            "returnedQuantity": null,
+            "variance": null
+        },
+        {
+            "lineId": "2eab3586-4f49-4ef8-b1e8-ffe692afb9b3",
+            "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+            "product": {
+                "id": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+                "title": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                "sku": "CIRCA-1110",
+                "barcode": null,
+                "productIdentifier": "CIRCA-1110",
+                "baseUnitOfMeasure": "hộp"
+            },
+            "document": {
+                "sourceProductId": "50812c0e-99a6-4a51-bf30-0d62459c61e9",
+                "sourceProductNumber": "CIRCA-1110",
+                "name": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                "sku": "CIRCA-1110",
+                "gtin": null,
+                "barcode": null,
+                "brand": null,
+                "baseUnit": "hộp",
+                "trackBatch": true
+            },
+            "mapping": {
+                "state": "mapped",
+                "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7"
+            },
+            "quantity": 3,
+            "unit": "vỉ",
+            "unitPrice": 0,
+            "taxRate": null,
+            "unitCost": null,
+            "batch": {
+                "batchNumber": "A1",
+                "manufactureDate": null,
+                "expiryDate": "2029-12-12"
+            },
+            "epcs": [
+                "E280F302000000017032872B",
+                "E280F3020000000170328729",
+                "E280F3020000000170328728"
+            ],
+            "epcCount": 3,
+            "receivedQuantity": null,
+            "receivedEpcs": null,
+            "returnedQuantity": null,
+            "variance": null
+        },
+        {
+            "lineId": "27650f8f-cdf4-46eb-aa7d-952c54e25405",
+            "productId": "3b250a6b-d64b-46fb-b389-b02f6f1c6368",
+            "product": {
+                "id": "3b250a6b-d64b-46fb-b389-b02f6f1c6368",
+                "title": "Kem xua muỗi Soffell hương cam",
+                "sku": "CIRCA-2431732",
+                "barcode": null,
+                "productIdentifier": "CIRCA-2431732",
+                "baseUnitOfMeasure": "chai"
+            },
+            "document": {
+                "sourceProductId": "3a05ef50-41ad-4e3f-b45c-d64adbe99776",
+                "sourceProductNumber": "CIRCA-2431732",
+                "name": "Kem xua muỗi Soffell hương cam",
+                "sku": "CIRCA-2431732",
+                "gtin": null,
+                "barcode": null,
+                "brand": null,
+                "baseUnit": "chai",
+                "trackBatch": false
+            },
+            "mapping": {
+                "state": "mapped",
+                "productId": "3b250a6b-d64b-46fb-b389-b02f6f1c6368"
+            },
+            "quantity": 2,
+            "unit": "chai",
+            "unitPrice": 0,
+            "taxRate": null,
+            "unitCost": null,
+            "batch": null,
+            "epcs": [
+                "E280F302000000017032C729",
+                "E280F302000000017032C728"
+            ],
+            "epcCount": 2,
+            "receivedQuantity": null,
+            "receivedEpcs": null,
+            "returnedQuantity": null,
+            "variance": null
+        },
+        {
+            "lineId": "9796be24-7371-42fe-a724-455ec3cb1ebe",
+            "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+            "product": {
+                "id": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+                "title": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                "sku": "CIRCA-5451",
+                "barcode": null,
+                "productIdentifier": "CIRCA-5451",
+                "baseUnitOfMeasure": "hộp"
+            },
+            "document": {
+                "sourceProductId": "4a0f6df3-8b7d-4993-ab39-e1664034f5dd",
+                "sourceProductNumber": "CIRCA-5451",
+                "name": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                "sku": "CIRCA-5451",
+                "gtin": null,
+                "barcode": null,
+                "brand": null,
+                "baseUnit": "hộp",
+                "trackBatch": true
+            },
+            "mapping": {
+                "state": "mapped",
+                "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8"
+            },
+            "quantity": 2,
+            "unit": "túi",
+            "unitPrice": 0,
+            "taxRate": null,
+            "unitCost": null,
+            "batch": {
+                "batchNumber": "261009KSDHAU",
+                "manufactureDate": null,
+                "expiryDate": "2028-12-12"
+            },
+            "epcs": [
+                "E280F302000000017032A72A",
+                "E280F302000000017032A728"
+            ],
+            "epcCount": 2,
+            "receivedQuantity": null,
+            "receivedEpcs": null,
+            "returnedQuantity": null,
+            "variance": null
+        },
+        {
+            "lineId": "592c7d5e-7eda-4bb5-9031-3578882bc703",
+            "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+            "product": {
+                "id": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+                "title": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                "sku": "CIRCA-5451",
+                "barcode": null,
+                "productIdentifier": "CIRCA-5451",
+                "baseUnitOfMeasure": "hộp"
+            },
+            "document": {
+                "sourceProductId": "4a0f6df3-8b7d-4993-ab39-e1664034f5dd",
+                "sourceProductNumber": "CIRCA-5451",
+                "name": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                "sku": "CIRCA-5451",
+                "gtin": null,
+                "barcode": null,
+                "brand": null,
+                "baseUnit": "hộp",
+                "trackBatch": true
+            },
+            "mapping": {
+                "state": "mapped",
+                "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8"
+            },
+            "quantity": 2,
+            "unit": "túi",
+            "unitPrice": 0,
+            "taxRate": null,
+            "unitCost": null,
+            "batch": {
+                "batchNumber": "A1",
+                "manufactureDate": null,
+                "expiryDate": "2028-12-12"
+            },
+            "epcs": [
+                "E280F302000000017431E72B",
+                "E280F302000000017431E72A"
+            ],
+            "epcCount": 2,
+            "receivedQuantity": null,
+            "receivedEpcs": null,
+            "returnedQuantity": null,
+            "variance": null
+        }
+    ],
+    "totals": {
+        "lineCount": 5,
+        "quantity": 12,
+        "receivedQuantity": null,
+        "amount": 0
+    },
+    "timeline": [
+        {
+            "event": "created",
+            "at": "2026-10-19T09:21:00.118Z",
+            "actorName": null,
+            "note": null,
+            "known": true
+        }
+    ],
+    "availableActions": [
+        "map_products",
+        "create_product",
+        "accept",
+        "reject"
+    ],
+    "acceptBlockers": [],
+    "createdBy": null,
+    "createdAt": "2026-10-19T09:21:00.118Z",
+    "updatedAt": "2026-10-19T09:21:00.118Z"
+}

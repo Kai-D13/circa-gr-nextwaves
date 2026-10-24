@@ -1,5 +1,12 @@
 # Logic tính năng — Nhận hàng POS qua Nextwaves (dev đề xuất v0.1, 24/10/2026)
 
+> **ĐÃ ĐƯỢC THAY bởi [`LOGIC-v0.2.md`](LOGIC-v0.2.md)** (24/10 chiều). Ba điểm chính đã đổi:
+> - Không có nút "Nhận bằng RFID": mở GR là extension tự chạy.
+> - Có hai đường vào: trang GR và trang `/chi-tiet-so`.
+> - Nextwaves đã tự ghi GR Circa qua tích hợp Circa.
+>
+> Giữ file này để tra cứu.
+
 Người viết: dev-team. **Đề xuất để PM audit và đưa vào spec**, chưa phải quyết định đã chốt.
 Nguồn: giải thích luồng của operator 24/10, các mẫu trong `samples/`, mã trang GR của POS (capture 19/10), bundle web Nextwaves.
 Mức bằng chứng ghi ở cuối mỗi mục: **[file]** = đã kiểm từ mẫu; **[giả thuyết]** = chưa có dữ liệu chứng minh.

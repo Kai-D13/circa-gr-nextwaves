@@ -1,0 +1,63 @@
+{
+    "purchaseOrderId": "55bd221f-65de-4a4d-8a77-40c568a6f176",
+    "poNumber": "PO28237814",
+    "status": "CONFIRMED",
+    "lines": [
+        {
+            "purchaseOrderItemId": "7d55d0da-56b9-4420-8743-2f352931035c",
+            "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+            "productName": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+            "productSku": "CIRCA-1110",
+            "ordered": 12,
+            "received": 0,
+            "outstanding": 12,
+            "variance": -12,
+            "variancePercent": -100,
+            "toleranceAllowance": 0,
+            "maxReceivable": 12,
+            "unitCost": 0,
+            "state": "SHORT"
+        },
+        {
+            "purchaseOrderItemId": "248a24e4-88a1-45da-abde-26b65a7b7a35",
+            "productId": "3b250a6b-d64b-46fb-b389-b02f6f1c6368",
+            "productName": "Kem xua muỗi Soffell hương cam",
+            "productSku": "CIRCA-2431732",
+            "ordered": 2,
+            "received": 0,
+            "outstanding": 2,
+            "variance": -2,
+            "variancePercent": -100,
+            "toleranceAllowance": 0,
+            "maxReceivable": 2,
+            "unitCost": 0,
+            "state": "SHORT"
+        },
+        {
+            "purchaseOrderItemId": "30a2b63a-995d-470e-a755-1f5d50231dbf",
+            "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+            "productName": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+            "productSku": "CIRCA-5451",
+            "ordered": 40,
+            "received": 0,
+            "outstanding": 40,
+            "variance": -40,
+            "variancePercent": -100,
+            "toleranceAllowance": 0,
+            "maxReceivable": 40,
+            "unitCost": 0,
+            "state": "SHORT"
+        }
+    ],
+    "totals": {
+        "ordered": 54,
+        "received": 0,
+        "outstanding": 54,
+        "orderedValue": 0,
+        "receivedValue": 0,
+        "closeVarianceAmount": 0
+    },
+    "shortLines": 3,
+    "overLines": 0,
+    "fullyReceived": false
+}

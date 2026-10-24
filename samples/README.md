@@ -12,6 +12,11 @@ Response thật do operator lấy ("Copy response" hoặc cURL đã bỏ token),
 | `po-stg-PO00006750-SOBD1593858.json` | STG | `GET /backend/v1/pos/<posId>/po/<poId>` | `sale_order_number` 1593858, `thuocsi_delivery_code` SOBD1593858-F |
 | `nw-stg-intertenant-PO28237814-SOBD1593858.json` | STG | `GET /api/v1/inter-tenant-orders/purchase-orders/<poId>` | `refId` SOBD1593858-1056745, 12 UID dự kiến (shipment pending) |
 | `nw-stg-po-PO28237814-detail.json` | STG | `GET /api/v1/purchase-orders/<poId>` | CONFIRMED, chưa nhận, `receivedUnits` rỗng |
+| `nw-stg-shipment-34e67fb9-PO28237814.json` | STG | `GET /api/v1/inter-tenant-shipments/<shipmentId>` | Dòng giao PO28237814: `batch {batchNumber, expiryDate}`, `epcs`, `receivedQuantity` (null trước khi nhận) |
+| `nw-stg-shipment-mapping-candidates-34e67fb9.json` | STG | `GET /api/v1/inter-tenant-shipments/<id>/mapping-candidates` | Ghép sản phẩm theo sku |
+| `nw-stg-circa-link-PO28237814.json` | STG | `GET /api/v1/integrations/circa/purchase-orders/<poId>/link` | `eligible: true, linked: false` |
+| `nw-stg-receiving-summary-PO28237814.json` | STG | `GET /api/v1/purchase-orders/<poId>/receiving-summary` | ordered / received / outstanding theo đơn vị gốc |
+| `pos-stg-gr-search-so-1593858.json` | STG | `GET /backend/v1/order/goods-receipt/search?query=so_thuocsi=1593858,…` | Đường vào (2) "Nhập SO thuocsi": trả GR03878 |
 | `nw-stg-receiving-PO76458756.json` | STG | `GET /api/v1/inter-tenant-orders/purchase-orders/<poId>/receiving` | PO76458756 (SO khác, **không** phải của GR03878): dòng giao có productId / sku / unit / UID |
 
 PO staging PO00006745 (của GR03877) chỉ ghi tóm tắt trong `state.md` §2.1, không có file.

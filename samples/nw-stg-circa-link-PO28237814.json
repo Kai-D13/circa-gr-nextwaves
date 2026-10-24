@@ -1,0 +1,10 @@
+{
+    "eligible": true,
+    "linked": false,
+    "pulled": false,
+    "circaPurchaseOrderId": null,
+    "circaPurchaseOrderCode": null,
+    "goodsReceiptId": null,
+    "goodsReceiptCode": null,
+    "goodsReceiptStatus": null
+}
