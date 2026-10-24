@@ -72,7 +72,11 @@ function createBrowser(server, opts = {}) {
   function sendMessage(tab, msg) {
     // Như Chrome: content script có sender.tab + url + origin của trang; popup không có tab.
     const sender = tab ? { tab: { id: tab.id, url: tab.url }, url: tab.url, origin: new URL(tab.url).origin } : { url: "chrome-extension://cgn-test/popup/popup.html" };
-    return new Promise((resolve) => bgListener(clone(msg), sender, (resp) => resolve(clone(resp))));
+    // Test có thể thay câu trả lời của background cho một số message (mô phỏng background lỗi).
+    const forced = opts.interceptBg ? opts.interceptBg(clone(msg), tab) : undefined;
+    if (forced !== undefined) return Promise.resolve(clone(forced));
+    // Như IPC thật: message tới background ở lượt sự kiện sau (macrotask), không phải ngay trong microtask.
+    return new Promise((resolve) => setImmediate(() => bgListener(clone(msg), sender, (resp) => resolve(clone(resp)))));
   }
 
   // ---- background ----
@@ -160,7 +164,8 @@ function createBrowser(server, opts = {}) {
         if (sig && sig.aborted) return reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
         if (sig) sig.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })), { once: true });
         const req = { tab: t.id, method: String(i.method || "GET").toUpperCase(), url: String(url), headers: clone(i.headers || {}), body: i.body === undefined ? null : JSON.parse(i.body) };
-        Promise.resolve()
+        // Như mạng thật: phản hồi đến ở lượt sự kiện sau (macrotask) → vòng lặp lỗi không bỏ đói timer của test.
+        new Promise((r) => setImmediate(r))
           .then(() => server(req))
           .then((r) => {
             const text = r.json === undefined ? "" : JSON.stringify(r.json);

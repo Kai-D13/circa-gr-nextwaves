@@ -817,7 +817,7 @@ test("P2.4: phiên bản cũ (không schema, thiếu khoá) không được ghi 
     // Tab Nextwaves cũ (đã có header) có thể tự khớp đơn cho phiên mới ngay → waiting_nw hoặc nw_ready đều đúng.
     assert.ok(["waiting_nw", "nw_ready"].includes(s2.state), s2.state);
     assert.deepEqual(s2.writeLocks, ["so_gr_unknown"]);
-    assert.equal(s2.createdBy, "0.1.3");
+    assert.equal(s2.createdBy, "0.1.4");
     assert.ok(s2.log.some((l) => l.type === "replaced_outdated" && l.oldState === "received"));
     assert.equal(b.tabs().length, tabsBefore + 1, "mở lại màn quét Nextwaves cho phiên mới");
     await grant(b);
@@ -867,12 +867,32 @@ test("P2.4: onInstalled (update, cùng extension ID) xoá phiên + cấp phép c
     assert.deepEqual(Object.keys(b.store.sessions), [KEY]);
     assert.deepEqual(Object.keys(b.store.grants), ["STG:GR03878"]);
     const u = b.store.lastUpgrade;
-    assert.deepEqual([u.reason, u.from, u.to, u.removedSessions, u.removedGrants], ["update", "0.1.2", "0.1.3", [{ key: oldKey, state: "received" }], 1]);
+    assert.deepEqual([u.reason, u.from, u.to, u.removedSessions, u.removedGrants], ["update", "0.1.2", "0.1.4", [{ key: oldKey, state: "received" }], 1]);
     // Lý do khác (vd. chrome_update) không đụng storage.
     delete b.store.lastUpgrade;
     b.fireInstalled({ reason: "chrome_update" });
     await settle(50);
     assert.equal(b.store.lastUpgrade, undefined);
+  } finally {
+    b.close();
+  }
+});
+
+test("Chống vòng lặp tạo phiên: background không trả lại phiên vừa tạo → POS tạo phiên đúng một lần rồi báo lỗi, không gọi API lặp", async () => {
+  const srv = makeServer();
+  // session:get luôn trả "không có phiên" (mô phỏng background / storage hỏng).
+  const b = createBrowser(srv.handle, { interceptBg: (msg) => (msg.type === "session:get" ? { ok: true, data: null } : undefined) });
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    pos.post(POS_AUTH);
+    await until(() => viewTitle(pos) === "GR03878: không đọc lại được phiên vừa tạo");
+    await settle(300);
+    const poReads = srv.st.log.filter((r) => /\/backend\/v1\/pos\/.+\/po\//.test(new URL(r.url).pathname)).length;
+    const searches = srv.st.log.filter((r) => r.url.includes("/goods-receipt/search")).length;
+    assert.deepEqual([poReads, searches], [2, 1], "đọc PO 2 lần (lần tạo + lần phát hiện), tìm GR theo SO 1 lần");
+    assert.equal(b.tabs().filter((t) => t.url.startsWith(NW)).length, 1, "chỉ mở Nextwaves một lần");
+    assert.equal(viewTitle(pos), "GR03878: không đọc lại được phiên vừa tạo");
   } finally {
     b.close();
   }

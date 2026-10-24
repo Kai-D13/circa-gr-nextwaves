@@ -19,7 +19,7 @@
   const P = C.pos;
   const PL = C.plan;
   const A = C.apply;
-  const T = Object.assign({ pollMs: 700, qrConcurrency: 4, reloadDelayMs: 800, httpTimeoutMs: 30000, leaseRenewMs: 15000 }, C.tuning || {});
+  const T = Object.assign({ pollMs: 700, qrConcurrency: 4, reloadDelayMs: 800, httpTimeoutMs: 30000, leaseRenewMs: 15000, restartGuardMs: 10000 }, C.tuning || {});
   const HOOK = "cgn/pos-hook";
   const ME = "cgn/pos-content";
   const panel = C.ui.createPanel("GR ← Nextwaves");
@@ -87,6 +87,7 @@
   let reloading = false;
   let watched = { key: null, state: null }; // phiên của trang đang mở — đổi trạng thái thì đánh giá lại
   let chosenGrId = null; // đường (2): GR dược sĩ chọn khi SO có nhiều GR
+  let lastStart = { grId: null, at: 0 }; // lần tạo phiên gần nhất trong tab (chống vòng lặp tạo phiên)
 
   // ---------- tiện ích ----------
   async function bg(type, extra) {
@@ -282,6 +283,7 @@
       }
       const start = async () => {
         setDismissed(env.id, gr.id, false);
+        lastStart = { grId: gr.id, at: Date.now() };
         // Khoá ghi phía POS (PM P3 / P1.6): SO phải có đúng một phiếu nhận (chưa huỷ) ở cửa hàng này, đọc đủ, và đó là phiếu này.
         const found = await searchGrsOfSo(env, storeId, link.soBase);
         const lock = P.soWriteLock(found, gr.id);
@@ -311,6 +313,20 @@
           lines: codes > 0 ? [`Phiếu đã có ${codes} mã quét. Kết quả Nextwaves phải chứa đúng các mã này, đúng lô, thì mới điền tiếp được.`] : ["Đã huỷ nhận bằng Nextwaves cho phiếu này trong tab."],
           buttons: [{ label: "Nhận bằng Nextwaves", onClick: start }],
         });
+      }
+      // Chống vòng lặp: vừa tạo phiên cho phiếu này mà background vẫn không trả lại phiên → báo lỗi, không tạo lại
+      // (tránh đọc GR / PO / tìm GR liên tục lên API POS).
+      if (lastStart.grId === gr.id && Date.now() - lastStart.at < T.restartGuardMs) {
+        watched = { key: null, state: null };
+        return showError(`${gr.code}: không đọc lại được phiên vừa tạo`, "Extension dừng để không gọi API POS lặp lại. Tải lại trang hoặc báo dev.", [
+          {
+            label: "Thử lại",
+            onClick: () => {
+              lastStart = { grId: null, at: 0 };
+              refresh();
+            },
+          },
+        ]);
       }
       await start();
       return;

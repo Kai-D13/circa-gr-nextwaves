@@ -1,10 +1,10 @@
-"""Đột biến có chủ đích cho các hàng rào của v0.1.3 (PM audit 24/10: P1.1–P1.7, P2.1–P2.4, P3).
+"""Đột biến có chủ đích cho các hàng rào của v0.1.4 (PM audit 24/10: P1.1–P1.7, P2.1–P2.4, P3; chống vòng lặp tạo phiên).
 
 Mỗi ca gỡ đúng MỘT hàng rào trong src/, chạy `node --test "tests/*.test.js"`; bộ test phải hỏng (KILLED).
 Chạy trên BẢN SAO trong thư mục tạm — không sửa src/ của repo. Cần Node (node --test) trên PATH.
 
-  python -I scripts/mutate-v0.1.3.py            # mọi ca
-  python -I scripts/mutate-v0.1.3.py 24         # bắt đầu từ ca thứ 25
+  python -I scripts/mutate-v0.1.4.py            # mọi ca
+  python -I scripts/mutate-v0.1.4.py 24         # bắt đầu từ ca thứ 25
 """
 import os
 import shutil
@@ -92,6 +92,8 @@ muts = [
     ("src/background.js", '  if (!isCurrent(cur)) throw new Error("Phiên của bản cũ — mở lại phiếu trên POS");', "", "P2.4 received cho phiên bản cũ"),
     ("src/background.js", 'if (details && (details.reason === "update" || details.reason === "install")) serial(() => dropOutdated(details));', "", "P2.4 nâng cấp không dọn phiên cũ"),
     ("src/background.js", "  for (const [k, g] of Object.entries(grants || {})) if (isCurrent(g)) kept[k] = g;", "  for (const [k, g] of Object.entries(grants || {})) kept[k] = g;", "P2.4 nâng cấp giữ cấp phép cũ"),
+    # Chống vòng lặp tạo phiên (phát hiện khi chạy đột biến v0.1.3)
+    ("src/pos/pos-content.js", "if (lastStart.grId === gr.id && Date.now() - lastStart.at < T.restartGuardMs) {", "if (false) {", "Chống vòng lặp: bỏ chốt chặn tạo phiên lặp"),
 ]
 
 
