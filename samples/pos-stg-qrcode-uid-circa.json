@@ -1,0 +1,98 @@
+[
+    {
+        "capturedAt": "2026-10-24T09:19:56Z",
+        "method": "GET",
+        "url": "https://pos.stg.circa-v2.buymed.tech/thuocsi-warehouse/qrcode?code=1792145819958AA1",
+        "status": 200,
+        "response": {
+            "status": "OK",
+            "message": "Successfully",
+            "data": [
+                {
+                    "circaReceiptCode": "",
+                    "circaSellerCode": "",
+                    "circaSku": "",
+                    "circaUnitCode": "",
+                    "circaUnitName": "",
+                    "clientId": "",
+                    "createdBy": 42121,
+                    "createdSource": "BUYMED",
+                    "createdTime": "2026-10-16T10:16:59.958Z",
+                    "expiredDate": "12-12-2028",
+                    "generatedTime": 1792145819958,
+                    "index": 0,
+                    "isGenAuto": false,
+                    "lastUpdatedTime": "2026-10-16T10:16:59.958Z",
+                    "logs": null,
+                    "lot": "261009DHAUS",
+                    "machineCode": "AA",
+                    "oldSellerCode": null,
+                    "oldSku": null,
+                    "productId": 1110,
+                    "productName": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                    "productType": "",
+                    "quantity": 0,
+                    "receiptCode": "RECEIPT-1003",
+                    "sellerCode": "MEDX",
+                    "shortId": "1792145819958AA1",
+                    "sku": "MEDX.BRI-BRI-001",
+                    "status": "NORMAL",
+                    "totalCharacter": null,
+                    "uniqueId": "1792145819958AA1",
+                    "unitCode": "",
+                    "unitName": "",
+                    "vat": 1,
+                    "versionNo": "509faecc-4314-49d5-82ad-b354f3ff25a5"
+                }
+            ]
+        }
+    },
+    {
+        "capturedAt": "2026-10-24T09:20:23Z",
+        "method": "GET",
+        "url": "https://pos.stg.circa-v2.buymed.tech/thuocsi-warehouse/qrcode?code=1792379018917AA1",
+        "status": 200,
+        "response": {
+            "status": "OK",
+            "message": "Successfully",
+            "data": [
+                {
+                    "circaReceiptCode": "",
+                    "circaSellerCode": "",
+                    "circaSku": "",
+                    "circaUnitCode": "",
+                    "circaUnitName": "",
+                    "clientId": "",
+                    "createdBy": 42121,
+                    "createdSource": "BUYMED",
+                    "createdTime": "2026-10-19T03:03:38.917Z",
+                    "expiredDate": "06-06-2027",
+                    "generatedTime": 1792379018917,
+                    "index": 0,
+                    "isGenAuto": false,
+                    "lastUpdatedTime": "2026-10-19T03:03:38.917Z",
+                    "logs": null,
+                    "lot": "A98",
+                    "machineCode": "AA",
+                    "oldSellerCode": null,
+                    "oldSku": null,
+                    "productId": 2431732,
+                    "productName": "Kem xua muỗi Soffell hương cam",
+                    "productType": "",
+                    "quantity": 0,
+                    "receiptCode": "RECEIPT-1003",
+                    "sellerCode": "MEDX",
+                    "shortId": "1792379018917AA1",
+                    "sku": "MEDX.7YPBW961",
+                    "status": "NORMAL",
+                    "totalCharacter": null,
+                    "uniqueId": "1792379018917AA1",
+                    "unitCode": "",
+                    "unitName": "",
+                    "vat": 1,
+                    "versionNo": "7dd5a8e7-75c5-45f2-8460-eeed0386e716"
+                }
+            ]
+        }
+    }
+]

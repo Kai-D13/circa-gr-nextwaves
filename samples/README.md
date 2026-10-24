@@ -19,6 +19,8 @@ Response thật do operator lấy ("Copy response" hoặc cURL đã bỏ token),
 | `pos-stg-gr-search-so-1593858.json` | STG | `GET /backend/v1/order/goods-receipt/search?query=so_thuocsi=1593858,…` | Đường vào (2) "Nhập SO thuocsi": trả GR03878 |
 | `nw-stg-receive-scan-400-PO28237814.json` | STG | `POST /api/v1/inter-tenant-shipments/<shipmentId>/receive-scan` | Lời gọi "Xác nhận nhận hàng" (body `{onMissing, epcs}`): lần 14 EPC và lần 12 EPC, đều `400 tagged_unit_unsupported` |
 | `nw-stg-purchase-orders-list.json` | STG | `GET /api/v1/purchase-orders?page=1&pageSize=25` | 11 PO, **không có SO** (`externalNumber` null) |
+| `pos-stg-qrcode-uid-circa.json` | STG | `GET <POS>/thuocsi-warehouse/qrcode?code=<UID>` | Tra 2 UID Circa: có lot + hạn; `circaReceiptCode` / `circaUnitName` rỗng |
+| `nw-stg-po-PO88508353-received.json` | STG | `GET /api/v1/purchase-orders/<poId>` | PO **đã nhận** (mẫu Nextwaves dựng theo hub-order pos.dev): `receivedUnits`, `receipts[].items[].batchNumber/epcs`. Tên nhà cung cấp thử đã thay |
 | `nw-stg-receiving-PO76458756.json` | STG | `GET /api/v1/inter-tenant-orders/purchase-orders/<poId>/receiving` | PO76458756 (SO khác, **không** phải của GR03878): dòng giao có productId / sku / unit / UID |
 
 PO staging PO00006745 (của GR03877) chỉ ghi tóm tắt trong `state.md` §2.1, không có file.

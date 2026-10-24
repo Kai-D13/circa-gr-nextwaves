@@ -128,3 +128,41 @@ Extension **không tự xử lý** các lỗi này. Chỉ ghi nhận rằng Next
    - response 2xx của `receive-scan`;
    - `GET /purchase-orders/<id>` và `GET /inter-tenant-shipments/<id>` sau khi nhận.
 3. **D1:** trang danh sách đơn liên kết Nextwaves, gõ `SOBD1593858` vào ô tìm → response `inter-tenant-orders?…q=…`.
+
+## 9. Cập nhật 24/10 khuya — quyết định operator + dữ liệu mới
+
+**Quyết định operator:**
+- **Q1:** **được dùng API thường của Nextwaves** (purchase-orders, inter-tenant-orders, inter-tenant-shipments…), **không dùng** phần tích hợp Circa Nextwaves đã làm (`/integrations/circa/*`, gồm cả `hub-orders`).
+- **Q3:** chọn **W1** (extension ghi GR bằng `PUT …/detail`).
+- K1 (gỡ chặn nhận PO28237814): **chưa làm**.
+
+**D4 — tra QR trên POS staging** (`samples/pos-stg-qrcode-uid-circa.json`) **[file]:**
+- POS staging **tra được UID Circa**:
+  - `1792145819958AA1` → productId 1110, lot `261009DHAUS`, `expiredDate` 12-12-2028 (khớp batch dòng giao Nextwaves).
+  - `1792379018917AA1` → productId 2431732, lot `A98`, 06-06-2027 (khớp chi tiết `A98-060627` của GR03878).
+- ⇒ **Q5 có lời giải:** lô của dòng giao không có lô (Soffell) lấy bằng tra QR từng UID trên POS. Kiểm chéo được với batch Nextwaves ở dòng có lô.
+- `circaReceiptCode`, `circaSku`, `circaUnitName` **rỗng** trên staging. Không kiểm được "UID thuộc PO POS này" bằng tra QR, và không lấy được đơn vị từ tra QR.
+  Đơn vị lấy từ dòng giao Nextwaves (`unit`).
+
+**Lượt nhận thành công do Nextwaves dựng mẫu** (capture 13-44-11 + `samples/nw-stg-po-PO88508353-received.json`) **[file]:**
+- Mẫu này đi theo **mô hình "hub order"** của tích hợp Circa:
+  - trang `/vi/purchases/receive?po=PO000006639`;
+  - `GET /integrations/circa/hub-orders/<mã PO POS>`;
+  - nhận bằng `POST /integrations/circa/hub-orders/<mã>/receive {onMissing, epcs}`;
+  - PO Nextwaves có `externalNumber` "circa-hub:PO000006639", dựa trên PO / GR của **pos.dev**.
+- Theo Q1, extension **không dùng** đường này. Luồng của chúng ta là **mô hình đơn liên kết Buymed** (SO / `refId` → `POST /inter-tenant-shipments/<id>/receive-scan`).
+- Phần **dùng được** từ mẫu: `GET /purchase-orders/<id>` **sau khi nhận** (API thường), cấu trúc giống mẫu production PO62830114:
+  - `status` RECEIVED;
+  - `items[].receivedUnits[] {epc, unitUid, receiptId, receiptNumber}`;
+  - `receipts[].items[] {purchaseOrderItemId, quantity, batchNumber, epcs[]}`.
+  - ⇒ Đây là nguồn "đã nhận" cho bước lập kế hoạch ghi GR.
+- Trang `/vi/purchases/receive?po=<x>` (đường link mở thẳng màn quét, `autoConnect`):
+  - `po` là UUID → mở theo `purchaseOrderId`;
+  - `po` là chuỗi → tìm `GET /inter-tenant-orders/receiving?pageSize=50&q=<x>` **và** tự gọi `hub-orders/<x>`.
+  - Extension có thể chuyển dược sĩ tới `…/purchases/receive?po=<UUID PO Nextwaves>`. Cần operator đồng ý vì trang này tự gọi API hub-order của Nextwaves; đó là mã của Nextwaves, extension không gọi.
+- `GET /inter-tenant-orders/receiving?q=<chuỗi>` là ứng viên tốt để **tìm PO theo SO** (`q=SOBD1593858`). Chưa biết `q` khớp trường nào (R1).
+
+**Còn thiếu trước khi code (chi tiết trong `state.md` §9):**
+- PM ra spec v0.2 + giao B1.
+- Operator chốt Q4, Q6, ý nghĩa chế độ "Scan QR tăng SL nhận" khi đã chọn W1, và đích chuyển màn.
+- R1 / R2: response `inter-tenant-orders/receiving?q=SOBD1593858` và `?q=PO28237814`.

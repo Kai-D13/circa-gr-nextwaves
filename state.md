@@ -31,6 +31,10 @@ Cập nhật: **24/10/2026 (lần 3, có GR03878 sinh từ SO trên staging)**. 
   - "Xác nhận nhận hàng" = `POST /inter-tenant-shipments/<id>/receive-scan {onMissing, epcs}`.
   - PO28237814 bị Nextwaves từ chối `tagged_unit_unsupported` (dòng 1110 theo vỉ; đơn vị gốc Nextwaves là hộp) ⇒ **chưa nhận được (K1)**.
   - Web Nextwaves đọc reader bằng Web Serial. Danh sách PO Nextwaves không có SO.
+- **Lần 7 (24/10 khuya, `LOGIC-v0.3.md` §9):**
+  - Operator chốt: **Q1** dùng API thường của Nextwaves (không dùng `/integrations/circa/*`); **Q3 = W1** (extension `PUT …/detail`); chưa gỡ K1.
+  - Tra QR POS staging được UID Circa (lô + hạn, dùng cho Soffell); `circaReceiptCode` / `circaUnitName` rỗng.
+  - Mẫu nhận thành công của Nextwaves đi đường hub-order (không dùng); phần dùng được là `GET /purchase-orders/<id>` sau khi nhận.
 - Đang chờ người dùng gửi dữ liệu §6 (lấy qua giao diện, không cần token), nhất là D4 tra QR cả 12 UID.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
@@ -357,6 +361,11 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
   - Gửi capture luồng đầy đủ (POS nhập SO → `/chi-tiet-so`; Nextwaves PO28237814 có 3 lần xác nhận bị 400).
   - Dev viết `docs/dev/LOGIC-v0.3.md`.
 
+- 24/10/2026 (lần 8, operator):
+  - Q1: dùng API thường của Nextwaves, không dùng tích hợp Circa của Nextwaves.
+  - Q3: W1. K1 chưa gỡ.
+  - Gửi kết quả tra QR (D4) và mẫu nhận thành công (PO88508353, hub-order).
+
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
 2. Operator mở session PM Codex bằng `docs/PROMPT-PM-CODEX.md`. PM chốt hướng §3 / §6 và ra spec v0.1 staging chia batch.
@@ -369,8 +378,20 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-9. **Hiện hành:** PM audit `docs/dev/LOGIC-v0.3.md` và chốt Q1–Q6 (§7 của file đó).
-   Operator gỡ K1 (PO28237814 nhận được trên Nextwaves), lấy D4 (2 link tra QR) và một lượt nhận thành công có capture.
+10. **Hiện hành (trước khi code):**
+    - PM: viết **spec v0.2** từ `docs/dev/LOGIC-v0.3.md` (§0–§9) + quyết định Q1 / Q3, rồi giao **B1 (chỉ đọc)**.
+    - Operator chốt:
+      - Q4: ai bấm HOÀN THÀNH;
+      - Q6: SO nhiều GR;
+      - chế độ "Scan QR tăng SL nhận" còn cần không khi đã chọn W1;
+      - đích chuyển màn: `/vi/purchases/<id>` hay `/vi/purchases/receive?po=<id>`.
+    - Operator lấy (chỉ đọc, không bấm xác nhận):
+      - **R1:** mở `https://circa-stg.nextwaves.app/vi/purchases/receive?po=SOBD1593858` → Copy response `inter-tenant-orders/receiving?…q=SOBD1593858`;
+      - **R2:** mở `…/vi/purchases/receive?po=PO28237814` → Copy response `…receiving?…q=PO28237814`.
+    - Để sau (B3 / B4):
+      - một lượt nhận thành công theo đường đơn liên kết (sau khi gỡ K1);
+      - một GR staging operator cho phép dev ghi thử W1.
+9. (cũ) PM audit `docs/dev/LOGIC-v0.3.md` và chốt Q1–Q6 (§7 của file đó). Q1, Q3 đã chốt 24/10; D4 đã có.
 8. (cũ) PM audit `docs/dev/LOGIC-v0.2.md` và chốt Q-L, Q-A, Q-N, Q-M, Q-S, Q-K, Q-U (§6 của file đó).
    Operator lấy dữ liệu §7 của file đó: trạng thái kết nối Circa, bộ chọn GR của PO28237814, phép thử nhận PO28237814 có liên kết GR03878.
    Mục 7 cũ:

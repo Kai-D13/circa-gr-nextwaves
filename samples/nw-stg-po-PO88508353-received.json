@@ -1,0 +1,439 @@
+{
+    "id": "944aa069-1ac1-4796-9bef-5e0c7a9a7bb7",
+    "poNumber": "PO88508353",
+    "source": "NATIVE",
+    "externalNumber": "circa-hub:PO000006639",
+    "externalStatus": null,
+    "externalUpdatedAt": null,
+    "expectedDeliveryAt": null,
+    "sourceSyncWarning": null,
+    "sourceDocuments": null,
+    "supplierId": "b6bd2c52-aea0-4c58-9cdd-33fa1002051f",
+    "status": "RECEIVED",
+    "paymentStatus": "unpaid",
+    "subtotal": 0,
+    "discountAmount": 0,
+    "taxAmount": 0,
+    "totalAmount": 0,
+    "amountPaid": 0,
+    "dueDate": "2026-10-24T12:15:39.055Z",
+    "warehouseId": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57",
+    "supplierReference": "PO000006639",
+    "notes": "Mẫu theo Circa PO000006639 / GR03822 (pos.dev.circa-v2)",
+    "createdBy": "856b6ef8-b0dc-49a0-98cb-cac7722f34e4",
+    "approvedBy": null,
+    "approvedAt": null,
+    "confirmedAt": "2026-10-24T12:15:39.055Z",
+    "sentAt": "2026-10-24T12:15:39.055Z",
+    "closedAt": null,
+    "closeReason": null,
+    "closeVarianceDebtEntryId": null,
+    "cancelledAt": null,
+    "cancelReason": null,
+    "createdAt": "2026-10-24T12:15:39.037Z",
+    "updatedAt": "2026-10-24T13:43:57.601Z",
+    "supplier": {
+        "id": "b6bd2c52-aea0-4c58-9cdd-33fa1002051f",
+        "code": null,
+        "name": "<nhà cung cấp thử>",
+        "group": null,
+        "phone": null,
+        "email": null,
+        "taxCode": null,
+        "address": null,
+        "city": null,
+        "country": null,
+        "billingInfo": null,
+        "notes": null,
+        "isActive": true,
+        "creditTermDays": 0,
+        "currentDebt": 0,
+        "isConsignor": false,
+        "defaultCommissionRate": 0,
+        "tenantLinkSlug": null,
+        "createdAt": "2026-10-24T12:15:39.037Z",
+        "updatedAt": "2026-10-24T12:15:39.037Z"
+    },
+    "warehouse": {
+        "id": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57",
+        "name": "CIRCA FLORITA",
+        "description": null,
+        "code": "WH-30145",
+        "address": null,
+        "contactName": null,
+        "phone": null,
+        "ward": null,
+        "province": null,
+        "country": null,
+        "parentId": null,
+        "metadata": null,
+        "allowStockIn": true,
+        "allowStockOut": true,
+        "allowKiosk": true,
+        "allowPos": true,
+        "locationType": "warehouse",
+        "buymedCustomerId": "30145",
+        "createdAt": "2026-10-09T08:34:05.340Z",
+        "updatedAt": "2026-10-19T08:38:03.355Z"
+    },
+    "items": [
+        {
+            "id": "def6368c-24e6-4b15-b060-dde0c2d7b132",
+            "purchaseOrderId": "944aa069-1ac1-4796-9bef-5e0c7a9a7bb7",
+            "productId": "546e90ed-7a00-4d81-bfb9-962d85f16e16",
+            "productName": "Bổ não ginkgo natto plus nature việt nam (h/30v) ID 1111",
+            "productSku": "CIRCA-1111",
+            "externalLineKey": "546e90ed-7a00-4d81-bfb9-962d85f16e16",
+            "quantity": 5,
+            "sourceReceivedQuantity": 0,
+            "unitCost": 0,
+            "lineTotal": 0,
+            "overReceiptTolerancePercent": null,
+            "product": {
+                "labelType": null,
+                "id": "546e90ed-7a00-4d81-bfb9-962d85f16e16",
+                "productIdentifier": "CIRCA-1111",
+                "title": "Bổ não ginkgo natto plus nature việt nam (h/30v) ID 1111",
+                "description": null,
+                "baseUnitOfMeasure": "chai",
+                "externalProductId": null,
+                "externalVariantId": null,
+                "categoryId": null,
+                "costPrice": 0,
+                "sellingPrice": 0,
+                "salePrice": null,
+                "salePriceReasonCode": null,
+                "salePriceReasonText": null,
+                "taxRate": null,
+                "sku": "CIRCA-1111",
+                "barcode": null,
+                "brand": null,
+                "minStockLevel": 0,
+                "maxStockLevel": null,
+                "isActive": true,
+                "inactiveByCategory": false,
+                "allowSales": true,
+                "trackBatch": false,
+                "packEnabled": false,
+                "ownershipType": "OWNED",
+                "consignmentAgreementId": null,
+                "productType": "standard",
+                "packDefaultQuantity": null,
+                "quantityDecimals": 0,
+                "shelfLocation": null,
+                "weight": null,
+                "weightUnit": "kg",
+                "attributes": null,
+                "customAttributes": null,
+                "masterProductId": null,
+                "preorderOfProductId": null,
+                "preorderLinkManual": false,
+                "created_at": "2026-10-24T12:15:29.412Z",
+                "updated_at": "2026-10-24T12:15:29.412Z"
+            },
+            "receivedQuantity": 5,
+            "remainingQuantity": 0,
+            "receivedUnits": [
+                {
+                    "epc": "E28011700000020A66390001",
+                    "unitUid": "6639L001",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390002",
+                    "unitUid": "6639L002",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390003",
+                    "unitUid": "6639L003",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390004",
+                    "unitUid": "6639L004",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390005",
+                    "unitUid": "6639L005",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                }
+            ]
+        },
+        {
+            "id": "78373c92-062f-4fe5-b194-bd758e60c468",
+            "purchaseOrderId": "944aa069-1ac1-4796-9bef-5e0c7a9a7bb7",
+            "productId": "9f08fdb9-d84b-4a78-8318-9e59b051907d",
+            "productName": "Bổ mắt omega 369 newfrance (c/60v) ID 1109",
+            "productSku": "CIRCA-1109",
+            "externalLineKey": "9f08fdb9-d84b-4a78-8318-9e59b051907d",
+            "quantity": 20,
+            "sourceReceivedQuantity": 0,
+            "unitCost": 0,
+            "lineTotal": 0,
+            "overReceiptTolerancePercent": null,
+            "product": {
+                "labelType": null,
+                "id": "9f08fdb9-d84b-4a78-8318-9e59b051907d",
+                "productIdentifier": "CIRCA-1109",
+                "title": "Bổ mắt omega 369 newfrance (c/60v) ID 1109",
+                "description": null,
+                "baseUnitOfMeasure": "hộp 1",
+                "externalProductId": null,
+                "externalVariantId": null,
+                "categoryId": null,
+                "costPrice": 0,
+                "sellingPrice": 0,
+                "salePrice": null,
+                "salePriceReasonCode": null,
+                "salePriceReasonText": null,
+                "taxRate": null,
+                "sku": "CIRCA-1109",
+                "barcode": null,
+                "brand": null,
+                "minStockLevel": 0,
+                "maxStockLevel": null,
+                "isActive": true,
+                "inactiveByCategory": false,
+                "allowSales": true,
+                "trackBatch": false,
+                "packEnabled": false,
+                "ownershipType": "OWNED",
+                "consignmentAgreementId": null,
+                "productType": "standard",
+                "packDefaultQuantity": null,
+                "quantityDecimals": 0,
+                "shelfLocation": null,
+                "weight": null,
+                "weightUnit": "kg",
+                "attributes": null,
+                "customAttributes": null,
+                "masterProductId": null,
+                "preorderOfProductId": null,
+                "preorderLinkManual": false,
+                "created_at": "2026-10-24T12:15:29.587Z",
+                "updated_at": "2026-10-24T12:15:29.587Z"
+            },
+            "receivedQuantity": 20,
+            "remainingQuantity": 0,
+            "receivedUnits": [
+                {
+                    "epc": "E28011700000020A66390006",
+                    "unitUid": "6639L006",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390007",
+                    "unitUid": "6639L007",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390008",
+                    "unitUid": "6639L008",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390009",
+                    "unitUid": "6639L009",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A6639000A",
+                    "unitUid": "6639L010",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A6639000B",
+                    "unitUid": "6639L011",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A6639000C",
+                    "unitUid": "6639L012",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A6639000D",
+                    "unitUid": "6639L013",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A6639000E",
+                    "unitUid": "6639L014",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A6639000F",
+                    "unitUid": "6639L015",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390010",
+                    "unitUid": "6639L016",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390011",
+                    "unitUid": "6639L017",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390012",
+                    "unitUid": "6639L018",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390013",
+                    "unitUid": "6639L019",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390014",
+                    "unitUid": "6639L020",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390015",
+                    "unitUid": "6639L021",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390016",
+                    "unitUid": "6639L022",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390017",
+                    "unitUid": "6639L023",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390018",
+                    "unitUid": "6639L024",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                },
+                {
+                    "epc": "E28011700000020A66390019",
+                    "unitUid": "6639L025",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "receiptNumber": "GRN42138441"
+                }
+            ]
+        }
+    ],
+    "receipts": [
+        {
+            "id": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+            "receiptNumber": "GRN42138441",
+            "purchaseOrderId": "944aa069-1ac1-4796-9bef-5e0c7a9a7bb7",
+            "warehouseId": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57",
+            "supplierReference": null,
+            "notes": "Hub order PO000006639",
+            "receivedBy": "856b6ef8-b0dc-49a0-98cb-cac7722f34e4",
+            "receivedAt": "2026-10-24T13:43:57.654Z",
+            "createdAt": "2026-10-24T13:43:57.601Z",
+            "items": [
+                {
+                    "id": "cfaadfd8-a601-4845-8d36-75bc225dcfef",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "purchaseOrderItemId": "def6368c-24e6-4b15-b060-dde0c2d7b132",
+                    "productId": "546e90ed-7a00-4d81-bfb9-962d85f16e16",
+                    "quantity": 5,
+                    "batchNumber": "DUP",
+                    "warehouseNodeId": null,
+                    "epcs": [
+                        "E28011700000020A66390001",
+                        "E28011700000020A66390002",
+                        "E28011700000020A66390003",
+                        "E28011700000020A66390004",
+                        "E28011700000020A66390005"
+                    ],
+                    "stockLedgerId": "21dc39e3-fe9d-4ba7-b9ae-d349c95e8047"
+                },
+                {
+                    "id": "a00cdef8-6275-487e-9a8e-1708e99f8589",
+                    "receiptId": "7e5f0ceb-3f89-4a6f-88ea-2f54533cdb1b",
+                    "purchaseOrderItemId": "78373c92-062f-4fe5-b194-bd758e60c468",
+                    "productId": "9f08fdb9-d84b-4a78-8318-9e59b051907d",
+                    "quantity": 20,
+                    "batchNumber": "221121",
+                    "warehouseNodeId": null,
+                    "epcs": [
+                        "E28011700000020A66390006",
+                        "E28011700000020A66390007",
+                        "E28011700000020A66390008",
+                        "E28011700000020A66390009",
+                        "E28011700000020A6639000A",
+                        "E28011700000020A6639000B",
+                        "E28011700000020A6639000C",
+                        "E28011700000020A6639000D",
+                        "E28011700000020A6639000E",
+                        "E28011700000020A6639000F",
+                        "E28011700000020A66390010",
+                        "E28011700000020A66390011",
+                        "E28011700000020A66390012",
+                        "E28011700000020A66390013",
+                        "E28011700000020A66390014",
+                        "E28011700000020A66390015",
+                        "E28011700000020A66390016",
+                        "E28011700000020A66390017",
+                        "E28011700000020A66390018",
+                        "E28011700000020A66390019"
+                    ],
+                    "stockLedgerId": "6eb5e88e-fa10-4265-b879-695789d56d3b"
+                }
+            ],
+            "warehouse": {
+                "id": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57",
+                "name": "CIRCA FLORITA",
+                "description": null,
+                "code": "WH-30145",
+                "address": null,
+                "contactName": null,
+                "phone": null,
+                "ward": null,
+                "province": null,
+                "country": null,
+                "parentId": null,
+                "metadata": null,
+                "allowStockIn": true,
+                "allowStockOut": true,
+                "allowKiosk": true,
+                "allowPos": true,
+                "locationType": "warehouse",
+                "buymedCustomerId": "30145",
+                "createdAt": "2026-10-09T08:34:05.340Z",
+                "updatedAt": "2026-10-19T08:38:03.355Z"
+            },
+            "stockRequest": {
+                "id": "965d701d-db8f-46ac-bb61-96658a9b5fb7",
+                "requestNumber": "CF/IN/00002"
+            }
+        }
+    ]
+}
