@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **24/10/2026 (lần 11, dev sửa theo PM audit)**. Giai đoạn: **v0.1.1 trên nhánh `batch/v0.1-staging` (commit `d124453`, gói `D8CD9AFD`), chờ PM audit lại; chưa qua gate merge / ghi; T1 chỉ đọc thử bằng v0.1.1**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **24/10/2026 (lần 12, PM audit lại v0.1.1)**. Giai đoạn: **v0.1.1 trên nhánh `batch/v0.1-staging` (commit `d124453`, gói `D8CD9AFD`), chưa qua gate merge / ghi; T1 chỉ đọc có thể thử**. Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -48,6 +48,7 @@ Cập nhật: **24/10/2026 (lần 11, dev sửa theo PM audit)**. Giai đoạn: 
   - Đã sửa P1.1–P1.5 và P2.1–P2.3; khoá ghi P3 (SO nhiều GR / Nextwaves nhiều đơn cùng SO).
   - 73 test, đột biến 32/32 (dev tự báo; `scripts/mutate-v0.1.1.py` để PM chạy lại).
   - Vẫn chưa có bằng chứng staging thật: K1, W1, hợp đồng "đã nhận" theo đường inter-tenant.
+- **Lần 12 (24/10, PM audit lại):** PM chạy `npm test` tại `d124453`: 73/73; đối chiếu ZIP và bản cài 17/17 file. Báo cáo `docs/pm/AUDIT-v0.1.1-STG-20261024.md`: P1.1–P1.5/P2.1–P2.3 có sửa local, nhưng **chưa qua gate merge/ghi**. Phát hiện P1.6: tìm GR theo SO bỏ qua `data.total/page/limit`, có thể mở khoá ghi trên danh sách thiếu. P1.7: `nwWriteLocks` có thể bị xoá qua `session:update`. Cả hai đã tái hiện trên browser-sim. K1/W1 vẫn thiếu bằng chứng live.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -406,18 +407,16 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-12. **Hiện hành (sau v0.1.1, 24/10 khuya):**
-    - **PM:** audit lại theo `docs/dev/FIX-AUDIT-BATCH-v0.1-STG.md`.
-      - DIFF `git diff a08d541 d124453 -- src tests package.json`.
-      - Chạy lại `npm test` và (tuỳ chọn) `python -I scripts/mutate-v0.1.1.py` trên nhánh.
-      - Duyệt các quyết định thiết kế lần 11 (§8).
+13. **Hiện hành (sau PM audit lại v0.1.1):**
+    - **Dev:** sửa P1.6/P1.7 theo `docs/pm/AUDIT-v0.1.1-STG-20261024.md`, gửi DIFF và test nguyên văn; runtime đổi thì version/ZIP/SHA-256 mới. PM audit lại trước merge.
     - **Operator — T1 chỉ đọc bằng v0.1.1:**
       - cài `C:\circa-gr-nextwaves-v0.1.1`, Staging, **không cấp phép điền**, mở GR03878;
-      - chụp hai khung (khung Nextwaves có dòng `total`), Copy response `inter-tenant-orders/receiving?…q=SOBD1593858`.
+      - chụp hai khung, Copy response `inter-tenant-orders/receiving?…q=SOBD1593858` và `goods-receipt/search?query=so_thuocsi=1593858…` (giữ `total/page/limit`).
     - Operator / Nextwaves / Buymed gỡ **K1** → lượt nhận thật. Dev cần các response sau để thay phần dựng lại:
       - 2xx `receive-scan`;
       - `purchase-orders/<id>` và `inter-tenant-shipments/<id>` sau khi nhận.
     - W1: chỉ khi gate trên đạt và PM audit lại. Operator chỉ định 1 GR staging rồi cấp phép một lần trong popup.
+12. (cũ, thay bằng mục 13) PM audit lại v0.1.1 theo báo cáo dev, T1 chỉ đọc.
 11. (cũ, thay bằng mục 12) Sau batch v0.1:
      - PM đã audit nhánh `batch/v0.1-staging` theo `docs/pm/AUDIT-BATCH-v0.1-STG-20261024.md`; **chưa cho merge hoặc ghi POS**. Dev sửa P1.1–P1.5, báo gate để PM audit lại.
     - Operator thử **T1 (chỉ đọc)** trên laptop này: cài `C:\circa-gr-nextwaves-v0.1.0`, Staging, điền phiếu = Tắt, mở GR03878 (§6 file báo cáo).
