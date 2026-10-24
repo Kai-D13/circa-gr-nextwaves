@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **24/10/2026 (lần 14, PM audit v0.1.2)**. Giai đoạn: **v0.1.2 trên nhánh `batch/v0.1-staging` (mã `6eeb3c0`, đầu nhánh `5d117d2`, gói `525BCE84`); P1.6/P1.7 đạt gate source/test local; chưa qua gate merge / ghi; T1 chỉ đọc có thể thử**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **25/10/2026 (lần 15, dev xử lý P2.4)**. Giai đoạn: **v0.1.4 trên nhánh `batch/v0.1-staging` (mã `91e3bd1`, đầu nhánh `49bf0a4`, gói `10A29BC4`), chờ PM audit P2.4; T1 chỉ đọc vẫn làm với v0.1.2 (`525BCE84`); chưa qua gate merge / ghi**. Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -54,6 +54,15 @@ Cập nhật: **24/10/2026 (lần 14, PM audit v0.1.2)**. Giai đoạn: **v0.1.2
   - P1.7: `session:update` chỉ đổi `state`. Khớp đơn Nextwaves qua `session:nwMatched` một lần, từ trang Nextwaves. Message ghi kiểm nguồn gửi.
   - 78 test; đột biến 47/47 trên `5d117d2` (lần đầu 46/47, đã thêm test). Nextwaves và POS đều **fail closed ở một trang** (chưa phân trang).
 - **Lần 14 (24/10, PM audit v0.1.2):** `docs/pm/AUDIT-v0.1.2-STG-20261024.md`. PM chạy lại 78/78 test, kiểm ZIP và bản cài 17/17 file khớp source; P1.6/P1.7 đóng ở mức source/test local. Dev tự báo 47/47 đột biến, PM chưa chạy lại. T1 chỉ đọc bằng v0.1.2 có thể chạy; chưa qua gate merge/ghi vì K1, response thật sau nhận và W1 còn thiếu. P2.4: trước khi nâng cấp giữ cùng extension ID, cần xử lý phiên active từ bản cũ thiếu khoá.
+- **Lần 15 (25/10, dev xử lý P2.4):** v0.1.4, gói `10A29BC4` (`C:\circa-gr-nextwaves-v0.1.4`). Báo cáo `docs/dev/FIX-AUDIT-v0.1.2-STG.md`.
+  - **P2.4:** phiên / cấp phép mang `schema`. Thứ của bản cũ:
+    - không được ghi (`session_outdated`), không tìm lại được, không nhận khớp đơn / lượt nhận;
+    - mở lại phiếu → phiên mới thay thế, kiểm lại khoá;
+    - `onInstalled` (update) xoá phiên + cấp phép cũ, ghi `lastUpgrade`.
+    - Edge thật: nâng cấp 0.1.2 → 0.1.4 **cùng extension ID** → phiên / cấp phép cũ bị xoá.
+  - **Thêm:** chống vòng lặp tạo phiên trên POS (không gọi API lặp nếu background không trả lại phiên vừa tạo).
+  - Bộ test: sửa 3 lỗi của trình duyệt giả có thể làm treo file test. 82 test; đột biến 58/58 trên `49bf0a4`, không ca nào do hết giờ.
+  - v0.1.3 `DF493307` chỉ dựng nội bộ, không giao.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -404,6 +413,10 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
   - PM audit lại `d124453`: chấp nhận thiết kế cấp phép một lần / một GR / 30 phút và các mốc lease / timeout / cooldown cho staging. Thêm finding P1.6, P1.7.
   - Dev sửa → v0.1.2 (`6eeb3c0`, đầu nhánh `5d117d2`, gói `525BCE84`).
 
+- 24–25/10/2026 (lần 14–15):
+  - PM audit v0.1.2: P1.6 / P1.7 đạt gate source/test local; T1 chỉ đọc với v0.1.2; thêm P2.4.
+  - Dev xử lý P2.4 → v0.1.4 (`91e3bd1`, đầu nhánh `49bf0a4`, gói `10A29BC4`), kèm chốt chặn vòng lặp tạo phiên.
+
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
 2. Operator mở session PM Codex bằng `docs/PROMPT-PM-CODEX.md`. PM chốt hướng §3 / §6 và ra spec v0.1 staging chia batch.
@@ -416,7 +429,13 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-15. **Hiện hành (sau PM audit v0.1.2, 24/10):**
+16. **Hiện hành (sau v0.1.4, 25/10):**
+    - **PM:** audit P2.4 theo `docs/dev/FIX-AUDIT-v0.1.2-STG.md`.
+      - DIFF `git diff 5d117d2 49bf0a4 -- src tests package.json scripts`.
+      - Chạy lại `npm test` và (tuỳ chọn) `python -I scripts/mutate-v0.1.4.py`.
+    - **Operator — T1 chỉ đọc vẫn làm với v0.1.2** (`C:\circa-gr-nextwaves-v0.1.2`): Staging, không cấp phép điền, mở GR03878; gửi ảnh khung hai tab + Copy response tìm đơn Nextwaves và tìm GR theo SO `1593858` (giữ `total / page / limit`, bỏ credential).
+    - K1 → lượt nhận thật → hợp đồng "đã nhận" → W1 có operator cho phép. Chưa merge mã ghi.
+15. (cũ, thay bằng mục 16) Sau PM audit v0.1.2:
     - **Operator — T1 chỉ đọc** (dev đề xuất cài v0.1.2 `C:\circa-gr-nextwaves-v0.1.2`; PM cho phép cả v0.1.1):
       - Staging, **không cấp phép điền**, mở GR03878;
       - gửi ảnh khung hai tab, Copy response `inter-tenant-orders/receiving?…q=SOBD1593858` và `goods-receipt/search?query=so_thuocsi=1593858…` (giữ `total / page / limit`, bỏ token).
