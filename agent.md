@@ -45,6 +45,10 @@ Báo cáo phải tách bốn mức bằng chứng: **đã kiểm từ source / g
 | 24/10 | Repo GitHub để **public**. Mẫu trong `samples/` phải bỏ token / cookie và thay tên nhân viên bằng `<nhân viên>` trước khi commit |
 | 24/10 | PM (Codex) đọc và làm việc **trực tiếp trên máy local**, cùng thư mục `C:\QR_code\circa-gr-nextwaves` với dev |
 | 24/10 | Máy thử staging = **laptop này** (cùng máy dev / PM) |
+| 24/10 | Dùng **API thường** của Nextwaves (GET); **không** dùng `/integrations/circa/*` (Nextwaves làm extension riêng). Không gọi API ghi của Nextwaves, không bấm nút hộ dược sĩ |
+| 24/10 | Ghi GR bằng **W1** (`PUT …/detail`) do extension làm; khoá nối = `thuocsi_delivery_code` (1 mã giao ↔ 1 PO POS ↔ 1 GR) |
+| 24/10 | Không có nút: mở GR (hoặc `/chi-tiet-so/<SO>`) là extension tự chuyển sang `/vi/purchases/receive?po=<SO>`; không cần chế độ nhập hàng trên POS |
+| 24/10 | **Dược sĩ bấm HOÀN THÀNH** trên POS; extension chỉ điền sẵn UID đã map |
 
 Hệ quả của "một gói":
 - `manifest.json` phải khai quyền cho host của **cả hai** môi trường.
@@ -108,7 +112,7 @@ Hiện có (24/10):
 | `AGENTS.md`, `CLAUDE.md` | Trỏ về `agent.md` + `state.md` (Codex / Claude Code tự đọc) |
 | `docs/PROMPT-PM-CODEX.md` | Prompt mở session PM (Codex) |
 | `docs/SPEC-STG-v0.1.md` | Spec staging v0.1 của PM (đề xuất) |
-| `docs/dev/` | Báo cáo / phản hồi của dev gửi PM (ví dụ `DEV-REVIEW-SPEC-STG-v0.1.md`) |
+| `docs/dev/` | Báo cáo / phản hồi của dev gửi PM: `DEV-REVIEW-SPEC-STG-v0.1.md`, `LOGIC-v0.3.md` (logic hiện hành), `BATCH-v0.1-STG.md` (batch đầu, chờ audit) |
 | `samples/README.md` | Danh sách mẫu: môi trường, API nguồn, ghi chú |
 | `samples/gr-stg-GR03878-20261024.json`, `samples/po-stg-PO00006750-SOBD1593858.json` | Cặp staging **có SO** 1593858 (đề xuất làm cặp thử chính) |
 | `samples/nw-stg-po-PO28237814-detail.json` | PO Nextwaves staging dạng chi tiết (`GET /purchase-orders/<id>`), chưa nhận |
@@ -117,15 +121,22 @@ Hiện có (24/10):
 | `samples/po-prod-PO01970951-SOBD38468903.json` | PO production của SO 38468903 (có `thuocsi_delivery_code`, `goods_receipts`) |
 | `samples/nw-stg-intertenant-PO28237814-SOBD1593858.json` | Inter-tenant order Nextwaves staging, ghép với GR03877 (12 UID dự kiến, chưa nhận), không token |
 
-Dự kiến khi bắt đầu code (chờ spec PM, chưa tạo):
+Mã (từ 24/10, **trên nhánh `batch/*`**, chưa có ở `main` cho tới khi PM duyệt; batch đầu `batch/v0.1-staging`, báo cáo `docs/dev/BATCH-v0.1-STG.md`):
 
 ```
-src/        mã extension (thư mục Load unpacked khi dev): manifest.json, env, background, pos-hook, pos-content, nw-content, core/, popup
-tests/      test Node (node --test), dùng samples/ làm dữ liệu mẫu; e2e Chrome sau
-scripts/    đóng gói ZIP + SHA-256, kiểm gói, quét bí mật
-docs/       spec, báo cáo gate, hướng dẫn cài / nâng cấp
-dist/       gói phát hành (không đưa vào git; phát hành qua GitHub Release hoặc gửi ZIP + hash)
+src/                 thư mục extension (Load unpacked / nội dung ZIP)
+  manifest.json      MV3; content MAIN (hook) + ISOLATED (logic) cho POS và Nextwaves
+  background.js      phiên (chrome.storage.local), giành quyền ghi 1 tab, mở / chuyển tab
+  lib/               logic thuần, chạy được cả Node test: env, keys, pos-model, nw-model, match, plan, apply
+  pos/               pos-hook.js (MAIN, chỉ quan sát), pos-content.js (luồng POS + W1)
+  nw/                nw-hook.js (MAIN, chỉ quan sát), nw-content.js (tìm / kiểm đơn, đọc kết quả nhận)
+  popup/, ui/        cấu hình môi trường + chế độ điền; khung trạng thái Shadow DOM
+tests/               node --test: lib, hook (node:vm), chạy trọn luồng trên trình duyệt giả (browser-sim.js)
+scripts/pack.py      src/ → dist/circa-gr-nextwaves-v<ver>.zip + SHA-256 (8 ký tự đầu = mã gói)
+dist/                gói phát hành (không đưa vào git); bản giải nén để cài: C:\circa-gr-nextwaves-v<ver>
 ```
+
+Lệnh: `npm test` (= `node --test "tests/*.test.js"`); đóng gói `python -I scripts/pack.py` (chạy ở nhánh batch).
 
 Công cụ ngoài repo: `C:\QR_code\requests\net-capture\` (extension Net Capture ghi thao tác trên máy POS).
 
