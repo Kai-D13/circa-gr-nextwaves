@@ -1,5 +1,8 @@
 # Logic tính năng — v0.2 (dev đề xuất, 24/10/2026 chiều) — thay `LOGIC-v0.1.md`
 
+> **ĐÃ ĐƯỢC THAY bởi [`LOGIC-v0.3.md`](LOGIC-v0.3.md)** (24/10 tối). Operator chỉ đạo **không dùng tích hợp Circa của Nextwaves**.
+> Extension tự ghi GR, nên phần "extension không ghi POS" (C3, §2, §4) **không còn hiệu lực**.
+
 Người viết: dev-team. **Đề xuất để PM audit**, chưa phải quyết định đã chốt.
 Nguồn:
 - 4 capture operator gửi 24/10 (POS staging mở GR; Nextwaves PO / dòng giao cũ và PO28237814; POS "Nhập SO thuocsi").

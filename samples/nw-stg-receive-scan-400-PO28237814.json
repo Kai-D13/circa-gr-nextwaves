@@ -1,0 +1,64 @@
+[
+    {
+        "capturedAt": "2026-10-24T09:07:17.938Z",
+        "method": "POST",
+        "url": "https://api-circa-stg.nextwaves.app/api/v1/inter-tenant-shipments/34e67fb9-ea76-4606-ab65-4c515934c0e1/receive-scan",
+        "status": 400,
+        "request": {
+            "onMissing": "keep_open",
+            "epcs": [
+                "E280F302000000017032C728",
+                "E280F302000000017032E72B",
+                "E280F302000000017431E72A",
+                "E280F302000000017032C729",
+                "E280F302000000017032A729",
+                "E280F302000000017032A72B",
+                "E280F3020000000170328728",
+                "E280F302000000017032E72A",
+                "E280F302000000017032A728",
+                "E280F3020000000170328729",
+                "E280F302000000017032872B",
+                "E280F302000000017032A72A",
+                "E280F302000000017431E72B",
+                "E280F302000000017032C72A"
+            ]
+        },
+        "response": {
+            "message": "INTER_TENANT_SHIPMENT_LINE_INVALID",
+            "params": {
+                "lineId": "edba6bf3-cb98-4dc8-be8c-463da68b0c9c",
+                "reason": "tagged_unit_unsupported"
+            }
+        }
+    },
+    {
+        "capturedAt": "2026-10-24T09:07:23.385Z",
+        "method": "POST",
+        "url": "https://api-circa-stg.nextwaves.app/api/v1/inter-tenant-shipments/34e67fb9-ea76-4606-ab65-4c515934c0e1/receive-scan",
+        "status": 400,
+        "request": {
+            "onMissing": "keep_open",
+            "epcs": [
+                "E280F302000000017032C728",
+                "E280F302000000017032E72B",
+                "E280F302000000017431E72A",
+                "E280F302000000017032C729",
+                "E280F3020000000170328728",
+                "E280F302000000017032E72A",
+                "E280F302000000017032A728",
+                "E280F3020000000170328729",
+                "E280F302000000017032872B",
+                "E280F302000000017032A72A",
+                "E280F302000000017431E72B",
+                "E280F302000000017032C72A"
+            ]
+        },
+        "response": {
+            "message": "INTER_TENANT_SHIPMENT_LINE_INVALID",
+            "params": {
+                "lineId": "edba6bf3-cb98-4dc8-be8c-463da68b0c9c",
+                "reason": "tagged_unit_unsupported"
+            }
+        }
+    }
+]

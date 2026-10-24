@@ -26,6 +26,11 @@ Cập nhật: **24/10/2026 (lần 3, có GR03878 sinh từ SO trên staging)**. 
     Đề xuất extension **không ghi POS**; chỉ tìm đúng PO, chuyển màn, đảm bảo liên kết và kiểm kết quả.
   - Không có nút: mở GR là tự chạy. Hai đường vào: trang GR và `/chi-tiet-so/<SO>`.
   - Logic mới: `docs/dev/LOGIC-v0.2.md` (thay v0.1).
+- **Lần 6 (operator 24/10 tối, capture luồng đầy đủ) — `docs/dev/LOGIC-v0.3.md` thay v0.2:**
+  - **Không dùng tích hợp Circa của Nextwaves.** Extension tự ghi GR trên POS.
+  - "Xác nhận nhận hàng" = `POST /inter-tenant-shipments/<id>/receive-scan {onMissing, epcs}`.
+  - PO28237814 bị Nextwaves từ chối `tagged_unit_unsupported` (dòng 1110 theo vỉ; đơn vị gốc Nextwaves là hộp) ⇒ **chưa nhận được (K1)**.
+  - Web Nextwaves đọc reader bằng Web Serial. Danh sách PO Nextwaves không có SO.
 - Đang chờ người dùng gửi dữ liệu §6 (lấy qua giao diện, không cần token), nhất là D4 tra QR cả 12 UID.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
@@ -347,6 +352,11 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
   - PO28237814 giữ để thử.
   - Dev phát hiện tích hợp Circa có sẵn của Nextwaves, viết `docs/dev/LOGIC-v0.2.md`.
 
+- 24/10/2026 (lần 7, operator):
+  - Không dùng API tích hợp Circa của Nextwaves (Nextwaves làm extension riêng); kênh Circa POS trên Nextwaves staging "Cần xử lý", chưa đồng bộ.
+  - Gửi capture luồng đầy đủ (POS nhập SO → `/chi-tiet-so`; Nextwaves PO28237814 có 3 lần xác nhận bị 400).
+  - Dev viết `docs/dev/LOGIC-v0.3.md`.
+
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
 2. Operator mở session PM Codex bằng `docs/PROMPT-PM-CODEX.md`. PM chốt hướng §3 / §6 và ra spec v0.1 staging chia batch.
@@ -359,7 +369,9 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-8. PM audit `docs/dev/LOGIC-v0.2.md` và chốt Q-L, Q-A, Q-N, Q-M, Q-S, Q-K, Q-U (§6 của file đó).
+9. **Hiện hành:** PM audit `docs/dev/LOGIC-v0.3.md` và chốt Q1–Q6 (§7 của file đó).
+   Operator gỡ K1 (PO28237814 nhận được trên Nextwaves), lấy D4 (2 link tra QR) và một lượt nhận thành công có capture.
+8. (cũ) PM audit `docs/dev/LOGIC-v0.2.md` và chốt Q-L, Q-A, Q-N, Q-M, Q-S, Q-K, Q-U (§6 của file đó).
    Operator lấy dữ liệu §7 của file đó: trạng thái kết nối Circa, bộ chọn GR của PO28237814, phép thử nhận PO28237814 có liên kết GR03878.
    Mục 7 cũ:
    Operator lấy dữ liệu §8 của file đó: D4 cho 12 UID, `/receiving` của PO28237814, lời gọi "Xác nhận nhận hàng", D1.
