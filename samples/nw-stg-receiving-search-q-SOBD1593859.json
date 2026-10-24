@@ -1,0 +1,23 @@
+{
+    "items": [
+        {
+            "id": "83f012a0-64b8-44ea-8029-b3e0fe921542",
+            "purchaseOrderId": "9d5ed520-d304-4116-9d8f-d5a8baa3b290",
+            "purchaseOrderNumber": "PO60017570",
+            "purchaseOrderStatus": "CONFIRMED",
+            "counterparty": {
+                "tenantSlug": "buymed-stag",
+                "name": "buymed-stag"
+            },
+            "origin": "seller",
+            "status": "shipped",
+            "warehouse": {
+                "id": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57",
+                "name": "CIRCA FLORITA"
+            },
+            "openShipmentCount": 1,
+            "updatedAt": "2026-10-19T09:30:49.786Z"
+        }
+    ],
+    "total": 1
+}

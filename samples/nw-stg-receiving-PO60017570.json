@@ -1,0 +1,143 @@
+{
+    "order": {
+        "id": "83f012a0-64b8-44ea-8029-b3e0fe921542",
+        "documentId": "8e160b70-dd8c-49d9-a74f-3a40a04481e1",
+        "direction": "outbound",
+        "status": "shipped",
+        "linkId": "c486adfc-7b47-4916-8cee-95ba777b4b58",
+        "counterparty": {
+            "tenantSlug": "buymed-stag",
+            "name": "buymed-stag"
+        },
+        "purchaseOrderId": "9d5ed520-d304-4116-9d8f-d5a8baa3b290",
+        "purchaseOrderNumber": "PO60017570",
+        "lineCount": 3,
+        "totalQuantity": 7,
+        "currency": "VND",
+        "totalAmount": 0,
+        "fulfilmentComplete": true,
+        "needsAttention": false,
+        "createdAt": "2026-10-19T09:30:49.526Z",
+        "sentAt": "2026-10-19T09:30:49.360Z",
+        "acceptedAt": "2026-10-19T09:30:49.538Z",
+        "rejectedAt": null,
+        "shippedAt": "2026-10-19T09:30:49.652Z",
+        "receivedAt": null,
+        "updatedAt": "2026-10-19T09:30:49.786Z",
+        "origin": "seller",
+        "awaitingBuyer": false
+    },
+    "purchaseOrderStatus": "CONFIRMED",
+    "warehouse": {
+        "id": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57",
+        "name": "CIRCA FLORITA"
+    },
+    "shipments": [
+        {
+            "id": "d5f61cba-dbbb-4af4-8f9d-53506994df9b",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019093049-4935",
+            "status": "pending",
+            "needsAccept": true,
+            "dispatchedAt": null,
+            "lines": [
+                {
+                    "lineId": "26406871-554c-45cb-8b81-975c4c067440",
+                    "productId": "3b250a6b-d64b-46fb-b389-b02f6f1c6368",
+                    "product": {
+                        "id": "3b250a6b-d64b-46fb-b389-b02f6f1c6368",
+                        "title": "Kem xua muỗi Soffell hương cam",
+                        "sku": "CIRCA-2431732",
+                        "barcode": null
+                    },
+                    "name": "Kem xua muỗi Soffell hương cam",
+                    "quantity": 2,
+                    "unit": "chai",
+                    "tagged": true,
+                    "units": [
+                        {
+                            "epc": "E280F302000000017431C72B",
+                            "unitUid": "1792380343272AA1"
+                        },
+                        {
+                            "epc": "E280F302000000017431A72B",
+                            "unitUid": "1792380464257AA1"
+                        }
+                    ],
+                    "qrUnitUids": []
+                },
+                {
+                    "lineId": "cd520349-0c3e-4151-8201-007129495ba4",
+                    "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+                    "product": {
+                        "id": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+                        "title": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                        "sku": "CIRCA-1110",
+                        "barcode": null
+                    },
+                    "name": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                    "quantity": 3,
+                    "unit": "vỉ",
+                    "tagged": true,
+                    "units": [
+                        {
+                            "epc": "E280F302000000017431C72A",
+                            "unitUid": "1792380393966AA1"
+                        },
+                        {
+                            "epc": "E280F302000000017431C729",
+                            "unitUid": "1792380409425AA1"
+                        },
+                        {
+                            "epc": "E280F302000000017431C728",
+                            "unitUid": "1792380418946AA1"
+                        }
+                    ],
+                    "qrUnitUids": []
+                },
+                {
+                    "lineId": "61c1c9fa-07de-4aa9-8d4f-94c1e51194f1",
+                    "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+                    "product": {
+                        "id": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+                        "title": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                        "sku": "CIRCA-5451",
+                        "barcode": null
+                    },
+                    "name": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                    "quantity": 1,
+                    "unit": "hộp",
+                    "tagged": true,
+                    "units": [
+                        {
+                            "epc": "E280F302000000017431A728",
+                            "unitUid": "1792380873355AA1"
+                        }
+                    ],
+                    "qrUnitUids": []
+                },
+                {
+                    "lineId": "766b4617-6d62-4a34-84bd-b41c2c91ca1a",
+                    "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+                    "product": {
+                        "id": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+                        "title": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                        "sku": "CIRCA-5451",
+                        "barcode": null
+                    },
+                    "name": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                    "quantity": 1,
+                    "unit": "hộp",
+                    "tagged": true,
+                    "units": [
+                        {
+                            "epc": "E280F302000000017431872B",
+                            "unitUid": "1792380903524AA1"
+                        }
+                    ],
+                    "qrUnitUids": []
+                }
+            ]
+        }
+    ],
+    "receipts": []
+}
