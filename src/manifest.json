@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Circa GR ← Nextwaves",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Nhận hàng thuocsi bằng RFID trên Nextwaves rồi điền phiếu nhận (GR) trên POS Circa. Một gói cho Staging và Production.",
   "minimum_chrome_version": "111",
   "permissions": ["storage"],

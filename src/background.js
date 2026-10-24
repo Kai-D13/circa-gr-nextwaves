@@ -12,6 +12,12 @@
  *  - Lease phải được gia hạn trong lúc ghi; trước mỗi PUT tab gọi `renewLease` — mất lease thì dừng.
  *    Lease hết hạn (tab đóng / treo) mới cho tab khác giành; LEASE_MS > thời hạn một PUT (grpc-timeout 30S + hết giờ phía client).
  *  - Chỉ chủ lease kết thúc được lượt ghi (`finishApply`). Kết quả không rõ (mất kết nối) → chờ RETRY_COOLDOWN_MS mới cho ghi lại.
+ *
+ * Bất biến phiên (PM audit v0.1.1 P1.7):
+ *  - content script chỉ đổi được `state` (sang applied / done) qua session:update; mọi trường khác bị bỏ qua;
+ *  - khoá ghi phía POS đặt lúc tạo phiên (session:start, từ trang POS); khoá + dữ liệu đơn Nextwaves đặt MỘT lần (session:nwMatched,
+ *    từ trang Nextwaves, khi phiên đang waiting_nw); không message nào xoá / hạ khoá;
+ *  - message ghi kiểm nguồn gửi: claim / renew / finish từ trang POS, nwMatched / scanOk / received từ trang Nextwaves của môi trường.
  */
 importScripts("lib/env.js", "lib/keys.js");
 const E = self.__CGN__.env;
@@ -22,12 +28,11 @@ const DEFAULT_CONFIG = Object.freeze({ mode: "", url: "" });
 const ACTIVE = new Set(["waiting_nw", "nw_ready", "received", "applying", "applied", "apply_stopped"]);
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const LOG_MAX = 200;
-// Trường do background tự quản; session:update từ content script không được đụng.
-const GUARDED = new Set([
-  "key", "envId", "grId", "posId", "warehouseId", "writeLocks", "scanOk", "nwResult",
-  "lease", "applyToken", "authorization", "applyResult", "applyError", "retryNotBefore", "createdAt", "updatedAt", "log",
-]);
-const UPDATE_STATES = new Set(["nw_ready", "applied", "done"]);
+// session:update từ content script CHỈ đổi được `state`, và chỉ sang các trạng thái này (PM audit v0.1.1 P1.7).
+// Mọi dữ liệu khác của phiên (khoá ghi, dữ liệu nhận dạng đơn Nextwaves, lease, …) đi qua message riêng có kiểm nguồn gửi.
+const UPDATE_STATES = new Set(["applied", "done"]);
+// Khoá ghi phía Nextwaves mà tab khớp đơn được phép đặt.
+const NW_LOCKS = new Set(["nw_many_orders"]);
 
 // Mọi thao tác đọc-sửa-ghi storage chạy nối tiếp (hai tab gửi cùng lúc không ghi đè nhau).
 let queue = Promise.resolve();
@@ -109,18 +114,75 @@ async function updateSession(key, patch, logEvent) {
   return s;
 }
 
-// session:update từ content script: không đụng trường do background quản, chỉ chuyển sang vài trạng thái.
+// session:update từ content script: chỉ trường `state` (các trường khác bị bỏ qua), chỉ sang applied / done.
 async function contentUpdate(key, patch, logEvent) {
-  const p = Object.assign({}, patch || {});
-  for (const k of Object.keys(p)) if (GUARDED.has(k)) delete p[k];
-  if ("state" in p) {
-    const s = (await getSessions())[key];
-    if (!s) return null;
-    if (!UPDATE_STATES.has(p.state)) throw new Error(`Không chuyển trạng thái ${p.state} qua session:update`);
-    if (s.state === "applying" && p.state !== "done") throw new Error("Phiên đang ghi");
-    if (p.state === "applied" && !["received", "apply_stopped"].includes(s.state)) throw new Error(`Không chuyển ${s.state} → applied`);
+  const s = (await getSessions())[key];
+  if (!s) return null;
+  if (!patch || !("state" in patch)) return logEvent ? updateSession(key, null, logEvent) : s;
+  const state = patch.state;
+  if (!UPDATE_STATES.has(state)) throw new Error(`Không chuyển trạng thái ${state} qua session:update`);
+  if (s.state === "applying" && state !== "done") throw new Error("Phiên đang ghi");
+  if (state === "applied" && !["received", "apply_stopped"].includes(s.state)) throw new Error(`Không chuyển ${s.state} → applied`);
+  return updateSession(key, { state }, logEvent);
+}
+
+// Nguồn gửi message: origin của trang (content script) — "" nếu là popup / không xác định.
+function senderOrigin(sender) {
+  if (!sender || !sender.tab) return "";
+  const u = sender.origin || sender.url || sender.tab.url || "";
+  try {
+    return new URL(u).origin.toLowerCase();
+  } catch (_) {
+    return "";
   }
-  return updateSession(key, p, logEvent);
+}
+
+function requireOrigin(sender, origin, what) {
+  if (senderOrigin(sender) !== String(origin || "").toLowerCase()) throw new Error(`${what}: nguồn gửi không hợp lệ`);
+}
+
+const isStr = (x) => typeof x === "string" && x.length > 0;
+const isStrList = (x, min) => Array.isArray(x) && x.length >= (min || 0) && x.every(isStr);
+
+// Tab Nextwaves báo đã khớp đúng một đơn (lib/resolve.js). Chỉ một lần cho mỗi phiên, chỉ từ trang Nextwaves của môi trường,
+// chỉ khi phiên đang chờ (waiting_nw). Khoá ghi phía Nextwaves chỉ nhận giá trị đã biết; sau đó không đổi được (P1.7).
+async function nwMatched(msg, sender) {
+  const s = (await getSessions())[msg.key];
+  if (!s) throw new Error("Không có phiên");
+  const env = E.envById(s.envId);
+  requireOrigin(sender, env && env.nwUiOrigin, "session:nwMatched");
+  if (s.state !== "waiting_nw" || s.nwPoId) throw new Error("Phiên đã khớp đơn Nextwaves — không khớp lại / đổi được");
+  const m = msg.match || {};
+  const ok =
+    isStr(m.nwPoId) &&
+    isStr(m.nwPoNumber) &&
+    isStr(m.nwOrderId) &&
+    isStr(m.nwRefId) &&
+    K.sameSo(m.nwRefId, s.soBase) &&
+    isStrList(m.shipmentIds, 1) &&
+    m.expected &&
+    Array.isArray(m.expected.shipments) &&
+    isStrList(m.receiptIdsBefore) &&
+    isStrList(m.nwWriteLocks) &&
+    m.nwWriteLocks.every((l) => NW_LOCKS.has(l));
+  if (!ok) throw new Error("session:nwMatched: dữ liệu khớp đơn không hợp lệ");
+  return updateSession(
+    msg.key,
+    {
+      state: "nw_ready",
+      nwPoId: m.nwPoId.toLowerCase(),
+      nwPoNumber: m.nwPoNumber,
+      nwOrderId: m.nwOrderId.toLowerCase(),
+      nwRefId: m.nwRefId,
+      shipmentIds: m.shipmentIds.map((x) => x.toLowerCase()),
+      expected: m.expected,
+      fpRows: Array.isArray(m.fpRows) ? m.fpRows : [],
+      receiptIdsBefore: m.receiptIdsBefore.slice(),
+      nwWriteLocks: [...new Set(m.nwWriteLocks)],
+      nwSearch: m.nwSearch || null,
+    },
+    msg.log || { type: "nw_matched" }
+  );
 }
 
 async function openOrFocus(tabId, url) {
@@ -143,6 +205,7 @@ async function openOrFocus(tabId, url) {
 async function startSession(msg, sender) {
   const env = E.envById(msg.envId);
   if (!env) throw new Error("env");
+  requireOrigin(sender, env.posOrigin, "session:start");
   if (!K.soBase(msg.soBase)) throw new Error("soBase");
   if (!msg.posId || !E.storeAllowed(env, msg.posId)) throw new Error("store");
   const key = keyOf(env.id, msg.grId);
@@ -161,8 +224,8 @@ async function startSession(msg, sender) {
     soBase: K.soBase(msg.soBase),
     warehouseId: msg.warehouseId || null,
     fingerprint: msg.fingerprint || [],
-    writeLocks: Array.isArray(msg.writeLocks) ? msg.writeLocks.map(String) : [], // khoá ghi phía POS (khoá cứng, content không xoá được)
-    nwWriteLocks: [], // khoá ghi phía Nextwaves (tab Nextwaves đặt khi khớp đơn)
+    writeLocks: Array.isArray(msg.writeLocks) ? msg.writeLocks.map(String) : [], // khoá ghi phía POS: đặt lúc tạo phiên, không đổi được
+    nwWriteLocks: [], // khoá ghi phía Nextwaves: chỉ session:nwMatched đặt, một lần
     returnUrl: msg.returnUrl,
     posTabId: sender && sender.tab ? sender.tab.id : null,
     nwTabId: null,
@@ -202,12 +265,19 @@ function writeBlockers(s) {
   return out;
 }
 
-async function claimApply(msg) {
+// Ghi chỉ từ tab POS của đúng môi trường phiên.
+function requirePosTab(s, sender, what) {
+  const env = s ? E.envById(s.envId) : null;
+  requireOrigin(sender, env && env.posOrigin, what);
+}
+
+async function claimApply(msg, sender) {
   const all = await getSessions();
   const s = all[msg.key];
   const now = Date.now();
   const no = (reason) => ({ ok: false, reason });
   if (!s) return no("no_session");
+  requirePosTab(s, sender, "session:claimApply");
   const blockers = writeBlockers(s);
   if (blockers.length) return no(blockers[0]);
   const leaseExpired = s.state === "applying" && !(s.lease && s.lease.expiresAt > now);
@@ -235,10 +305,11 @@ async function claimApply(msg) {
   return { ok: true, leaseMs: T.leaseMs };
 }
 
-async function renewLease(key, token) {
+async function renewLease(key, token, sender) {
   const all = await getSessions();
   const s = all[key];
   const now = Date.now();
+  if (s) requirePosTab(s, sender, "session:renewLease");
   if (!s || s.state !== "applying" || !s.lease || s.lease.token !== token || !(s.lease.expiresAt > now)) return false;
   s.lease = { token, expiresAt: now + T.leaseMs };
   all[key] = s;
@@ -246,8 +317,9 @@ async function renewLease(key, token) {
   return true;
 }
 
-async function finishApply(msg) {
+async function finishApply(msg, sender) {
   const s = (await getSessions())[msg.key];
+  if (s) requirePosTab(s, sender, "session:finishApply");
   if (!s || s.state !== "applying" || s.applyToken !== msg.token) return false;
   const ok = !!msg.ok;
   const patch = ok
@@ -258,9 +330,10 @@ async function finishApply(msg) {
 }
 
 // Nextwaves đã nhận đủ: chỉ nhận khi phiên đang nw_ready và đã ghi nhận lượt "Xác nhận nhận hàng" 2xx (PM P2.1).
-async function received(key, payload) {
+async function received(key, payload, sender) {
   const cur = (await getSessions())[key];
   if (!cur) return null;
+  requireOrigin(sender, E.envById(cur.envId).nwUiOrigin, "session:received");
   if (cur.state !== "nw_ready" || !cur.scanOk) throw new Error("Chưa có lượt xác nhận nhận hàng 2xx của phiên");
   const s = await updateSession(key, { state: "received", nwResult: payload }, { type: "nw_received", units: (payload.units || []).length });
   // Đưa dược sĩ về tab POS; tab đã đóng hoặc đã rời trang thì mở lại đúng trang bắt đầu phiên.
@@ -313,23 +386,29 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         return contentUpdate(msg.key, msg.patch, msg.log);
       case "session:log":
         return updateSession(msg.key, null, msg.log);
+      case "session:nwMatched":
+        return nwMatched(msg, sender);
       case "session:scanOk": {
         const s = (await getSessions())[msg.key];
         if (!s || s.state !== "nw_ready") return null;
-        return updateSession(msg.key, { scanOk: msg.scan }, Object.assign({ type: "scan_ok" }, msg.scan));
+        requireOrigin(sender, E.envById(s.envId).nwUiOrigin, "session:scanOk");
+        const scan = msg.scan || {};
+        if (!Array.isArray(s.shipmentIds) || !s.shipmentIds.includes(String(scan.shipmentId || "").toLowerCase())) throw new Error("session:scanOk: phiếu gửi không thuộc đơn đã khớp");
+        if (!(scan.httpStatus >= 200 && scan.httpStatus < 300)) throw new Error("session:scanOk: không phải lượt 2xx");
+        return updateSession(msg.key, { scanOk: scan }, Object.assign({ type: "scan_ok" }, scan));
       }
       case "session:received":
-        return received(msg.key, msg.payload);
+        return received(msg.key, msg.payload, sender);
       case "session:writeBlockers": {
         const s = (await getSessions())[msg.key];
         return s ? writeBlockers(s) : ["no_session"];
       }
       case "session:claimApply":
-        return claimApply(msg);
+        return claimApply(msg, sender);
       case "session:renewLease":
-        return renewLease(msg.key, msg.token);
+        return renewLease(msg.key, msg.token, sender);
       case "session:finishApply":
-        return finishApply(msg);
+        return finishApply(msg, sender);
       case "session:focusPos":
         return focusPos(msg.key);
       case "session:reopenNw": {

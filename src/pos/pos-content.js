@@ -54,11 +54,18 @@
     env_read_only: "Môi trường này chỉ đọc",
     warehouse_unmapped: "Cửa hàng chưa có bảng kho Nextwaves",
     so_many_gr: "SO có nhiều phiếu nhận — chưa chứng minh được đúng lần giao",
-    so_gr_unknown: "Không kiểm được số phiếu nhận của SO",
+    so_gr_unknown: "Không kiểm được đủ / rõ danh sách phiếu nhận của SO",
     nw_many_orders: "Nextwaves có nhiều đơn cùng SO — chưa chứng minh được đúng lần giao",
     lease_held: "Tab khác đang điền phiếu này",
     cooldown: "Lần ghi trước có kết quả chưa rõ — chờ thêm rồi thử lại",
     gr_mismatch: "Cấp phép không đúng phiếu",
+  };
+  const SO_CHECK_MSG = {
+    search_unreadable: "Kết quả tìm phiếu nhận theo SO không đúng dạng (thiếu goods_receipts / total / page / limit)",
+    search_paging: "Kết quả tìm phiếu nhận theo SO có trang / giới hạn không hợp lệ",
+    search_incomplete: "Danh sách phiếu nhận của SO chưa đọc đủ (nhiều trang hoặc total lệch)",
+    row_incomplete: "Một phiếu nhận trong kết quả thiếu id / trạng thái / cửa hàng",
+    row_other_store: "Kết quả có phiếu nhận của cửa hàng khác",
   };
   const STATE_LABEL = {
     waiting_nw: "Chờ nhận hàng trên Nextwaves",
@@ -195,19 +202,29 @@
     panel.show({ tone: "info", title: `${env.label}: extension chỉ chạy cho cửa hàng thử`, lines: ["Cửa hàng đang đăng nhập không thuộc danh sách chạy thử của môi trường này."] });
   }
 
+  // Tìm GR theo SO + kiểm đọc đủ / rõ (pos-model.checkSoGrs — PM audit v0.1.1 P1.6). Dùng chung cho hai đường vào.
   async function searchGrsOfSo(env, storeId, so) {
     const digits = K.soDigits(so);
-    if (!digits) return { ok: false, error: "Không đọc được số SO" };
+    if (!digits) return { ok: false, reason: "so_unreadable", error: "Không đọc được số SO" };
     const r = await posGet(env, E.api.grSearchBySo(env, digits, storeId));
-    if (!r.ok) return { ok: false, error: httpError("Tìm GR theo SO", r) };
-    // Chỉ GR của đúng cửa hàng đăng nhập (thiếu pos_info → loại; evaluateGr kiểm lại đầy đủ).
-    return { ok: true, list: P.normalizeGrSearch(r.json).filter((g) => g.posId === storeId) };
+    if (!r.ok) return { ok: false, reason: "http", error: httpError("Tìm GR theo SO", r) };
+    const check = P.checkSoGrs(r.json, storeId);
+    if (!check.ok) return Object.assign({}, check, { error: soCheckText(check) });
+    return check;
+  }
+
+  function soCheckText(c) {
+    const facts = c.total === undefined ? "" : ` (total ${c.total}, đã đọc ${c.read})`;
+    return (SO_CHECK_MSG[c.reason] || c.reason) + facts + (c.code ? ` — ${c.code}` : "");
   }
 
   // Đường (2): /chi-tiet-so/<SO>
   async function evaluateSo(env, storeId, so) {
     const found = await searchGrsOfSo(env, storeId, so);
-    if (!found.ok) return showError("Không tìm được phiếu nhận của SO", found.error, [{ label: "Thử lại", onClick: refresh }]);
+    if (!found.ok) {
+      watched = { key: null, state: null };
+      return showError("Không đọc đủ danh sách phiếu nhận của SO — extension không đi tiếp", found.error, [{ label: "Thử lại", onClick: refresh }]);
+    }
     const all = found.list;
     if (chosenGrId && all.some((g) => g.id === chosenGrId)) return evaluateGr(env, storeId, chosenGrId, location.href);
     const receivable = all.filter(P.isReceivable);
@@ -264,15 +281,10 @@
       }
       const start = async () => {
         setDismissed(env.id, gr.id, false);
-        // Khoá ghi phía POS (PM P3): SO phải có đúng một phiếu nhận (chưa huỷ) ở cửa hàng này, và đó là phiếu này.
-        const writeLocks = [];
+        // Khoá ghi phía POS (PM P3 / P1.6): SO phải có đúng một phiếu nhận (chưa huỷ) ở cửa hàng này, đọc đủ, và đó là phiếu này.
         const found = await searchGrsOfSo(env, storeId, link.soBase);
-        if (!found.ok) writeLocks.push("so_gr_unknown");
-        else {
-          const live = found.list.filter((x) => !/^CANCEL/i.test(x.status));
-          if (!live.some((x) => x.id === gr.id)) writeLocks.push("so_gr_unknown");
-          else if (live.length !== 1) writeLocks.push("so_many_gr");
-        }
+        const lock = P.soWriteLock(found, gr.id);
+        const writeLocks = lock ? [lock] : [];
         await bg("session:start", {
           envId: env.id,
           grId: gr.id,

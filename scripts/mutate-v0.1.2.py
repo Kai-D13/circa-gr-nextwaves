@@ -1,10 +1,10 @@
-"""Đột biến có chủ đích cho các hàng rào của v0.1.1 (PM audit 24/10: P1.1–P1.5, P2.1–P2.3, P3).
+"""Đột biến có chủ đích cho các hàng rào của v0.1.2 (PM audit 24/10: P1.1–P1.7, P2.1–P2.3, P3).
 
 Mỗi ca gỡ đúng MỘT hàng rào trong src/, chạy `node --test "tests/*.test.js"`; bộ test phải hỏng (KILLED).
 Chạy trên BẢN SAO trong thư mục tạm — không sửa src/ của repo. Cần Node (node --test) trên PATH.
 
-  python -I scripts/mutate-v0.1.1.py            # mọi ca
-  python -I scripts/mutate-v0.1.1.py 24         # bắt đầu từ ca thứ 25
+  python -I scripts/mutate-v0.1.2.py            # mọi ca
+  python -I scripts/mutate-v0.1.2.py 24         # bắt đầu từ ca thứ 25
 """
 import os
 import shutil
@@ -57,9 +57,28 @@ muts = [
     ("src/lib/apply.js", 'if (diff) return stop("gr_changed", step, { observed: diff });', "", "P2.3 bỏ so toàn phiếu"),
     # P3
     ("src/background.js", "for (const l of [].concat(s.writeLocks || [], s.nwWriteLocks || [])) out.push(l);", "", "P3 bỏ khoá ghi"),
-    ("src/background.js", '"key", "envId", "grId", "posId", "warehouseId", "writeLocks", "scanOk", "nwResult",', '"key", "envId", "grId", "posId", "warehouseId", "scanOk", "nwResult",', "P3 content gỡ được khoá"),
+    ("src/background.js", 'return updateSession(key, { state }, logEvent);', 'return updateSession(key, patch, logEvent);', "P3 / P1.7 session:update ghi cả trường khác state"),
+    ("src/background.js", 'if (!patch || !("state" in patch)) return logEvent ? updateSession(key, null, logEvent) : s;', 'if (!patch || !("state" in patch)) return updateSession(key, patch, logEvent);', "P1.7 session:update không state ghi được khoá"),
     ("src/lib/resolve.js", 'if (verified.length > 1) out.writeLocks.push("nw_many_orders");', "", "P3 bỏ khoá nhiều đơn Nextwaves"),
-    ("src/pos/pos-content.js", 'else if (live.length !== 1) writeLocks.push("so_many_gr");', "", "P3 bỏ khoá SO nhiều GR"),
+    ("src/lib/pos-model.js", 'return live.length === 1 ? null : "so_many_gr";', "return null;", "P3 bỏ khoá SO nhiều GR"),
+    # P1.6
+    ("src/lib/pos-model.js", 'if (page.total !== page.items.length) return Object.assign({ ok: false, reason: "search_incomplete" }, facts);', "", "P1.6 bỏ kiểm total GR theo SO"),
+    ("src/lib/pos-model.js", "if (page.page !== 1 || !(page.limit >= 1) || page.items.length > page.limit)", "if (false)", "P1.6 bỏ kiểm page / limit"),
+    ("src/lib/pos-model.js", "if (!g.id || !g.status || !g.posId) return", "if (false) return", "P1.6 dòng thiếu trường vẫn đếm"),
+    ("src/lib/pos-model.js", "if (!store || g.posId !== store) return", "if (false) return", "P1.6 dòng cửa hàng khác vẫn đếm"),
+    ("src/pos/pos-content.js", "const writeLocks = lock ? [lock] : [];", "const writeLocks = [];", "P1.6 phiên không mang khoá SO"),
+    ("src/pos/pos-content.js", '''    if (!found.ok) {
+      watched = { key: null, state: null };''', '''    if (false) {
+      watched = { key: null, state: null };''', "P1.6 đường /chi-tiet-so đi tiếp khi chưa đủ"),
+    # P1.7
+    ("src/background.js", 'if (s.state !== "waiting_nw" || s.nwPoId) throw', "if (false) throw", "P1.7 khớp đơn nhiều lần"),
+    ("src/background.js", 'requireOrigin(sender, env && env.nwUiOrigin, "session:nwMatched");', "", "P1.7 khớp đơn từ trang bất kỳ"),
+    ("src/background.js", "m.nwWriteLocks.every((l) => NW_LOCKS.has(l));", "true;", "P1.7 nhận khoá lạ"),
+    ("src/background.js", "K.sameSo(m.nwRefId, s.soBase) &&", "", "P1.7 nhận refId khác SO"),
+    ("src/background.js", 'requirePosTab(s, sender, "session:claimApply");', "", "P1.7 giành quyền từ trang bất kỳ"),
+    ("src/background.js", 'requireOrigin(sender, env.posOrigin, "session:start");', "", "P1.7 tạo phiên từ trang bất kỳ"),
+    ("src/background.js", 'if (!Array.isArray(s.shipmentIds) || !s.shipmentIds.includes(String(scan.shipmentId || "").toLowerCase())) throw new Error("session:scanOk: phiếu gửi không thuộc đơn đã khớp");', "", "P1.7 scanOk phiếu gửi lạ"),
+    ("src/background.js", 'requireOrigin(sender, E.envById(cur.envId).nwUiOrigin, "session:received");', "", "P1.7 received từ trang bất kỳ"),
 ]
 
 

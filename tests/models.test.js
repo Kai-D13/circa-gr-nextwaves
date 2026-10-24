@@ -71,6 +71,57 @@ test("tìm GR theo SO (đường /chi-tiet-so) → GR03878", () => {
   assert.deepEqual(list.map((g) => [g.code, g.status, g.poCode]), [["GR03878", "WAITING_TO_RECEIVE", "PO00006750"]]);
 });
 
+test("P1.6: danh sách GR theo SO phải đọc đủ (total / page / limit) và rõ từng dòng, không lọc rồi đếm", () => {
+  const GR = "2de6c0ec-2ea8-4038-8616-659fa3f5820a";
+  const base = () => H.clone(H.sample("pos-stg-gr-search-so-1593858.json"));
+  const check = (j, store = H.STORE_2222) => pos.checkSoGrs(j, store);
+  // Mẫu thật: total 1, page 1, limit 1000, một GR → không khoá.
+  const ok = check(base());
+  assert.deepEqual([ok.ok, ok.total, ok.read, ok.list.map((g) => g.code)], [true, 1, 1, ["GR03878"]]);
+  assert.equal(pos.soWriteLock(ok, GR), null);
+  // total 2, trang chỉ trả 1 dòng (GR thứ hai ở trang sau) → chưa đủ → khoá.
+  const j1 = base();
+  j1.data.total = 2;
+  assert.deepEqual([check(j1).ok, check(j1).reason, check(j1).total, check(j1).read], [false, "search_incomplete", 2, 1]);
+  assert.equal(pos.soWriteLock(check(j1), GR), "so_gr_unknown");
+  // page / limit sai hoặc thiếu.
+  for (const [patch, reason] of [[{ page: 2 }, "search_paging"], [{ limit: 0 }, "search_paging"], [{ limit: undefined }, "search_unreadable"], [{ total: "1" }, "search_unreadable"], [{ goods_receipts: null }, "search_unreadable"]]) {
+    const j = base();
+    Object.assign(j.data, patch);
+    assert.equal(check(j).reason, reason, JSON.stringify(patch));
+    assert.equal(pos.soWriteLock(check(j), GR), "so_gr_unknown");
+  }
+  const jl = base();
+  jl.data.limit = 1;
+  jl.data.total = 2;
+  jl.data.goods_receipts.push(Object.assign(H.clone(jl.data.goods_receipts[0]), { id: "11111111-2222-4333-8444-555555555555", code: "GR03999" }));
+  assert.equal(check(jl).reason, "search_paging", "số dòng > limit");
+  // Một dòng thiếu pos_info.id → không lọc bỏ, mà khoá.
+  const j2 = base();
+  j2.data.total = 2;
+  j2.data.goods_receipts.push(Object.assign(H.clone(j2.data.goods_receipts[0]), { id: "11111111-2222-4333-8444-555555555555", code: "GR03999", pos_info: null }));
+  assert.deepEqual([check(j2).reason, check(j2).code], ["row_incomplete", "GR03999"]);
+  assert.equal(pos.soWriteLock(check(j2), GR), "so_gr_unknown");
+  const j3 = base();
+  j3.data.goods_receipts[0].status = "";
+  assert.equal(check(j3).reason, "row_incomplete");
+  // Dòng của cửa hàng khác / chưa biết cửa hàng đăng nhập.
+  const j4 = base();
+  j4.data.goods_receipts[0].pos_info = { id: "00000000-0000-0000-0000-00000000abcd" };
+  assert.equal(check(j4).reason, "row_other_store");
+  assert.equal(check(base(), "").reason, "row_other_store");
+  // Hai GR đủ dữ liệu → đọc được nhưng khoá so_many_gr; GR kia đã huỷ → không khoá.
+  const j5 = base();
+  j5.data.total = 2;
+  j5.data.goods_receipts.push(Object.assign(H.clone(j5.data.goods_receipts[0]), { id: "11111111-2222-4333-8444-555555555555", code: "GR03999" }));
+  assert.equal(check(j5).ok, true);
+  assert.equal(pos.soWriteLock(check(j5), GR), "so_many_gr");
+  j5.data.goods_receipts[1].status = "CANCELED";
+  assert.equal(pos.soWriteLock(check(j5), GR), null);
+  // GR đang mở không có trong danh sách → khoá.
+  assert.equal(pos.soWriteLock(ok, "99999999-0000-4000-8000-000000000000"), "so_gr_unknown");
+});
+
 test("Nextwaves: tìm receiving theo SO, đọc đơn liên kết và kiểm SO / đối tác / kho", () => {
   const page = nw.normalizeReceivingSearchPage(H.sample("nw-stg-receiving-search-q-SOBD1593859.json"));
   assert.deepEqual([page.total, page.items.length], [1, 1]);

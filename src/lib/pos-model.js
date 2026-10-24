@@ -73,6 +73,40 @@
     return list.map((g) => ({ id: lower(g.id), code: String(g.code || ""), status: String(g.status || ""), poId: lower(g.purchase_order_id), poCode: String(g.purchase_order_code || ""), posId: lower(g.pos_info && g.pos_info.id) }));
   }
 
+  // Một trang kết quả tìm GR theo SO: {items, total, page, limit}. Thiếu goods_receipts mảng hoặc total / page / limit số → null.
+  function normalizeGrSearchPage(json) {
+    const d = dataOf(json);
+    const num = (x) => typeof x === "number" && Number.isFinite(x);
+    if (!d || typeof d !== "object" || !Array.isArray(d.goods_receipts) || !num(d.total) || !num(d.page) || !num(d.limit)) return null;
+    return { items: normalizeGrSearch(json), total: d.total, page: d.page, limit: d.limit };
+  }
+
+  // Danh sách GR của SO ở cửa hàng phải đọc ĐỦ và RÕ (PM audit v0.1.1 P1.6) — dùng chung cho đường GR và đường /chi-tiet-so.
+  //  - trang 1, limit ≥ 1, số dòng ≤ limit, total = số dòng đã đọc (chưa phân trang: nhiều trang → không kết luận);
+  //  - mỗi dòng phải có id, trạng thái, pos_info.id và đúng cửa hàng đang đăng nhập (không lọc bỏ rồi đếm).
+  // → {ok:true, list, total} | {ok:false, reason, total?, read?, code?}
+  function checkSoGrs(json, storeId) {
+    const page = normalizeGrSearchPage(json);
+    if (!page) return { ok: false, reason: "search_unreadable" };
+    const facts = { total: page.total, read: page.items.length };
+    if (page.page !== 1 || !(page.limit >= 1) || page.items.length > page.limit) return Object.assign({ ok: false, reason: "search_paging", page: page.page, limit: page.limit }, facts);
+    if (page.total !== page.items.length) return Object.assign({ ok: false, reason: "search_incomplete" }, facts);
+    const store = lower(storeId);
+    for (const g of page.items) {
+      if (!g.id || !g.status || !g.posId) return Object.assign({ ok: false, reason: "row_incomplete", code: g.code || g.id || "?" }, facts);
+      if (!store || g.posId !== store) return Object.assign({ ok: false, reason: "row_other_store", code: g.code }, facts);
+    }
+    return Object.assign({ ok: true, list: page.items }, facts);
+  }
+
+  // Khoá ghi phía POS (P3): SO phải có đúng một GR chưa huỷ ở cửa hàng, và đó là GR đang mở. null = không khoá.
+  function soWriteLock(check, grId) {
+    if (!check || !check.ok) return "so_gr_unknown";
+    const live = check.list.filter((g) => !/^CANCEL/i.test(g.status));
+    if (!live.some((g) => g.id === lower(grId))) return "so_gr_unknown";
+    return live.length === 1 ? null : "so_many_gr";
+  }
+
   const isReceivable = (gr) => !!gr && RECEIVABLE.has(gr.status);
 
   // GR + PO (+ cửa hàng đang đăng nhập) → {ok, soBase, deliveryCode, errors[]}.
@@ -121,7 +155,7 @@
     return { ok: true, productId, lot, expiredDate, status: String(d.status || "") };
   }
 
-  const lib = { normalizeGr, normalizePo, normalizeGrSearch, isReceivable, resolveDelivery, grFingerprintSource, normalizeQrLookup, RECEIVABLE };
+  const lib = { normalizeGr, normalizePo, normalizeGrSearch, normalizeGrSearchPage, checkSoGrs, soWriteLock, isReceivable, resolveDelivery, grFingerprintSource, normalizeQrLookup, RECEIVABLE };
   root.__CGN__ = root.__CGN__ || {};
   root.__CGN__.pos = lib;
   if (typeof module !== "undefined" && module.exports) module.exports = lib;

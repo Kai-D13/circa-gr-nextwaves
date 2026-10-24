@@ -216,23 +216,29 @@
     const shipmentIds = g.receiving.shipments.map((x) => x.id);
     const receiptIdsBefore = poDetail.receipts.map((x) => x.id);
     const preReceived = poDetail.items.reduce((n, it) => n + it.receivedUnits.length, 0);
-    const s2 = await bg("session:update", {
-      key: s.key,
-      patch: {
-        state: "nw_ready",
-        nwPoId: g.order.poId,
-        nwPoNumber: g.order.poNumber,
-        nwOrderId: g.order.orderId,
-        nwRefId: g.order.refId,
-        shipmentIds,
-        expected: g.receiving,
-        fpRows,
-        receiptIdsBefore,
-        nwWriteLocks: r.writeLocks,
-        nwSearch: { total: r.total, read: r.read, candidates: r.candidates, verified: r.verified },
-      },
-      log: { type: "nw_matched", nwPoNumber: g.order.poNumber, refId: g.order.refId, shipments: shipmentIds.length, total: r.total, candidates: r.candidates, verified: r.verified, receiptsBefore: receiptIdsBefore.length, preReceived, writeLocks: r.writeLocks },
-    });
+    // Background chỉ nhận một lần, từ trang Nextwaves của môi trường; khoá ghi đặt ở đây không đổi / xoá được về sau (PM P1.7).
+    let s2;
+    try {
+      s2 = await bg("session:nwMatched", {
+        key: s.key,
+        match: {
+          nwPoId: g.order.poId,
+          nwPoNumber: g.order.poNumber,
+          nwOrderId: g.order.orderId,
+          nwRefId: g.order.refId,
+          shipmentIds,
+          expected: g.receiving,
+          fpRows,
+          receiptIdsBefore,
+          nwWriteLocks: r.writeLocks,
+          nwSearch: { total: r.total, read: r.read, candidates: r.candidates, verified: r.verified },
+        },
+        log: { type: "nw_matched", nwPoNumber: g.order.poNumber, refId: g.order.refId, shipments: shipmentIds.length, total: r.total, candidates: r.candidates, verified: r.verified, receiptsBefore: receiptIdsBefore.length, preReceived, writeLocks: r.writeLocks },
+      });
+    } catch (err) {
+      panel.show({ tone: "err", title: "Không ghi được kết quả khớp đơn vào phiên", lines: [String((err && err.message) || err), "Huỷ phiên ở tab POS rồi mở lại phiếu."], buttons: [{ label: "Thử lại", onClick: refresh }] });
+      return null;
+    }
     if (preReceived > 0) note = { tone: "warn", title: "Đơn đã có hàng nhận trước khi mở phiên", text: `Nextwaves đã ghi nhận ${preReceived} UID trước lượt này. Extension chỉ chuyển về POS sau một lượt “Xác nhận nhận hàng” mới trong phiên.` };
     return ctxFromSession(env, s2, po);
   }

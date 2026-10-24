@@ -69,7 +69,9 @@ function createBrowser(server, opts = {}) {
   }
 
   function sendMessage(tab, msg) {
-    return new Promise((resolve) => bgListener(clone(msg), { tab: tab ? { id: tab.id } : undefined }, (resp) => resolve(clone(resp))));
+    // Như Chrome: content script có sender.tab + url + origin của trang; popup không có tab.
+    const sender = tab ? { tab: { id: tab.id, url: tab.url }, url: tab.url, origin: new URL(tab.url).origin } : { url: "chrome-extension://cgn-test/popup/popup.html" };
+    return new Promise((resolve) => bgListener(clone(msg), sender, (resp) => resolve(clone(resp))));
   }
 
   // ---- background ----

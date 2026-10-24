@@ -25,7 +25,15 @@ function makeServer(opts = {}) {
   const st = { gr: H.clone(H.sample("gr-stg-GR03878-20261024.json")), nwReceived: false, puts: [], log: [], putFailures: opts.putFailures || 0 };
   if (opts.grNoStore) delete st.gr.data.pos_info;
   const qr = H.qrByUidPO28237814();
-  const searchItem = { id: it.id, purchaseOrderId: it.purchaseOrderId, purchaseOrderNumber: it.purchaseOrderNumber, purchaseOrderStatus: it.purchaseOrderStatus, counterparty: it.counterparty, status: it.status, warehouse: it.warehouse, openShipmentCount: 1 };
+  const itemOf = (o) => ({ id: o.id, purchaseOrderId: o.purchaseOrderId, purchaseOrderNumber: o.purchaseOrderNumber, purchaseOrderStatus: o.purchaseOrderStatus, counterparty: o.counterparty, status: o.status, warehouse: o.warehouse, openShipmentCount: 1 });
+  const searchItem = itemOf(it);
+  const twin = opts.nwTwin ? Object.assign(H.clone(it), { id: "00000000-0000-4000-8000-0000000000a1", purchaseOrderId: "00000000-0000-4000-8000-0000000000b1", purchaseOrderNumber: "PO99999999", refId: "SOBD1593858-999" }) : null;
+  const twinReceiving = () => {
+    const r = H.receivingPO28237814();
+    Object.assign(r.order, { id: twin.id, purchaseOrderId: twin.purchaseOrderId, purchaseOrderNumber: twin.purchaseOrderNumber });
+    r.shipments[0].lines = r.shipments[0].lines.slice(1);
+    return r;
+  };
   async function handle(req) {
     st.log.push(req);
     const u = new URL(req.url);
@@ -48,7 +56,11 @@ function makeServer(opts = {}) {
       }
       if (u.pathname === "/backend/v1/order/goods-receipt/search" && req.method === "GET") {
         const r = H.sample("pos-stg-gr-search-so-1593858.json");
-        if (opts.extraGr) r.data.goods_receipts.push(Object.assign(H.clone(r.data.goods_receipts[0]), { id: "11111111-2222-4333-8444-555555555555", code: "GR03999", purchase_order_code: "PO00006999" }));
+        if (opts.extraGr) {
+          r.data.goods_receipts.push(Object.assign(H.clone(r.data.goods_receipts[0]), { id: "11111111-2222-4333-8444-555555555555", code: "GR03999", purchase_order_code: "PO00006999" }));
+          r.data.total = 2;
+        }
+        if (opts.soSearch) opts.soSearch(r.data);
         return { status: 200, json: r };
       }
       m = /^\/backend\/v1\/order\/goods-receipt\/([0-9a-f-]{36})\/item\/([0-9a-f-]{36})\/detail\/([0-9a-f-]{36})$/.exec(u.pathname);
@@ -76,7 +88,12 @@ function makeServer(opts = {}) {
       if (u.pathname.includes("/integrations/")) throw new Error("extension gọi API tích hợp Nextwaves");
       if (req.method !== "GET") throw new Error("extension gọi API ghi Nextwaves");
       if (req.headers.authorization !== "Bearer nw-test") return { status: 401, json: { message: "unauthorized" } };
-      if (u.pathname === "/api/v1/inter-tenant-orders/receiving") return { status: 200, json: u.searchParams.get("q") === "SOBD1593858" ? { items: [searchItem], total: 1 } : { items: [], total: 0 } };
+      if (u.pathname === "/api/v1/inter-tenant-orders/receiving") {
+        const items = u.searchParams.get("q") === "SOBD1593858" ? (twin ? [itemOf(twin), searchItem] : [searchItem]) : [];
+        return { status: 200, json: { items, total: items.length } };
+      }
+      if (twin && u.pathname === `/api/v1/inter-tenant-orders/purchase-orders/${twin.purchaseOrderId}`) return { status: 200, json: H.clone(twin) };
+      if (twin && u.pathname === `/api/v1/inter-tenant-orders/purchase-orders/${twin.purchaseOrderId}/receiving`) return { status: 200, json: twinReceiving() };
       if (u.pathname === `/api/v1/inter-tenant-orders/purchase-orders/${it.purchaseOrderId}`) return { status: 200, json: H.clone(it) };
       if (u.pathname === `/api/v1/inter-tenant-orders/purchase-orders/${it.purchaseOrderId}/receiving`) return { status: 200, json: H.receivingPO28237814() };
       if (u.pathname === `/api/v1/purchase-orders/${it.purchaseOrderId}`) {
@@ -240,7 +257,7 @@ test("P1.3: cấp phép cho phiếu khác / đã hết hạn → 0 PUT; content 
     await grant(b); // GR03878, hết hạn sau 80 ms
     await until(() => fillButton(pos));
     await sleep(120);
-    assert.deepEqual((await b.sendFromPopup(claimMsg("x"))).data, { ok: false, reason: "no_grant" });
+    assert.deepEqual((await b.sendFromTab(pos, claimMsg("x"))).data, { ok: false, reason: "no_grant" });
     assert.equal(srv.st.puts.length, 0);
     const denied = await b.sendFromTab(pos, { type: "grant:create", envId: "STG", grCode: "GR03878" });
     assert.equal(denied.ok, false);
@@ -258,10 +275,12 @@ test("P1.3: production chỉ đọc — không cấp phép được, phiên PRD 
     const g = await grant(b, "GR03878", "PRD");
     assert.equal(g.ok, false);
     assert.match(g.error, /chỉ đọc/);
-    // Phiên PRD dựng ở background (cửa hàng PRD đã map kho) ở trạng thái received → claim vẫn bị chặn.
-    await b.sendFromPopup({ type: "session:start", envId: "PRD", grId: GR_ID, grCode: "GR03878", posId: "c476efb2-415c-429a-978e-d389b4b06607", soBase: "SOBD1", warehouseId: "eb5e2b4f-6f92-413b-90ef-6be1730b94c0", returnUrl: "https://pos.v2.circa.vn/" });
+    // Phiên PRD tạo từ trang POS production (cửa hàng PRD đã map kho) ở trạng thái received → claim vẫn bị chặn.
+    const prd = b.openTab(`https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    const st = await b.sendFromTab(prd, { type: "session:start", envId: "PRD", grId: GR_ID, grCode: "GR03878", posId: "c476efb2-415c-429a-978e-d389b4b06607", soBase: "SOBD1", warehouseId: "eb5e2b4f-6f92-413b-90ef-6be1730b94c0", returnUrl: "https://pos.v2.circa.vn/" });
+    assert.equal(st.ok, true, st.error);
     b.store.sessions[`PRD:${GR_ID}`].state = "received";
-    const r = await b.sendFromPopup(claimMsg("x", { key: `PRD:${GR_ID}` }));
+    const r = await b.sendFromTab(prd, claimMsg("x", { key: `PRD:${GR_ID}` }));
     assert.deepEqual(r.data, { ok: false, reason: "env_read_only" });
     assert.equal(srv.st.puts.length, 0);
   } finally {
@@ -382,7 +401,7 @@ test("P1.5: tab mất lease giữa chừng (tab khác tiếp quản) → không 
     await until(() => srv.st.puts.length === 2); // PUT 2 đang treo
     await sleep(130); // lease tab 1 hết hạn
     await grant(b);
-    assert.equal((await b.sendFromPopup(claimMsg("tab-khac"))).data.ok, true, "lease hết hạn → tab khác giành được");
+    assert.equal((await b.sendFromTab(pos, claimMsg("tab-khac"))).data.ok, true, "lease hết hạn → tab khác giành được");
     release(); // PUT 2 của tab 1 xong → tab 1 phải tự dừng trước PUT 3
     await until(() => b.session(KEY).log.some((l) => l.type === "apply_abort" && l.reason === "lease_lost"));
     await settle(100);
@@ -404,7 +423,7 @@ test("P3: SO có 2 phiếu nhận ở cửa hàng → phiên khoá ghi; có cấ
     await grant(b);
     await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa được điền phiếu");
     assert.match(pos.view.lines.join("\n"), /SO có nhiều phiếu nhận/);
-    assert.deepEqual((await b.sendFromPopup(claimMsg("x"))).data, { ok: false, reason: "so_many_gr" });
+    assert.deepEqual((await b.sendFromTab(pos, claimMsg("x"))).data, { ok: false, reason: "so_many_gr" });
     await b.sendFromTab(pos, { type: "session:update", key: KEY, patch: { writeLocks: [] } });
     assert.deepEqual(b.session(KEY).writeLocks, ["so_many_gr"]);
     await settle();
@@ -595,11 +614,16 @@ test("Lượt 'Xác nhận nhận hàng' của phiếu gửi khác → bỏ qua,
   }
 });
 
-test("background: giành quyền ghi — đúng một lần cho một cấp phép; chỉ từ received / apply_stopped; chỉ chủ lease gia hạn / kết thúc", async () => {
-  const { b, srv, nw } = await openToReady();
+test("background: giành quyền ghi — chỉ từ trang POS; đúng một lần cho một cấp phép; chỉ từ received / apply_stopped; chỉ chủ lease gia hạn / kết thúc", async () => {
+  const { b, srv, pos, nw } = await openToReady();
   try {
-    const claim = (token, extra) => b.sendFromPopup(claimMsg(token, extra));
+    const claim = (token, extra) => b.sendFromTab(pos, claimMsg(token, extra));
     await grant(b);
+    for (const from of [() => b.sendFromPopup(claimMsg("p")), () => b.sendFromTab(nw, claimMsg("n"))]) {
+      const r = await from();
+      assert.equal(r.ok, false);
+      assert.match(r.error, /nguồn gửi không hợp lệ/);
+    }
     assert.deepEqual((await claim("a")).data, { ok: false, reason: "state_nw_ready" });
     srv.st.nwReceived = true;
     nw.post(scan(200));
@@ -609,14 +633,141 @@ test("background: giành quyền ghi — đúng một lần cho một cấp phé
     const [r1, r2] = await Promise.all([claim("a"), claim("b")]);
     assert.deepEqual([r1.data.ok, r2.data], [true, { ok: false, reason: "lease_held" }]);
     assert.equal(b.session(KEY).applyToken, "a");
-    assert.equal((await b.sendFromPopup({ type: "session:renewLease", key: KEY, token: "b" })).data, false);
-    assert.equal((await b.sendFromPopup({ type: "session:renewLease", key: KEY, token: "a" })).data, true);
-    assert.equal((await b.sendFromPopup({ type: "session:finishApply", key: KEY, token: "b", ok: true })).data, false, "không phải chủ lease");
-    assert.equal((await b.sendFromPopup({ type: "session:finishApply", key: KEY, token: "a", ok: false, error: { reason: "put_failed" } })).data, true);
+    assert.equal((await b.sendFromTab(pos, { type: "session:renewLease", key: KEY, token: "b" })).data, false);
+    assert.equal((await b.sendFromTab(pos, { type: "session:renewLease", key: KEY, token: "a" })).data, true);
+    assert.equal((await b.sendFromTab(nw, { type: "session:renewLease", key: KEY, token: "a" })).ok, false, "gia hạn từ trang Nextwaves bị từ chối");
+    assert.equal((await b.sendFromTab(pos, { type: "session:finishApply", key: KEY, token: "b", ok: true })).data, false, "không phải chủ lease");
+    assert.equal((await b.sendFromTab(pos, { type: "session:finishApply", key: KEY, token: "a", ok: false, error: { reason: "put_failed" } })).data, true);
     assert.equal(b.session(KEY).state, "apply_stopped");
     assert.deepEqual((await claim("b")).data, { ok: false, reason: "no_grant" });
     await grant(b);
     assert.equal((await claim("b")).data.ok, true);
+  } finally {
+    b.close();
+  }
+});
+
+// ---------- P1.6: danh sách GR theo SO phải đọc đủ / rõ ở cả hai đường vào ----------
+
+const TWIN_GR = "11111111-2222-4333-8444-555555555555";
+const SO_VARIANTS = [
+  ["total 2 / trang trả 1 dòng (GR thứ hai ở trang sau)", (d) => (d.total = 2), "so_gr_unknown"],
+  ["page = 2", (d) => (d.page = 2), "so_gr_unknown"],
+  ["thiếu limit", (d) => delete d.limit, "so_gr_unknown"],
+  ["một dòng thiếu pos_info.id", (d) => { d.goods_receipts.push(Object.assign(JSON.parse(JSON.stringify(d.goods_receipts[0])), { id: TWIN_GR, code: "GR03999", pos_info: null })); d.total = 2; }, "so_gr_unknown"],
+  ["hai GR đủ dữ liệu", (d) => { d.goods_receipts.push(Object.assign(JSON.parse(JSON.stringify(d.goods_receipts[0])), { id: TWIN_GR, code: "GR03999" })); d.total = 2; }, "so_many_gr"],
+];
+
+test("P1.6 đường mở GR: tìm GR theo SO chưa đủ / không rõ / nhiều GR → phiên khoá ghi; có cấp phép vẫn 0 PUT", async () => {
+  for (const [name, mutate, lock] of SO_VARIANTS) {
+    const { b, srv, pos } = await openToReceived({ server: { soSearch: mutate } });
+    try {
+      assert.deepEqual(b.session(KEY).writeLocks, [lock], name);
+      await grant(b);
+      await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa được điền phiếu");
+      assert.deepEqual((await b.sendFromTab(pos, claimMsg("x"))).data, { ok: false, reason: lock }, name);
+      await settle(50);
+      assert.equal(srv.st.puts.length, 0, name);
+    } finally {
+      b.close();
+    }
+  }
+});
+
+test("P1.6 đường /chi-tiet-so: danh sách chưa đủ / không rõ → dừng, không mở Nextwaves; hai GR → chọn được nhưng phiên khoá ghi", async () => {
+  for (const [name, mutate, lock] of SO_VARIANTS) {
+    const srv = makeServer({ soSearch: mutate });
+    const b = createBrowser(srv.handle);
+    try {
+      await b.setConfig({ mode: "STG", url: "" });
+      const pos = b.openTab(`${POS}/chi-tiet-so/SOBD1593858`);
+      pos.post(POS_AUTH);
+      if (lock === "so_gr_unknown") {
+        await until(() => viewTitle(pos) === "Không đọc đủ danh sách phiếu nhận của SO — extension không đi tiếp");
+        await settle(80);
+        assert.equal(b.tabs().length, 1, name);
+        assert.equal(b.session(KEY), null, name);
+      } else {
+        const pick = await until(() => pos.view && pos.view.buttons && pos.view.buttons.find((x) => x.label.startsWith("GR03878")));
+        assert.equal(pos.view.buttons.length, 2, name);
+        pick.onClick();
+        await sessionState(b, "waiting_nw");
+        assert.deepEqual(b.session(KEY).writeLocks, ["so_many_gr"], name);
+      }
+      assert.equal(srv.st.puts.length, 0, name);
+    } finally {
+      b.close();
+    }
+  }
+});
+
+// ---------- P1.7: khoá ghi phía Nextwaves bất biến ----------
+
+test("P1.7: Nextwaves có đơn cùng SO khác lần giao → khoá nw_many_orders; tab POS / Nextwaves không xoá được khoá, không đổi được đơn; claim bị từ chối, 0 PUT", async () => {
+  const { b, srv, pos, nw } = await openToReady({ server: { nwTwin: true } });
+  try {
+    const s0 = b.session(KEY);
+    assert.equal(s0.nwPoNumber, "PO28237814", "dấu vân tay vẫn chọn đúng đơn");
+    assert.deepEqual(s0.nwWriteLocks, ["nw_many_orders"]);
+    assert.deepEqual(s0.nwSearch, { total: 2, read: 2, candidates: 2, verified: 2 });
+    const tamper = { nwWriteLocks: [], writeLocks: [], nwPoId: "00000000-0000-4000-8000-0000000000b1", nwPoNumber: "PO99999999", shipmentIds: ["x"], receiptIdsBefore: [], warehouseId: "kho-khac", scanOk: { httpStatus: 200 } };
+    for (const t of [pos, nw]) await b.sendFromTab(t, { type: "session:update", key: KEY, patch: tamper });
+    const match = { nwPoId: tamper.nwPoId, nwPoNumber: "PO99999999", nwOrderId: "00000000-0000-4000-8000-0000000000a1", nwRefId: "SOBD1593858-999", shipmentIds: ["x"], expected: { shipments: [] }, receiptIdsBefore: [], nwWriteLocks: [] };
+    const again = await b.sendFromTab(nw, { type: "session:nwMatched", key: KEY, match });
+    assert.equal(again.ok, false);
+    assert.match(again.error, /đã khớp đơn/);
+    assert.match((await b.sendFromTab(pos, { type: "session:nwMatched", key: KEY, match })).error, /nguồn gửi không hợp lệ/);
+    assert.match((await b.sendFromPopup({ type: "session:nwMatched", key: KEY, match })).error, /nguồn gửi không hợp lệ/);
+    const s1 = b.session(KEY);
+    assert.deepEqual([s1.nwWriteLocks, s1.writeLocks, s1.nwPoId, s1.nwPoNumber, s1.shipmentIds, s1.warehouseId, s1.scanOk], [["nw_many_orders"], [], s0.nwPoId, "PO28237814", [SHIP], s0.warehouseId, undefined]);
+    // Nhận thật xong, có cấp phép: vẫn chỉ xem, claim bị từ chối.
+    srv.st.nwReceived = true;
+    nw.post(scan(200));
+    await sessionState(b, "received");
+    await grant(b);
+    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa được điền phiếu");
+    assert.match(pos.view.lines.join("\n"), /Nextwaves có nhiều đơn cùng SO/);
+    for (const t of [pos, nw]) await b.sendFromTab(t, { type: "session:update", key: KEY, patch: { nwWriteLocks: [] } });
+    assert.deepEqual((await b.sendFromTab(pos, claimMsg("x"))).data, { ok: false, reason: "nw_many_orders" });
+    await settle(50);
+    assert.equal(srv.st.puts.length, 0);
+  } finally {
+    b.close();
+  }
+});
+
+test("P1.7: session:nwMatched — chỉ từ trang Nextwaves, chỉ khi phiên chờ, kiểm refId cùng SO và khoá hợp lệ, chỉ một lần", async () => {
+  const srv = makeServer();
+  const b = createBrowser(srv.handle);
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    pos.post(POS_AUTH);
+    const nw = await until(() => b.tabs().find((t) => t.url.startsWith(NW)));
+    // Chưa gửi header Nextwaves → tab Nextwaves chưa tự khớp; phiên đang waiting_nw.
+    await sessionState(b, "waiting_nw");
+    const good = { nwPoId: "55bd221f-65de-4a4d-8a77-40c568a6f176", nwPoNumber: "PO28237814", nwOrderId: "f930f66d-679a-4ed8-9c8e-b48aea91a8be", nwRefId: "SOBD1593858-1056745", shipmentIds: [SHIP], expected: H.receivingPO28237814(), receiptIdsBefore: [], nwWriteLocks: [] };
+    const send = (t, m) => b.sendFromTab(t, { type: "session:nwMatched", key: KEY, match: Object.assign({}, good, m || {}) });
+    assert.match((await send(nw, { nwRefId: "SOBD9999999-1" })).error, /không hợp lệ/, "refId khác SO");
+    assert.match((await send(nw, { nwWriteLocks: ["khoa-la"] })).error, /không hợp lệ/, "khoá lạ");
+    assert.match((await send(nw, { shipmentIds: [] })).error, /không hợp lệ/, "thiếu phiếu gửi");
+    assert.match((await send(pos)).error, /nguồn gửi không hợp lệ/);
+    assert.equal(b.session(KEY).state, "waiting_nw");
+    const ok = await send(nw, { nwWriteLocks: ["nw_many_orders", "nw_many_orders"] });
+    assert.equal(ok.ok, true, ok.error);
+    assert.deepEqual([ok.data.state, ok.data.nwWriteLocks], ["nw_ready", ["nw_many_orders"]]);
+    assert.match((await send(nw)).error, /đã khớp đơn/, "chỉ một lần");
+    // scanOk / received chỉ từ trang Nextwaves, phiếu gửi phải thuộc đơn đã khớp.
+    assert.match((await b.sendFromTab(nw, { type: "session:scanOk", key: KEY, scan: { shipmentId: "00000000-0000-0000-0000-000000000099", httpStatus: 200 } })).error, /không thuộc đơn đã khớp/);
+    assert.match((await b.sendFromTab(pos, { type: "session:scanOk", key: KEY, scan: { shipmentId: SHIP, httpStatus: 200 } })).error, /nguồn gửi không hợp lệ/);
+    assert.match((await b.sendFromTab(nw, { type: "session:scanOk", key: KEY, scan: { shipmentId: SHIP, httpStatus: 400 } })).error, /không phải lượt 2xx/);
+    assert.equal(b.session(KEY).scanOk, undefined);
+    assert.match((await b.sendFromTab(pos, { type: "session:received", key: KEY, payload: { units: [] } })).error, /nguồn gửi không hợp lệ/);
+    assert.equal(b.session(KEY).state, "nw_ready");
+    // Tạo phiên chỉ từ trang POS của môi trường.
+    const start = { type: "session:start", envId: "STG", grId: "99999999-0000-4000-8000-000000000000", grCode: "GR09999", posId: STORE, soBase: "SOBD1", warehouseId: H.STG_CTX.warehouseId, returnUrl: `${POS}/` };
+    for (const r of [await b.sendFromPopup(start), await b.sendFromTab(nw, start)]) assert.match(r.error, /nguồn gửi không hợp lệ/);
+    assert.equal(b.session("STG:99999999-0000-4000-8000-000000000000"), null);
   } finally {
     b.close();
   }
