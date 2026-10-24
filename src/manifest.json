@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Circa GR ← Nextwaves",
+  "version": "0.1.0",
+  "description": "Nhận hàng thuocsi bằng RFID trên Nextwaves rồi điền phiếu nhận (GR) trên POS Circa. Một gói cho Staging và Production.",
+  "minimum_chrome_version": "111",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://pos.stg.circa-v2.buymed.tech/*",
+    "https://circa-stg.nextwaves.app/*",
+    "https://api-circa-stg.nextwaves.app/*",
+    "https://pos.v2.circa.vn/*",
+    "https://api.v2.circa.vn/*",
+    "https://circa.nextwaves.app/*",
+    "https://api-circa.nextwaves.app/*"
+  ],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "GR ← Nextwaves", "default_popup": "popup/popup.html" },
+  "content_scripts": [
+    {
+      "matches": ["https://pos.stg.circa-v2.buymed.tech/*", "https://pos.v2.circa.vn/*"],
+      "js": ["lib/env.js", "pos/pos-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://pos.stg.circa-v2.buymed.tech/*", "https://pos.v2.circa.vn/*"],
+      "js": ["lib/env.js", "lib/keys.js", "lib/pos-model.js", "lib/plan.js", "lib/apply.js", "ui/panel.js", "pos/pos-content.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://circa-stg.nextwaves.app/*", "https://circa.nextwaves.app/*"],
+      "js": ["lib/env.js", "nw/nw-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://circa-stg.nextwaves.app/*", "https://circa.nextwaves.app/*"],
+      "js": ["lib/env.js", "lib/keys.js", "lib/nw-model.js", "lib/match.js", "ui/panel.js", "nw/nw-content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
