@@ -124,7 +124,8 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 
 1. **T1 lần 2 (25/10) đã chạy với v0.1.5, dev đánh giá đạt:** `docs/dev/T1-KET-QUA-v0.1.5-20261025.md`.
    - Response thật lưu ở `samples/*-T1-20261025.json`, test `tests/t1-real.test.js` (nhánh `0b9aeb3`).
-   - **Còn chờ:** operator gửi ảnh popup bước 3.8 (dòng phiên + "Khoá điền"); PM chốt gate T1.
+   - Ảnh popup bước 3.8 đã gửi bổ sung. **PM đóng gate T1** (`docs/pm/AUDIT-T1-LIVE-v0.1.5-STG-20261025.md`, state lần 20).
+   - Operator giữ SO hiện tại. PO28237814 dùng được cho **một phép thử nhánh lỗi K1** (một lượt ghi Nextwaves có phép riêng): extension phải không chuyển sang điền POS; kiểm shipment / `/receiving` trước và sau vì Nextwaves có thể chấp nhận phiếu gửi trước khi báo 400. 400 không đạt T3.
 2. **Cách xử lý mỗi lần nhận response thật từ operator:**
    - đối chiếu khung / phiên với response (khoá `so_gr_unknown` / `so_many_gr` / `nw_many_orders`, dòng "Tìm theo … total …");
    - lưu vào `samples/` (bỏ token, thay tên nhân viên bằng `<nhân viên>`, CRLF → LF, ghi `samples/README.md` kèm sha256 bản gốc);

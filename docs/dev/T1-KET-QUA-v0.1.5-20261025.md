@@ -14,7 +14,13 @@ Không có thao tác ghi: không bấm "Xác nhận nhận hàng", không cấp 
 
 Hai response tìm kiếm thật đã chạy lại qua đúng parser của extension và cho cùng kết quả với khung (§3).
 
-**Còn thiếu 1 ảnh:** popup ở bước 3.8, gồm dòng `STG · GR03878` với trạng thái "Đã khớp đơn Nextwaves" và có hay không dòng "Khoá điền: …". Chỉ popup hiện khoá ghi (khung POS không hiện). Theo dữ liệu thì khoá phải rỗng (§3). Phiên vẫn còn nên chụp lại được, không cần chạy lại.
+**Ảnh popup bước 3.8** (operator gửi bổ sung lúc 22:03, `popup_extension_GR.jpg`) nằm trên cùng phiên:
+- Mục "Phiên gần đây" có `STG · GR03878 · Đã khớp đơn Nextwaves · SOBD1593858-F → PO28237814 · 21:35:05 25/10/2026`.
+- **Không có dòng "Khoá điền"**. Popup chỉ hiện dòng này khi `writeLocks` hoặc `nwWriteLocks` khác rỗng, nên cả hai rỗng, khớp với §3.
+- Không có dòng "Phiên của bản cũ", tức phiên có `schema`.
+- Danh sách cấp phép điền trống: không có cấp phép nào.
+
+Ảnh chụp không đưa vào repo (repo public). Nội dung đã chép lại đủ ở trên.
 
 ## 2. Kỳ vọng ↔ thực tế
 
@@ -26,7 +32,7 @@ Hai response tìm kiếm thật đã chạy lại qua đúng parser của extens
 | 5 | Khung Nextwaves "Sẵn sàng nhận hàng", dòng 1 + dòng "Tìm theo…" + bảng SL gốc khớp | `UI_extension_1.jpg` (trước F5) và `UI_extension_3.jpg` (sau F5): "Phiếu GR03878 ↔ Nextwaves PO28237814 (SOBD1593858) — 12 UID dự kiến." / "Tìm theo SOBD1593858: total 1, đã đọc 1; ứng viên Buymed cùng kho 1; refId đúng SO 1." / 1110: 12 = 12; 5451: 40 = 40; 2431732: 2 = 2 | Đạt |
 | 6 | Response tìm đơn Nextwaves | `T1-nw-receiving-search.json`: total 1, PO28237814 | Đạt |
 | 7 | Khung POS "Đã khớp đơn Nextwaves — chờ nhận hàng" + 2 dòng | `UI_extensin_2.jpg`: "Phiếu GR03878 · PO00006750 · mã giao SOBD1593858-F" / "Nextwaves: PO28237814 (SOBD1593858-1056745)"; nút "Mở tab Nextwaves", "Huỷ phiên" | Đạt |
-| 8 | Popup: `STG · GR03878` "Đã khớp đơn Nextwaves", ghi dòng "Khoá điền" nếu có | **Chưa có ảnh** | Thiếu |
+| 8 | Popup: `STG · GR03878` "Đã khớp đơn Nextwaves", ghi dòng "Khoá điền" nếu có | `popup_extension_GR.jpg` (gửi bổ sung): "STG · GR03878 / Đã khớp đơn Nextwaves / SOBD1593858-F → PO28237814 · 21:35:05 25/10/2026"; không có "Khoá điền"; không có cấp phép | Đạt |
 
 Sau F5 trang Nextwaves, khung vẫn "Sẵn sàng nhận hàng" với cùng số liệu tìm kiếm: phiên đã khớp được giữ, không tìm lại (đúng thiết kế `session:nwMatched` một lần).
 
@@ -56,8 +62,8 @@ Test hồi quy: `tests/t1-real.test.js` (2 test).
 
 ## 5. Bước tiếp theo
 
-1. **Operator:** chụp popup (bước 3.8) ngay trên phiên đang mở. **Không** bấm "Xác nhận nhận hàng", **không** cấp phép điền.
-2. **PM:** xem T1 (file này + commit `0b9aeb3`), chốt T1 đạt hay cần thêm.
+1. ~~Operator chụp popup bước 3.8~~: đã gửi, đạt (§1). Phiên GR03878 vẫn ở `nw_ready`. **Không** bấm "Xác nhận nhận hàng", **không** cấp phép điền cho tới gate T3 / W1.
+2. ~~PM xem T1~~: **PM đóng gate T1** (`docs/pm/AUDIT-T1-LIVE-v0.1.5-STG-20261025.md`), không finding runtime.
 3. **K1 → T3:** cần một trong hai cách sau trước khi có lượt nhận thật:
    - Nextwaves / Buymed gỡ `tagged_unit_unsupported` cho dòng 1110 (gắn thẻ theo vỉ, đơn vị gốc Nextwaves là hộp);
    - hoặc tạo SO staging mới, giao cửa hàng 2222, có dòng gắn thẻ theo đơn vị gốc.
