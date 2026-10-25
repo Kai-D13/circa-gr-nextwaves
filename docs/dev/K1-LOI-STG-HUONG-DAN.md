@@ -25,11 +25,14 @@ Dev và extension không bấm hộ.
 ### A. Ghi trạng thái TRƯỚC lượt bấm
 
 1. Mở tab mới `https://circa-stg.nextwaves.app/vi/purchases/55bd221f-65de-4a4d-8a77-40c568a6f176` (trang chi tiết PO28237814). **Không bấm nút nào trên trang này** (chấp nhận / từ chối / ghép sản phẩm / nhận hàng).
-2. F12 → Network, rồi F5. Copy response các request sau (lọc theo chuỗi trong ngoặc):
-   - `inter-tenant-shipments/34e67fb9-…` (lọc `34e67fb9`) → `K1-truoc-shipment.json`;
-   - `purchase-orders/55bd221f-…` (lọc `purchase-orders/55bd`) → `K1-truoc-po.json`;
-   - nếu có `…/55bd221f-…/receiving` → `K1-truoc-receiving.json`.
+2. F12 → Network, rồi F5. Lọc `55bd`. Copy response `inter-tenant-orders/purchase-orders/55bd221f-…` → `K1-truoc-intertenant.json`.
+   - Thực tế 25/10: trang này **chỉ gọi request đó**, không gọi `inter-tenant-shipments/34e67fb9`.
+   - Response này đã đủ để so trước / sau: có `status`, `acceptedAt` / `receivedAt` / `updatedAt` của đơn, `shipments[] {id, status, receivedAt}`, `receipts`, `units`, `timeline`.
 3. Chụp ảnh trang chi tiết PO (phần trạng thái phiếu gửi) → `K1-truoc-po.jpg`.
+4. Ở tab màn quét (bước B.1), trước khi quét: F12 → Network → tick "Preserve log" → lọc `55bd` → F5. Copy response:
+   - `purchase-orders/55bd221f-…` (không có tiền tố `inter-tenant-orders`; extension gọi khi tải trang) → `K1-truoc-po.json`;
+   - `…/55bd221f-…/receiving` nếu có → `K1-truoc-receiving.json`.
+   - Request nào không thấy thì ghi "không thấy".
 
 ### B. Lượt bấm (ghi Nextwaves, một lần)
 
@@ -50,7 +53,7 @@ Dev và extension không bấm hộ.
 
 ### C. Ghi trạng thái SAU lượt bấm
 
-1. Lặp lại bước A.2 trên tab chi tiết PO (F5 lại), lưu thành `K1-sau-shipment.json`, `K1-sau-po.json`, `K1-sau-receiving.json`. Chụp `K1-sau-po.jpg`.
+1. Sau khi đã chụp xong bước B.6–B.7: lặp lại A.2–A.3 trên tab chi tiết PO (F5) → `K1-sau-intertenant.json`, `K1-sau-po.jpg`; lặp lại A.4 trên tab màn quét (F5) → `K1-sau-po.json`, `K1-sau-receiving.json`.
 2. Tab POS (GR03878): chụp khung extension → `K1-khung-pos.jpg`. Kỳ vọng vẫn là "Đã khớp đơn Nextwaves — chờ nhận hàng", không có kế hoạch điền.
 3. Trên POS, GR03878 vẫn "Chờ nhận hàng", không có UID nào: F12 → Network, lọc `goods-receipt/2de6c0ec`, F5, Copy response → `K1-sau-gr.json`.
 4. Popup: chụp → `K1-popup.jpg`. Kỳ vọng phiên vẫn "Đã khớp đơn Nextwaves", không "Khoá điền", không cấp phép.
@@ -69,9 +72,9 @@ Dev và extension không bấm hộ.
 
 - Ảnh: `K1-truoc-po.jpg`, `K1-khung-nextwaves.jpg`, `K1-man-nextwaves.jpg`, `K1-sau-po.jpg`, `K1-khung-pos.jpg`, `K1-popup.jpg`.
 - JSON (Copy response):
-  - `K1-truoc-shipment.json`, `K1-truoc-po.json`, `K1-truoc-receiving.json` (nếu có);
+  - `K1-truoc-intertenant.json`, `K1-truoc-po.json`, `K1-truoc-receiving.json` (nếu có);
   - `K1-receive-scan.json`;
-  - `K1-sau-shipment.json`, `K1-sau-po.json`, `K1-sau-receiving.json` (nếu có), `K1-sau-gr.json`.
+  - `K1-sau-intertenant.json`, `K1-sau-po.json`, `K1-sau-receiving.json` (nếu có), `K1-sau-gr.json`.
 - Kèm HTTP status của `receive-scan` và giờ bấm.
 
 ## 6. 12 EPC của phiếu gửi IT-BUYMED-STAG-20261019092009-7938
