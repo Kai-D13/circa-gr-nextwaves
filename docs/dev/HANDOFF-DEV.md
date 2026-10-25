@@ -83,7 +83,8 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
   - `FIX-T1-v0.1.5.md`
   - `T1-STG-HUONG-DAN.md` (hướng dẫn operator)
   - `T1-KET-QUA-v0.1.5-20261025.md` (T1 lần 2, PM đóng gate)
-  - `K1-LOI-STG-HUONG-DAN.md` (hướng dẫn thử nhánh lỗi K1 — một lượt ghi Nextwaves, operator tự quyết)
+  - `K1-LOI-STG-HUONG-DAN.md` (hướng dẫn thử nhánh lỗi K1 — một lượt ghi Nextwaves, operator tự quyết). Thực tế 25/10 23:46: nhận 200 (K1 đã sửa), xem `state.md` lần 21
+  - `FULL-STG-HUONG-DAN.md` (chạy trọn luồng T1 → T3 → W1 → HOÀN THÀNH trên SO mới, Net Capture tab POS từ đầu đến cuối)
 - **Logic gốc:** `docs/dev/LOGIC-v0.3.md`.
 
 ## 6. Kiểm thử và công cụ (chạy trên nhánh batch)

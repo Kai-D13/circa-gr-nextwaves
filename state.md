@@ -76,6 +76,15 @@ Cập nhật: **25/10/2026 (lần 20, PM audit T1 live v0.1.5)**. Giai đoạn: 
   - Lưu vào `samples/*-T1-20261025.json` + `tests/t1-real.test.js` (nhánh `0b9aeb3`, không đổi `src/`, 87/87).
   - Còn thiếu ảnh popup bước 3.8 (dòng phiên + "Khoá điền").
 - **Lần 20 (25/10, PM audit T1 live):** `docs/pm/AUDIT-T1-LIVE-v0.1.5-STG-20261025.md`. Operator đã gửi ảnh popup: `STG · GR03878`, đã khớp PO28237814, không có dòng "Khoá điền". PM đối chiếu hai fixture với hai Copy response thật: JSON trùng hoàn toàn; chạy 87/87 test trên `0b9aeb3`, không đổi runtime. **Đóng gate T1 chỉ đọc.** Operator chọn giữ SO staging hiện tại để thử luồng; đơn hiện tại có thể dùng để kiểm nhánh lỗi K1 với phép riêng, nhưng `400 tagged_unit_unsupported` không đạt T3. T3 thành công vẫn cần sửa K1 hoặc SO staging khác; W1/merge còn chặn.
+- **Lần 21 (25/10 23:46, operator bấm nhận trên PO28237814 — dev ghi):**
+  - **`receive-scan` trả 200:** 12/12, `orderStatus received`, không tem lạ. **K1 đã được Nextwaves sửa** (dòng 1110 theo vỉ nhận được).
+  - Biên nhận PO GRN96438872 `7bec38d2…` (khác id receipt inter-tenant `ea603c18…`).
+  - Phiếu gửi có timeline `accepted` 16:46:06.155 → `received` 16:46:06.224, tức chấp nhận và nhận nằm trong cùng lượt `receive-scan`.
+  - Dev chạy lại dữ liệu thật (Net Capture tab Nextwaves) qua `buildReceivedUnits`: không có problem, 0 thiếu, 0 lạ, 1 biên nhận mới, đúng kho. **Hợp đồng "đã nhận" P2.1 khớp response thật.**
+  - Extension tự về POS (kế hoạch #60070071, 12 UID / 6 lô). **Operator tự cấp phép và bấm điền (W1) trước gate PM**; khung báo "đã điền 12 UID".
+  - **Không có traffic PUT phía POS** (Net Capture chỉ ghi tab Nextwaves, dừng 23:46:44), nên W1 trên GR03878 chưa đủ bằng chứng.
+  - Operator chọn chạy trọn luồng trên SO staging khác (còn 2 PO) theo `docs/dev/FULL-STG-HUONG-DAN.md`.
+  - Mẫu T3 thật chưa lưu vào `samples/`; dev sẽ gộp cùng lượt mới.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
