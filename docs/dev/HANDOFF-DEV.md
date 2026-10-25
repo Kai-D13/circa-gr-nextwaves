@@ -61,7 +61,7 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 | v0.1.2 | 525BCE84 | 6eeb3c0 (đầu `5d117d2`) | PM đạt P1.6 / P1.7; thêm P2.4 |
 | v0.1.3 | DF493307 | 761d734 | chỉ dựng nội bộ, không giao |
 | v0.1.4 | 10A29BC4 | 91e3bd1 (đầu `49bf0a4`) | PM đạt P2.4; **T1 lần 1 lỗi `envFromConfig`** (mọi bản ≤ 0.1.4 dính) |
-| **v0.1.5** | **CDD02C3D** | **456205a** (đầu nhánh `9270d98`) | Sửa nạp `env.js`; **PM đạt** (`docs/pm/AUDIT-T1-FIX-v0.1.5-STG-20261025.md`); **dùng cho T1** |
+| **v0.1.5** | **CDD02C3D** | **456205a** (đầu nhánh `0b9aeb3`) | Sửa nạp `env.js`; **PM đạt** (`docs/pm/AUDIT-T1-FIX-v0.1.5-STG-20261025.md`); **T1 lần 2 trên phiên thật đạt theo dev** (`docs/dev/T1-KET-QUA-v0.1.5-20261025.md`) |
 
 - Bản giải nén để cài: `C:\circa-gr-nextwaves-v0.1.x` (đối chiếu từng file với `src/` của commit).
 - ZIP: `dist/` (không vào git).
@@ -88,7 +88,7 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 
 | Lệnh | Nội dung |
 |---|---|
-| `npm test` | **85 test** (`node --test --test-timeout=60000`): env-keys 7, hooks 5, manifest 3, models 15, plan-apply 19, resolve 8, runtime 28. Chạy ~7 s |
+| `npm test` | **87 test** (`node --test --test-timeout=60000`): env-keys 7, hooks 5, manifest 3, models 15, plan-apply 19, resolve 8, runtime 28, t1-real 2 (response T1 thật). Chạy ~7 s |
 | `python -I scripts/mutate-v0.1.5.py [từ_ca]` | 60 đột biến, chép sang thư mục tạm, ~45 phút. **Chạy một mình**: không chạy stress / test khác đè lên. Ca "bị bắt vì hết giờ 240 s" **không phải bằng chứng**, phải tìm nguyên nhân treo |
 | `node scripts/edge-check.js <thư mục cài>` | Edge / Chrome **thật** (hồ sơ tạm, không đăng nhập). Kiểm 2 world trên Nextwaves; đường POS GR03878 với CDP Fetch trả `samples/`; phiên; tab Nextwaves; không token. v0.1.5: 9/9 |
 | `node scripts/edge-upgrade-check.js <bản cũ> <bản mới>` | Nâng cấp giữ cùng extension ID (P2.4) trên Edge thật |
@@ -122,13 +122,12 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 
 ## 8. Trạng thái và việc tiếp theo
 
-1. **Đang chờ operator chạy lại T1 với v0.1.5** (`docs/dev/T1-STG-HUONG-DAN.md`). Operator sẽ gửi:
-   - 3 ảnh: khung POS, khung Nextwaves, popup;
-   - `T1-pos-gr-search.json`: tìm GR theo SO `1593858`, giữ `total / page / limit`;
-   - `T1-nw-receiving-search.json`: `inter-tenant-orders/receiving?q=SOBD1593858`.
-2. **Khi nhận T1, dev làm:**
-   - đối chiếu khung / phiên với response thật (khoá `so_gr_unknown` / `so_many_gr` / `nw_many_orders`, dòng "Tìm theo … total …");
-   - lưu response vào `samples/` (bỏ token, thay tên nhân viên bằng `<nhân viên>`, ghi `samples/README.md`);
+1. **T1 lần 2 (25/10) đã chạy với v0.1.5, dev đánh giá đạt:** `docs/dev/T1-KET-QUA-v0.1.5-20261025.md`.
+   - Response thật lưu ở `samples/*-T1-20261025.json`, test `tests/t1-real.test.js` (nhánh `0b9aeb3`).
+   - **Còn chờ:** operator gửi ảnh popup bước 3.8 (dòng phiên + "Khoá điền"); PM chốt gate T1.
+2. **Cách xử lý mỗi lần nhận response thật từ operator:**
+   - đối chiếu khung / phiên với response (khoá `so_gr_unknown` / `so_many_gr` / `nw_many_orders`, dòng "Tìm theo … total …");
+   - lưu vào `samples/` (bỏ token, thay tên nhân viên bằng `<nhân viên>`, CRLF → LF, ghi `samples/README.md` kèm sha256 bản gốc);
    - nếu response khác giả định: **ghi lại response, không nới parser**; thêm test theo mẫu thật;
    - báo PM.
 3. **K1 / T3:** cần Nextwaves / Buymed gỡ `tagged_unit_unsupported`, hoặc tạo SO staging mới có dòng gắn thẻ theo đơn vị gốc, giao cửa hàng 2222.

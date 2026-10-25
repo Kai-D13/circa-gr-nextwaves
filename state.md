@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **25/10/2026 (lần 18, PM audit sửa T1 v0.1.5)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`); sửa lỗi nạp `env.js` đạt gate source/test + Edge không đăng nhập; T1 chỉ đọc chạy lại với v0.1.5; chưa qua gate merge / ghi**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **25/10/2026 (lần 19, T1 lần 2 với v0.1.5 — dev đối chiếu)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`; đầu nhánh `0b9aeb3` chỉ thêm mẫu + test); T1 chỉ đọc trên phiên thật đạt theo dev, còn thiếu ảnh popup, chờ PM xem; K1 chặn lượt nhận thật; chưa qua gate merge / ghi**. Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -70,6 +70,11 @@ Cập nhật: **25/10/2026 (lần 18, PM audit sửa T1 v0.1.5)**. Giai đoạn:
   - **Sửa v0.1.5** (`456205a`, gói `CDD02C3D`, `C:\circa-gr-nextwaves-v0.1.5`): `src/main/env.js` là bản sao y hệt cho MAIN; thêm test manifest; trình duyệt giả nạp như Chrome; thêm `scripts/edge-check.js` kiểm trên trình duyệt thật (v0.1.5 9/9, v0.1.4 6/9).
   - Báo cáo `docs/dev/FIX-T1-v0.1.5.md`. **T1 chạy lại với v0.1.5** theo `docs/dev/T1-STG-HUONG-DAN.md`.
 - **Lần 18 (25/10, PM audit sửa T1):** `docs/pm/AUDIT-T1-FIX-v0.1.5-STG-20261025.md`. PM chạy 85/85 test, kiểm gói và bản cài 18/18 file; tự chạy Edge v0.1.5 đạt 9/9, v0.1.4 hỏng 6/9 và tái hiện đúng `envFromConfig`. Dev tự báo 60/60 đột biến, PM chưa chạy lại. **Chỉ v0.1.5 được dùng cho T1 chạy lại**; chờ ảnh/response trên phiên đăng nhập thật. K1/W1 và gate merge/ghi không đổi.
+- **Lần 19 (25/10, T1 lần 2 với v0.1.5):** báo cáo `docs/dev/T1-KET-QUA-v0.1.5-20261025.md`.
+  - Operator chạy trên phiên Chrome đăng nhập thật, không cấp phép, không bấm nhận. Kết quả: hết lỗi nạp script; tab Nextwaves tự mở; khung Nextwaves "Sẵn sàng nhận hàng"; dòng "Tìm theo SOBD1593858: total 1, đã đọc 1; ứng viên Buymed cùng kho 1; refId đúng SO 1"; SL gốc 3 sản phẩm khớp; khung POS "Đã khớp đơn Nextwaves — chờ nhận hàng".
+  - Response thật: tìm GR theo SO có total 1 / page 1 / limit 1000, chỉ GR03878, trùng mẫu 24/10; tìm đơn Nextwaves có total 1, PO28237814. Dev chạy lại qua parser: không khoá ghi, chọn đúng đơn.
+  - Lưu vào `samples/*-T1-20261025.json` + `tests/t1-real.test.js` (nhánh `0b9aeb3`, không đổi `src/`, 87/87).
+  - Còn thiếu ảnh popup bước 3.8 (dòng phiên + "Khoá điền").
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -429,6 +434,10 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
   - T1 lần 1 lỗi nạp `env.js` (mọi bản trước đều dính) → dev sửa v0.1.5 (`456205a`, gói `CDD02C3D`).
   - Bài học: bộ test giả phải nạp content script như trình duyệt thật; mỗi bản phát hành chạy `scripts/edge-check.js` trên trình duyệt thật.
 
+- 25/10/2026 (lần 18–19):
+  - PM audit sửa T1: chỉ v0.1.5 cho T1.
+  - T1 lần 2 trên phiên thật đạt theo dev. Hai response tìm kiếm thật khớp mẫu đã dùng để code; giữ làm mẫu + test hồi quy.
+
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
 2. Operator mở session PM Codex bằng `docs/PROMPT-PM-CODEX.md`. PM chốt hướng §3 / §6 và ra spec v0.1 staging chia batch.
@@ -441,7 +450,12 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-19. **Hiện hành (sau PM audit sửa T1 v0.1.5, 25/10):**
+20. **Hiện hành (sau T1 lần 2, 25/10):**
+    - **Operator:** chụp popup (bước 3.8) trên phiên đang mở: dòng `STG · GR03878` + có / không dòng "Khoá điền". Không bấm "Xác nhận nhận hàng", không cấp phép.
+    - **PM:** xem `docs/dev/T1-KET-QUA-v0.1.5-20261025.md` + nhánh `0b9aeb3`, chốt gate T1.
+    - **K1 → T3:** cần Nextwaves / Buymed gỡ `tagged_unit_unsupported` (dòng 1110 gắn thẻ theo vỉ) hoặc SO staging mới giao cửa hàng 2222. Sau đó, có phép operator, một lượt nhận thật → lấy response 2xx `receive-scan`, `purchase-orders/<id>`, `inter-tenant-shipments/<id>`, `/receiving` sau nhận.
+    - W1 sau T3. Chưa merge.
+19. (cũ, thay bằng mục 20) **Sau PM audit sửa T1 v0.1.5, 25/10:**
     - **Operator — T1 chạy lại với v0.1.5:**
       - gỡ mọi bản cũ, Load unpacked `C:\circa-gr-nextwaves-v0.1.5`, chọn lại Staging, không cấp phép điền;
       - tải lại tab POS, mở GR03878;
