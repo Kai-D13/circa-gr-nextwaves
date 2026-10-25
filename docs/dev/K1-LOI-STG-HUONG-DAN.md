@@ -34,11 +34,15 @@ Dev và extension không bấm hộ.
 ### B. Lượt bấm (ghi Nextwaves, một lần)
 
 1. Sang tab `https://circa-stg.nextwaves.app/vi/purchases/receive?po=SOBD1593858`, F5. Khung extension phải là "Sẵn sàng nhận hàng".
-2. F12 → Network, lọc `receive-scan`.
-3. Quét 12 tem bằng reader, sao cho màn hiện đủ 12.
-4. Bấm **"Xác nhận nhận hàng" một lần**.
-5. Copy response request `POST …/inter-tenant-shipments/34e67fb9-…/receive-scan` → `K1-receive-scan.json`. Ghi HTTP status.
-6. Chụp khung extension trên tab này → `K1-khung-nextwaves.jpg`. Kỳ vọng:
+2. F12 → Network → **tick "Preserve log"** → lọc `receive-scan`.
+3. Quét **đúng 12 tem của đơn** (bảng ở §6) bằng reader ("Kết nối đầu đọc").
+   - Để tem khác **xa reader**. Lượt 24/10 đầu tiên gửi 14 EPC, có 2 tem lạ `…7032A729` và `…7032A72B`.
+   - Trước khi bấm, màn phải hiện **"Đã nhận 12 / 12"**, mỗi dòng đầy: 1110 3/3 + 3/3 vỉ, Soffell 2/2 chai, 5451 2/2 + 2/2 túi. Nếu hơn 12 hoặc có tem lạ: F5 trang và quét lại.
+   - Reader không kết nối được (ví dụ tab POS khác đang giữ cổng) thì có thể gõ 12 EPC ở §6 vào ô "Quét hoặc nhập EPC", Enter sau mỗi mã. Ghi lại là đã gõ tay.
+   - Nếu màn hỏi "Còn thiếu … xử lý đơn mua hàng thế nào?" thì chọn **"Giữ đơn mở"** (giống 24/10: `onMissing: keep_open`).
+4. Bấm **"Xác nhận nhận hàng" một lần**. Có hộp xác nhận thì xác nhận một lần.
+5. Copy response request `POST …/inter-tenant-shipments/34e67fb9-…/receive-scan` → `K1-receive-scan.json`. Ghi HTTP status (cột Status) và giờ bấm.
+6. **Chưa F5.** Chụp khung extension trên tab này → `K1-khung-nextwaves.jpg` (thông báo lỗi chỉ nằm trên trang đang mở; tải lại là mất). Kỳ vọng:
    - tiêu đề **"Nextwaves CHƯA nhận (HTTP 400)"**;
    - dòng "Dòng có thẻ không nhận được theo đơn vị này … [INTER_TENANT_SHIPMENT_LINE_INVALID / tagged_unit_unsupported]";
    - câu "Extension chưa chuyển về POS".
@@ -69,6 +73,18 @@ Dev và extension không bấm hộ.
   - `K1-receive-scan.json`;
   - `K1-sau-shipment.json`, `K1-sau-po.json`, `K1-sau-receiving.json` (nếu có), `K1-sau-gr.json`.
 - Kèm HTTP status của `receive-scan` và giờ bấm.
+
+## 6. 12 EPC của phiếu gửi IT-BUYMED-STAG-20261019092009-7938
+
+Nguồn: `samples/nw-stg-shipment-34e67fb9-PO28237814.json`. Lượt 24/10 thứ hai gửi đúng 12 mã này.
+
+| Dòng | Lô / hạn | EPC |
+|---|---|---|
+| 1110 (3 vỉ) | 261009DHAUS · 12/12/2028 | `E280F302000000017032E72B`, `E280F302000000017032E72A`, `E280F302000000017032C72A` |
+| 1110 (3 vỉ) | A1 · 12/12/2029 | `E280F302000000017032872B`, `E280F3020000000170328729`, `E280F3020000000170328728` |
+| 2431732 Soffell (2 chai) | — | `E280F302000000017032C729`, `E280F302000000017032C728` |
+| 5451 (2 túi) | 261009KSDHAU · 12/12/2028 | `E280F302000000017032A72A`, `E280F302000000017032A728` |
+| 5451 (2 túi) | A1 · 12/12/2028 | `E280F302000000017431E72B`, `E280F302000000017431E72A` |
 
 Dev sẽ:
 - so trước / sau (trạng thái phiếu gửi, `receivedEpcs`, `receipts`, `updatedAt`) và đối chiếu khung / phiên với log của extension;
