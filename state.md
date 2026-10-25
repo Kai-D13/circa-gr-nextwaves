@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **25/10/2026 (lần 19, T1 lần 2 với v0.1.5 — dev đối chiếu)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`; đầu nhánh `0b9aeb3` chỉ thêm mẫu + test); T1 chỉ đọc trên phiên thật đạt theo dev, còn thiếu ảnh popup, chờ PM xem; K1 chặn lượt nhận thật; chưa qua gate merge / ghi**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **25/10/2026 (lần 20, PM audit T1 live v0.1.5)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`; `0b9aeb3` thêm mẫu + test); T1 chỉ đọc đạt gate trên phiên thật; K1 còn chặn T3 thành công; chưa qua gate W1 / merge mã ghi**. Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -75,6 +75,7 @@ Cập nhật: **25/10/2026 (lần 19, T1 lần 2 với v0.1.5 — dev đối chi
   - Response thật: tìm GR theo SO có total 1 / page 1 / limit 1000, chỉ GR03878, trùng mẫu 24/10; tìm đơn Nextwaves có total 1, PO28237814. Dev chạy lại qua parser: không khoá ghi, chọn đúng đơn.
   - Lưu vào `samples/*-T1-20261025.json` + `tests/t1-real.test.js` (nhánh `0b9aeb3`, không đổi `src/`, 87/87).
   - Còn thiếu ảnh popup bước 3.8 (dòng phiên + "Khoá điền").
+- **Lần 20 (25/10, PM audit T1 live):** `docs/pm/AUDIT-T1-LIVE-v0.1.5-STG-20261025.md`. Operator đã gửi ảnh popup: `STG · GR03878`, đã khớp PO28237814, không có dòng "Khoá điền". PM đối chiếu hai fixture với hai Copy response thật: JSON trùng hoàn toàn; chạy 87/87 test trên `0b9aeb3`, không đổi runtime. **Đóng gate T1 chỉ đọc.** Operator chọn giữ SO staging hiện tại để thử luồng; đơn hiện tại có thể dùng để kiểm nhánh lỗi K1 với phép riêng, nhưng `400 tagged_unit_unsupported` không đạt T3. T3 thành công vẫn cần sửa K1 hoặc SO staging khác; W1/merge còn chặn.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -450,11 +451,12 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-20. **Hiện hành (sau T1 lần 2, 25/10):**
-    - **Operator:** chụp popup (bước 3.8) trên phiên đang mở: dòng `STG · GR03878` + có / không dòng "Khoá điền". Không bấm "Xác nhận nhận hàng", không cấp phép.
-    - **PM:** xem `docs/dev/T1-KET-QUA-v0.1.5-20261025.md` + nhánh `0b9aeb3`, chốt gate T1.
-    - **K1 → T3:** cần Nextwaves / Buymed gỡ `tagged_unit_unsupported` (dòng 1110 gắn thẻ theo vỉ) hoặc SO staging mới giao cửa hàng 2222. Sau đó, có phép operator, một lượt nhận thật → lấy response 2xx `receive-scan`, `purchase-orders/<id>`, `inter-tenant-shipments/<id>`, `/receiving` sau nhận.
-    - W1 sau T3. Chưa merge.
+21. **Hiện hành (sau PM audit T1 live, 25/10):**
+    - **T1 đã đóng:** popup và hai response đã đối chiếu; không cần chạy lại cùng ca để lấy thêm bằng chứng T1.
+    - **Operator chọn SO hiện tại:** nếu muốn thử nhánh lỗi K1 trên PO28237814, cho phép riêng một lượt bấm "Xác nhận nhận hàng" ở Nextwaves; ghi trạng thái shipment/`/receiving` trước và sau, response, khung và GR. Nextwaves có thể chấp nhận phiếu gửi trước khi báo lỗi nhận, nên không tự thử lại. Không cấp phép điền POS; phản hồi 400 không đạt gate T3.
+    - **K1 → T3 thành công:** ưu tiên Nextwaves/Buymed sửa đơn hiện tại; nếu không được, tạo SO staging khác cùng cửa hàng 2222 rồi chạy T1 cho cặp mới. T3 cần response 2xx `receive-scan`, GET PO, shipment và `/receiving` sau nhận để PM audit.
+    - **W1** chỉ sau T3 đạt và operator cho phép từng lượt trên GR cụ thể. Chưa merge mã ghi.
+20. (cũ, thay bằng mục 21) Sau T1 lần 2: chụp popup, PM audit T1; K1 → T3 → W1.
 19. (cũ, thay bằng mục 20) **Sau PM audit sửa T1 v0.1.5, 25/10:**
     - **Operator — T1 chạy lại với v0.1.5:**
       - gỡ mọi bản cũ, Load unpacked `C:\circa-gr-nextwaves-v0.1.5`, chọn lại Staging, không cấp phép điền;
