@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **25/10/2026 (lần 17, T1 lần 1 lỗi → dev sửa v0.1.5)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`) sửa lỗi nạp `env.js` mà T1 lần 1 gặp; T1 chạy lại với v0.1.5; chờ PM xem bản sửa; chưa qua gate merge / ghi**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **25/10/2026 (lần 18, PM audit sửa T1 v0.1.5)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`); sửa lỗi nạp `env.js` đạt gate source/test + Edge không đăng nhập; T1 chỉ đọc chạy lại với v0.1.5; chưa qua gate merge / ghi**. Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -69,6 +69,7 @@ Cập nhật: **25/10/2026 (lần 17, T1 lần 1 lỗi → dev sửa v0.1.5)**. 
   - **Nguyên nhân** (tái hiện trên Edge thật): `lib/env.js` khai ở cả mục MAIN và ISOLATED của `content_scripts`; trình duyệt chỉ nạp một lần vào MAIN, nên ISOLATED thiếu `env`. Có từ v0.1.0.
   - **Sửa v0.1.5** (`456205a`, gói `CDD02C3D`, `C:\circa-gr-nextwaves-v0.1.5`): `src/main/env.js` là bản sao y hệt cho MAIN; thêm test manifest; trình duyệt giả nạp như Chrome; thêm `scripts/edge-check.js` kiểm trên trình duyệt thật (v0.1.5 9/9, v0.1.4 6/9).
   - Báo cáo `docs/dev/FIX-T1-v0.1.5.md`. **T1 chạy lại với v0.1.5** theo `docs/dev/T1-STG-HUONG-DAN.md`.
+- **Lần 18 (25/10, PM audit sửa T1):** `docs/pm/AUDIT-T1-FIX-v0.1.5-STG-20261025.md`. PM chạy 85/85 test, kiểm gói và bản cài 18/18 file; tự chạy Edge v0.1.5 đạt 9/9, v0.1.4 hỏng 6/9 và tái hiện đúng `envFromConfig`. Dev tự báo 60/60 đột biến, PM chưa chạy lại. **Chỉ v0.1.5 được dùng cho T1 chạy lại**; chờ ảnh/response trên phiên đăng nhập thật. K1/W1 và gate merge/ghi không đổi.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -440,15 +441,13 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-18. **Hiện hành (sau T1 lần 1, 25/10):**
+19. **Hiện hành (sau PM audit sửa T1 v0.1.5, 25/10):**
     - **Operator — T1 chạy lại với v0.1.5:**
       - gỡ mọi bản cũ, Load unpacked `C:\circa-gr-nextwaves-v0.1.5`, chọn lại Staging, không cấp phép điền;
       - tải lại tab POS, mở GR03878;
       - gửi ảnh khung hai tab + popup + Copy response tìm GR theo SO `1593858` và tìm đơn Nextwaves `SOBD1593858` (giữ `total / page / limit`, bỏ credential).
-    - **PM:** xem bản sửa theo `docs/dev/FIX-T1-v0.1.5.md`:
-      - DIFF `git diff 49bf0a4 456205a -- src tests package.json scripts`;
-      - chạy được `npm test` và `node scripts/edge-check.js C:\circa-gr-nextwaves-v0.1.5`.
     - K1 → lượt nhận thật → hợp đồng "đã nhận" → W1 có operator cho phép. Chưa merge mã ghi.
+18. (cũ, thay bằng mục 19) PM audit sửa T1 theo `docs/dev/FIX-T1-v0.1.5.md`; kết quả ở `docs/pm/AUDIT-T1-FIX-v0.1.5-STG-20261025.md`.
 17. (cũ, thay bằng mục 18) Sau PM audit v0.1.4:
     - **Operator — T1 chỉ đọc với v0.1.2 hoặc v0.1.4:** tắt bản cũ, chọn Staging, không cấp phép điền, mở GR03878; gửi ảnh khung hai tab + Copy response tìm đơn Nextwaves và tìm GR theo SO `1593858` (giữ `total / page / limit`, bỏ credential).
     - K1 → lượt nhận thật → hợp đồng "đã nhận" → W1 có operator cho phép. Chưa merge mã ghi.
