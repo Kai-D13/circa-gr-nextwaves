@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **25/10/2026 (lần 15, dev xử lý P2.4)**. Giai đoạn: **v0.1.4 trên nhánh `batch/v0.1-staging` (mã `91e3bd1`, đầu nhánh `49bf0a4`, gói `10A29BC4`), chờ PM audit P2.4; T1 chỉ đọc vẫn làm với v0.1.2 (`525BCE84`); chưa qua gate merge / ghi**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **25/10/2026 (lần 16, PM audit v0.1.4)**. Giai đoạn: **v0.1.4 trên nhánh `batch/v0.1-staging` (mã `91e3bd1`, đầu nhánh `49bf0a4`, gói `10A29BC4`); P2.4 đạt gate source/test local; T1 chỉ đọc được phép với v0.1.2 hoặc v0.1.4; chưa qua gate merge / ghi**. Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -63,6 +63,7 @@ Cập nhật: **25/10/2026 (lần 15, dev xử lý P2.4)**. Giai đoạn: **v0.1
   - **Thêm:** chống vòng lặp tạo phiên trên POS (không gọi API lặp nếu background không trả lại phiên vừa tạo).
   - Bộ test: sửa 3 lỗi của trình duyệt giả có thể làm treo file test. 82 test; đột biến 58/58 trên `49bf0a4`, không ca nào do hết giờ.
   - v0.1.3 `DF493307` chỉ dựng nội bộ, không giao.
+- **Lần 16 (25/10, PM audit v0.1.4):** `docs/pm/AUDIT-v0.1.4-STG-20261025.md`. PM chạy lại 82/82 và 5 lần liên tiếp đều đạt; kiểm ZIP và bản cài 17/17 file khớp source. P2.4 và chốt chống vòng lặp đạt gate source/test local. Dev tự báo 58/58 đột biến và Edge nâng cấp giữ ID; PM chưa chạy lại đột biến/Edge. T1 chỉ đọc được phép; K1, response thật sau nhận và W1 vẫn chặn gate merge/ghi.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -429,12 +430,10 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-16. **Hiện hành (sau v0.1.4, 25/10):**
-    - **PM:** audit P2.4 theo `docs/dev/FIX-AUDIT-v0.1.2-STG.md`.
-      - DIFF `git diff 5d117d2 49bf0a4 -- src tests package.json scripts`.
-      - Chạy lại `npm test` và (tuỳ chọn) `python -I scripts/mutate-v0.1.4.py`.
-    - **Operator — T1 chỉ đọc vẫn làm với v0.1.2** (`C:\circa-gr-nextwaves-v0.1.2`): Staging, không cấp phép điền, mở GR03878; gửi ảnh khung hai tab + Copy response tìm đơn Nextwaves và tìm GR theo SO `1593858` (giữ `total / page / limit`, bỏ credential).
+17. **Hiện hành (sau PM audit v0.1.4, 25/10):**
+    - **Operator — T1 chỉ đọc với v0.1.2 hoặc v0.1.4:** tắt bản cũ, chọn Staging, không cấp phép điền, mở GR03878; gửi ảnh khung hai tab + Copy response tìm đơn Nextwaves và tìm GR theo SO `1593858` (giữ `total / page / limit`, bỏ credential).
     - K1 → lượt nhận thật → hợp đồng "đã nhận" → W1 có operator cho phép. Chưa merge mã ghi.
+16. (cũ, thay bằng mục 17) PM audit P2.4 theo `docs/dev/FIX-AUDIT-v0.1.2-STG.md`; kết quả ở `docs/pm/AUDIT-v0.1.4-STG-20261025.md`.
 15. (cũ, thay bằng mục 16) Sau PM audit v0.1.2:
     - **Operator — T1 chỉ đọc** (dev đề xuất cài v0.1.2 `C:\circa-gr-nextwaves-v0.1.2`; PM cho phép cả v0.1.1):
       - Staging, **không cấp phép điền**, mở GR03878;
