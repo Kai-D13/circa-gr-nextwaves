@@ -6,6 +6,7 @@ Project `circa-gr-nextwaves`. Claude Code ở đây đóng vai **dev-team** (ses
 
 1. [`agent.md`](agent.md) — vai trò, quyết định đã chốt, luật, môi trường STG / PRD.
 2. [`state.md`](state.md) — trạng thái hiện tại, sự thật đã kiểm, câu hỏi mở, việc tiếp theo.
+3. [`docs/dev/HANDOFF-DEV.md`](docs/dev/HANDOFF-DEV.md) — bàn giao dev: mã, phiên bản / gói, lệnh kiểm thử, bẫy môi trường, việc tiếp theo.
 
 Chỉ implement theo spec PM (Codex) đã duyệt. Không sửa `C:\QR_code\circa-qr-scan-log`.
 Không ghi token / Authorization / cookie vào bất kỳ file nào.

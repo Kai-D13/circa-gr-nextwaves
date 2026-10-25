@@ -1,0 +1,143 @@
+# Bàn giao dev-team — circa-gr-nextwaves (cập nhật 25/10/2026)
+
+Đọc theo thứ tự: `agent.md` (vai trò, luật, môi trường) → `state.md` (§0 tóm tắt, §8 nhật ký, §9 mục hiện hành) → **file này** → báo cáo PM mới nhất trong `docs/pm/`.
+File này giữ đủ ngữ cảnh để session dev mới làm tiếp không cần lịch sử chat.
+
+## 1. Dự án và vai trò
+
+- **Một tính năng:**
+  1. Dược sĩ mở GR trên POS Circa (hoặc trang "Nhập SO thuocsi" `/chi-tiet-so/<SO>`).
+  2. Extension đi GR → PO POS → `thuocsi_delivery_code` → SO gốc, rồi mở màn quét Nextwaves `/vi/purchases/receive?po=<SO>`.
+  3. Dược sĩ đặt hàng lên reader và bấm "Xác nhận nhận hàng" (web Nextwaves gọi `POST /inter-tenant-shipments/<id>/receive-scan`).
+  4. Extension đọc kết quả nhận, quay về POS và **điền UID vào GR** bằng W1 (`PUT …/item/<i>/detail/<d>`). Dược sĩ tự bấm HOÀN THÀNH.
+- **Vai trò:**
+  - Operator: người dùng, cầu nối.
+  - **Dev-team:** Claude Code (session này), build, test, đóng gói.
+  - PM: Codex; spec / audit, không sửa mã. Làm việc trên cùng thư mục local.
+- **Repo:** https://github.com/Kai-D13/circa-gr-nextwaves (public). Tài liệu push thẳng `main`. **Mã chỉ ở nhánh `batch/v0.1-staging`**, chưa merge (chờ gate ghi).
+- **Quy ước commit:**
+  - File PM viết: commit nguyên trạng, tiền tố `PM:`.
+  - File dev viết: tiền tố `Dev:` (tài liệu) hoặc mô tả mã.
+  - Kết thúc bằng `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
+  - Trước khi sửa `state.md`, chạy `git diff` xem PM vừa thêm gì. PM thường để thay đổi chưa commit: commit giúp PM trước khi chuyển nhánh.
+- **Bí mật:**
+  - Không ghi token / Authorization / cookie vào file nào.
+  - Trước mỗi commit chạy quét bí mật (`agent.md` §7) và quét tên nhân viên (repo public).
+  - Operator chỉ gửi "Copy response", không gửi cURL.
+- **Ghi thật:**
+  - POS: ghi chỉ khi operator cho phép từng lần.
+  - Nextwaves: không gọi API ghi, không `/integrations/circa/*`, không bấm nút hộ dược sĩ.
+
+## 2. Định danh thử (staging)
+
+| | |
+|---|---|
+| POS | `https://pos.stg.circa-v2.buymed.tech` (API cùng origin `/backend/v1/…`), cửa hàng 2222 `64a8663b-0c9e-49c6-9626-0a4c7c4bd53d` |
+| Nextwaves | UI `https://circa-stg.nextwaves.app`, API `https://api-circa-stg.nextwaves.app/api/v1`, bên bán `buymed-stag`, kho `82bf85e4-84e2-4158-ae27-1aaa6fe1bc57` |
+| GR03878 | `2de6c0ec-2ea8-4038-8616-659fa3f5820a`; PO POS PO00006750 `f7678788-28e2-47bf-b5c6-a8e10a223f7d`; mã giao `SOBD1593858-F` → SO `SOBD1593858` |
+| Đơn Nextwaves | PO28237814 `55bd221f-65de-4a4d-8a77-40c568a6f176`; order `f930f66d-679a-4ed8-9c8e-b48aea91a8be`; refId `SOBD1593858-1056745`; phiếu gửi `34e67fb9-ea76-4606-ab65-4c515934c0e1`; 12 UID, 6 lô |
+| K1 | PO28237814 nhận bị `400 INTER_TENANT_SHIPMENT_LINE_INVALID / tagged_unit_unsupported` (dòng 1110 theo vỉ, đơn vị gốc Nextwaves là hộp). **Chưa gỡ** → chưa có lượt nhận inter-tenant thật |
+| Production | Chỉ đọc (`PRD.writeEnabled=false`). Bảng kho mới có Florita `c476efb2…` → `eb5e2b4f…` |
+
+## 3. Mã (nhánh `batch/v0.1-staging`)
+
+| File | Vai trò |
+|---|---|
+| `src/manifest.json` | MV3. MAIN world: `main/env.js` + hook. ISOLATED world: `lib/env.js` + thư viện + content script. **Không khai một file ở hai mục cùng khớp một trang** (trình duyệt chỉ nạp một lần, mục trước thắng; lỗi T1 lần 1) |
+| `src/lib/env.js` = `src/main/env.js` | Môi trường, nhận dạng URL, dựng URL API. **Hai file phải giống từng byte** (test bắt). Sửa một thì chép sang file kia |
+| `src/lib/keys.js`, `pos-model.js`, `nw-model.js`, `match.js`, `resolve.js`, `plan.js`, `apply.js` | Logic thuần, test được trong Node. `resolve.js`: chọn đơn Nextwaves (P1.1). `pos-model.checkSoGrs / soWriteLock`: tìm GR theo SO (P1.6). `plan.js`: kế hoạch W1, đối chiếu cả UID đã có (P1.2), mã kế hoạch FNV. `apply.js`: so toàn phiếu trước / sau mỗi PUT, `beforePut` kiểm lease (P2.3 / P1.5) |
+| `src/pos/pos-hook.js`, `src/nw/nw-hook.js` | MAIN world, chỉ quan sát: header app gửi (auth, x-store-id, grpc-timeout), PUT status GR, POST receive-scan |
+| `src/pos/pos-content.js` | Hai đường vào; cửa hàng bắt buộc (P1.4); khoá SO (P1.6 / P3); tra QR mọi UID; nút điền chỉ khi có cấp phép, mang mã kế hoạch; lease; chống vòng lặp tạo phiên (`restartGuardMs`) |
+| `src/nw/nw-content.js` | Tìm / khớp đơn qua `resolve.js` → `session:nwMatched` (một lần); chuyển về POS chỉ sau lượt 2xx + biên nhận mới (P2.1) |
+| `src/background.js` | Phiên (`SESSION_SCHEMA=1`), cấp phép một lần / một GR / 30 phút (chỉ popup), `claimApply` / `renewLease` / `finishApply`, kiểm nguồn gửi (P1.7), `session:update` chỉ đổi `state`, `onInstalled` dọn phiên cũ (P2.4) |
+| `src/popup/*`, `src/ui/panel.js` | Popup: môi trường + cấp phép từng lần + danh sách phiên. Khung Shadow DOM (closed) |
+
+## 4. Phiên bản và gói (không ghi đè gói đã có)
+
+| Bản | Mã gói | Commit runtime | Ghi chú |
+|---|---|---|---|
+| v0.1.0 | FF5CD95B | a08d541 | PM trả 5 P1 |
+| v0.1.1 | D8CD9AFD | d124453 | PM trả P1.6, P1.7 |
+| v0.1.2 | 525BCE84 | 6eeb3c0 (đầu `5d117d2`) | PM đạt P1.6 / P1.7; thêm P2.4 |
+| v0.1.3 | DF493307 | 761d734 | chỉ dựng nội bộ, không giao |
+| v0.1.4 | 10A29BC4 | 91e3bd1 (đầu `49bf0a4`) | PM đạt P2.4; **T1 lần 1 lỗi `envFromConfig`** (mọi bản ≤ 0.1.4 dính) |
+| **v0.1.5** | **CDD02C3D** | **456205a** (đầu nhánh `9270d98`) | Sửa nạp `env.js`; **PM đạt** (`docs/pm/AUDIT-T1-FIX-v0.1.5-STG-20261025.md`); **dùng cho T1** |
+
+- Bản giải nén để cài: `C:\circa-gr-nextwaves-v0.1.x` (đối chiếu từng file với `src/` của commit).
+- ZIP: `dist/` (không vào git).
+- Mỗi thay đổi runtime ⇒ version mới + ZIP mới + SHA-256 mới.
+
+## 5. Báo cáo theo thứ tự
+
+- **PM:**
+  - `docs/pm/AUDIT-BATCH-v0.1-STG-20261024.md`
+  - `AUDIT-v0.1.1-STG-20261024.md`
+  - `AUDIT-v0.1.2-STG-20261024.md`
+  - `AUDIT-v0.1.4-STG-20261025.md`
+  - `AUDIT-T1-FIX-v0.1.5-STG-20261025.md`
+- **Dev:**
+  - `docs/dev/BATCH-v0.1-STG.md`
+  - `FIX-AUDIT-BATCH-v0.1-STG.md`
+  - `FIX-AUDIT-v0.1.1-STG.md`
+  - `FIX-AUDIT-v0.1.2-STG.md`
+  - `FIX-T1-v0.1.5.md`
+  - `T1-STG-HUONG-DAN.md` (hướng dẫn operator)
+- **Logic gốc:** `docs/dev/LOGIC-v0.3.md`.
+
+## 6. Kiểm thử và công cụ (chạy trên nhánh batch)
+
+| Lệnh | Nội dung |
+|---|---|
+| `npm test` | **85 test** (`node --test --test-timeout=60000`): env-keys 7, hooks 5, manifest 3, models 15, plan-apply 19, resolve 8, runtime 28. Chạy ~7 s |
+| `python -I scripts/mutate-v0.1.5.py [từ_ca]` | 60 đột biến, chép sang thư mục tạm, ~45 phút. **Chạy một mình**: không chạy stress / test khác đè lên. Ca "bị bắt vì hết giờ 240 s" **không phải bằng chứng**, phải tìm nguyên nhân treo |
+| `node scripts/edge-check.js <thư mục cài>` | Edge / Chrome **thật** (hồ sơ tạm, không đăng nhập). Kiểm 2 world trên Nextwaves; đường POS GR03878 với CDP Fetch trả `samples/`; phiên; tab Nextwaves; không token. v0.1.5: 9/9 |
+| `node scripts/edge-upgrade-check.js <bản cũ> <bản mới>` | Nâng cấp giữ cùng extension ID (P2.4) trên Edge thật |
+| `python -I scripts/pack.py` | `src/` → `dist/*.zip` + SHA-256 (8 ký tự đầu = mã gói); tái lập được từ checkout sạch |
+
+**Trình duyệt giả `tests/browser-sim.js`** chạy `background.js` và content script thật trong `node:vm`. Các luật đã học (đừng phá):
+1. Nạp content script như Chrome: theo thứ tự manifest, một file một lần mỗi trang.
+2. `fetch` và message tới background trả về ở **macrotask**.
+3. Ngữ cảnh đã chết (tải lại / điều hướng) không vẽ khung, `fetch` không trả về.
+4. `afterEach(closeAll)`: test bị cắt vì quá giờ vẫn đóng được trình duyệt giả.
+5. Sau `close()`: không mở tab, không tạo timer, không chuyển message.
+6. `window` trong vm là global proxy, nên `event.source` = `vm.runInContext("globalThis")`.
+
+**Trước mỗi lần giao bản:**
+1. `npm test` nhiều lần.
+2. Chạy đột biến (một mình).
+3. `edge-check.js` cho bản mới, kèm bản cũ làm đối chứng nếu sửa lỗi.
+4. `pack.py`, rồi giải nén ra `C:\circa-gr-nextwaves-v<ver>`.
+5. Dựng lại từ worktree sạch để kiểm hash.
+6. Quét bí mật và tên nhân viên.
+7. Viết báo cáo `docs/dev/…` kèm test nguyên văn.
+8. Cập nhật `state.md`.
+
+## 7. Bẫy môi trường (máy này)
+
+- **Heredoc bash nuốt `\`:** viết script / regex bằng công cụ Write (thư mục scratchpad) hoặc `chr(92)` trong Python.
+- `sed -i` của Git Bash đổi CRLF. Repo dùng LF (`.gitattributes`).
+- Python cần `-I` và `sys.stdout.reconfigure(encoding="utf-8")`. Máy PM **không có Python** nhưng có `node`.
+- Edge: `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`. Chrome 156 bản thường không nhận `--load-extension`; Edge cần `--disable-features=DisableLoadExtensionCommandLineSwitch`.
+- Sau khi chạy Edge / đột biến: kiểm tiến trình còn sót (`msedge.exe` theo hồ sơ tạm, `node --test`).
+
+## 8. Trạng thái và việc tiếp theo
+
+1. **Đang chờ operator chạy lại T1 với v0.1.5** (`docs/dev/T1-STG-HUONG-DAN.md`). Operator sẽ gửi:
+   - 3 ảnh: khung POS, khung Nextwaves, popup;
+   - `T1-pos-gr-search.json`: tìm GR theo SO `1593858`, giữ `total / page / limit`;
+   - `T1-nw-receiving-search.json`: `inter-tenant-orders/receiving?q=SOBD1593858`.
+2. **Khi nhận T1, dev làm:**
+   - đối chiếu khung / phiên với response thật (khoá `so_gr_unknown` / `so_many_gr` / `nw_many_orders`, dòng "Tìm theo … total …");
+   - lưu response vào `samples/` (bỏ token, thay tên nhân viên bằng `<nhân viên>`, ghi `samples/README.md`);
+   - nếu response khác giả định: **ghi lại response, không nới parser**; thêm test theo mẫu thật;
+   - báo PM.
+3. **K1 / T3:** cần Nextwaves / Buymed gỡ `tagged_unit_unsupported`, hoặc tạo SO staging mới có dòng gắn thẻ theo đơn vị gốc, giao cửa hàng 2222.
+   Sau một lượt "Xác nhận nhận hàng" thật (operator cho phép), lấy: 2xx `receive-scan`, `purchase-orders/<id>`, `inter-tenant-shipments/<id>`, `/receiving` sau nhận.
+   Hợp đồng "đã nhận" (P2.1) chưa nghiệm thu: `receivedEpcs` của phiếu gửi và biên nhận mới mới chỉ là giả định; cấu trúc `receipts` lấy theo mẫu thật PO88508353.
+4. **W1:** sau gate T3. Operator chỉ định một GR staging, cấp phép một lần trong popup, bấm nút có mã kế hoạch. Kiểm request / response PUT và GET GR trước / sau.
+5. **Merge `batch/v0.1-staging` → `main`:** chỉ sau gate W1 và PM đồng ý.
+6. **Còn mở về thiết kế:**
+   - tìm đơn Nextwaves và tìm GR chỉ fail closed ở một trang (chưa phân trang);
+   - nhận thiếu thì không điền phần đã nhận (chờ stakeholder);
+   - R12: Web Serial giành cổng với circa-qr-scan-log trên POS production;
+   - PRD chưa nghiệm thu.
