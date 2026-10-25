@@ -22,5 +22,9 @@ Response thật do operator lấy ("Copy response" hoặc cURL đã bỏ token),
 | `pos-stg-qrcode-uid-circa.json` | STG | `GET <POS>/thuocsi-warehouse/qrcode?code=<UID>` | Tra 2 UID Circa: có lot + hạn; `circaReceiptCode` / `circaUnitName` rỗng |
 | `nw-stg-po-PO88508353-received.json` | STG | `GET /api/v1/purchase-orders/<poId>` | PO **đã nhận** (mẫu Nextwaves dựng theo hub-order pos.dev): `receivedUnits`, `receipts[].items[].batchNumber/epcs`. Tên nhà cung cấp thử đã thay |
 | `nw-stg-receiving-PO76458756.json` | STG | `GET /api/v1/inter-tenant-orders/purchase-orders/<poId>/receiving` | PO76458756 (SO khác, **không** phải của GR03878): dòng giao có productId / sku / unit / UID |
+| `nw-stg-receiving-PO60017570.json` | STG | `GET /api/v1/inter-tenant-orders/purchase-orders/<poId>/receiving` | PO60017570 (SO 1593859, không phải của GR03878) |
+| `nw-stg-receiving-search-q-SOBD1593859.json` | STG | `GET /api/v1/inter-tenant-orders/receiving?…q=SOBD1593859` | Tìm đơn theo SO khác: total 1 (PO60017570) |
+| `pos-stg-gr-search-so-1593858-T1-20261025.json` | STG | `GET /backend/v1/order/goods-receipt/search?query=so_thuocsi=1593858,…&limit=1000…` | **T1 lần 2** (v0.1.5, phiên đăng nhập thật, 25/10): total 1 / page 1 / limit 1000, chỉ GR03878; trùng mẫu 24/10 trừ `updated_at`. Bản gốc sha256 `78c6b9e5…`, chỉ đổi CRLF → LF |
+| `nw-stg-receiving-search-q-SOBD1593858-T1-20261025.json` | STG | `GET /api/v1/inter-tenant-orders/receiving?…q=SOBD1593858` | **T1 lần 2**: total 1, PO28237814 CONFIRMED / shipped, `buymed-stag`, kho CIRCA FLORITA `82bf85e4…`, `openShipmentCount` 1. Bản gốc sha256 `e8b95ffb…` |
 
 PO staging PO00006745 (của GR03877) chỉ ghi tóm tắt trong `state.md` §2.1, không có file.
