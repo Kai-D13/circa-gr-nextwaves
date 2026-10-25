@@ -1,10 +1,13 @@
-"""Đột biến có chủ đích cho các hàng rào của v0.1.4 (PM audit 24/10: P1.1–P1.7, P2.1–P2.4, P3; chống vòng lặp tạo phiên).
+"""Đột biến có chủ đích cho các hàng rào của v0.1.5 (PM audit 24/10: P1.1–P1.7, P2.1–P2.4, P3; chống vòng lặp tạo phiên;
+manifest không nạp trùng env.js — lỗi T1 25/10).
 
 Mỗi ca gỡ đúng MỘT hàng rào trong src/, chạy `node --test "tests/*.test.js"`; bộ test phải hỏng (KILLED).
 Chạy trên BẢN SAO trong thư mục tạm — không sửa src/ của repo. Cần Node (node --test) trên PATH.
 
-  python -I scripts/mutate-v0.1.4.py            # mọi ca
-  python -I scripts/mutate-v0.1.4.py 24         # bắt đầu từ ca thứ 25
+  python -I scripts/mutate-v0.1.5.py            # mọi ca
+  python -I scripts/mutate-v0.1.5.py 24         # bắt đầu từ ca thứ 25
+
+Đột biến trên src/lib/env.js được áp lên cả src/main/env.js (bản sao y hệt) để không bị bắt chỉ vì hai bản lệch nhau.
 """
 import os
 import shutil
@@ -94,6 +97,9 @@ muts = [
     ("src/background.js", "  for (const [k, g] of Object.entries(grants || {})) if (isCurrent(g)) kept[k] = g;", "  for (const [k, g] of Object.entries(grants || {})) kept[k] = g;", "P2.4 nâng cấp giữ cấp phép cũ"),
     # Chống vòng lặp tạo phiên (phát hiện khi chạy đột biến v0.1.3)
     ("src/pos/pos-content.js", "if (lastStart.grId === gr.id && Date.now() - lastStart.at < T.restartGuardMs) {", "if (false) {", "Chống vòng lặp: bỏ chốt chặn tạo phiên lặp"),
+    # Lỗi T1 25/10: env.js khai ở cả MAIN và ISOLATED → trình duyệt chỉ nạp vào MAIN → ISOLATED thiếu env
+    ("src/manifest.json", '"js": ["main/env.js", "pos/pos-hook.js"],', '"js": ["lib/env.js", "pos/pos-hook.js"],', "Manifest: hook POS dùng chung lib/env.js (lỗi T1)"),
+    ("src/manifest.json", '"js": ["main/env.js", "nw/nw-hook.js"],', '"js": ["lib/env.js", "nw/nw-hook.js"],', "Manifest: hook Nextwaves dùng chung lib/env.js (lỗi T1)"),
 ]
 
 
@@ -130,11 +136,16 @@ def main():
             if orig.count(a) != 1:
                 print("ANCHOR?", name, orig.count(a), flush=True)
                 continue
-            open(p, "w", encoding="utf-8", newline="\n").write(orig.replace(a, b))
+            # env.js có bản sao y hệt cho MAIN world: đột biến áp lên cả hai.
+            twins = [p] + ([os.path.join(base, "src/main/env.js")] if f == "src/lib/env.js" else [])
+            origs = {q: open(q, encoding="utf-8").read() for q in twins}
+            for q in twins:
+                open(q, "w", encoding="utf-8", newline="\n").write(origs[q].replace(a, b))
             try:
                 _, out = run_tests(base)
             finally:
-                open(p, "w", encoding="utf-8", newline="\n").write(orig)
+                for q in twins:
+                    open(q, "w", encoding="utf-8", newline="\n").write(origs[q])
             fails = sorted(set(l[:72] for l in out.splitlines() if l.startswith("✖") and "failing tests" not in l))
             if fails:
                 killed += 1

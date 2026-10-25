@@ -61,7 +61,11 @@ function loadHook(origin, file) {
   win.window = win;
   vm.createContext(win);
   const g = vm.runInContext("globalThis", win);
-  for (const f of ["lib/env.js", file]) vm.runInContext(fs.readFileSync(path.join(SRC, f), "utf8"), win, { filename: f });
+  // Đúng danh sách file MAIN world trong manifest cho trang này (env + hook).
+  const manifest = JSON.parse(fs.readFileSync(path.join(SRC, "manifest.json"), "utf8"));
+  const entry = manifest.content_scripts.find((c) => c.world === "MAIN" && c.js.includes(file) && c.matches.some((m) => m.startsWith(origin)));
+  assert.ok(entry, `manifest không có mục MAIN cho ${file} trên ${origin}`);
+  for (const f of entry.js) vm.runInContext(fs.readFileSync(path.join(SRC, f), "utf8"), win, { filename: f });
   const xhr = () => vm.runInContext("new XMLHttpRequest()", win);
   const fetch = (url, init) => vm.runInContext("fetch", win)(url, init);
   const hello = (mark) => listeners.forEach((fn) => fn({ source: g, data: { mark, type: "hello" } }));

@@ -22,6 +22,7 @@ const POS_AUTH = posAuth({ authorization: "Bearer pos-test", "x-client-id": "1",
 const NW_AUTH = { mark: "cgn/nw-hook", type: "auth", payload: { envId: "STG", headers: { authorization: "Bearer nw-test" } } };
 const scan = (httpStatus, response) => ({ mark: "cgn/nw-hook", type: "receive-scan", payload: { envId: "STG", shipmentId: SHIP, httpStatus, response: response || {}, sentEpcs: 12 } });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const APP_VERSION = require("../src/manifest.json").version;
 
 function makeServer(opts = {}) {
   const it = H.sample("nw-stg-intertenant-PO28237814-SOBD1593858.json");
@@ -821,7 +822,7 @@ test("P2.4: phiên bản cũ (không schema, thiếu khoá) không được ghi 
     // Tab Nextwaves cũ (đã có header) có thể tự khớp đơn cho phiên mới ngay → waiting_nw hoặc nw_ready đều đúng.
     assert.ok(["waiting_nw", "nw_ready"].includes(s2.state), s2.state);
     assert.deepEqual(s2.writeLocks, ["so_gr_unknown"]);
-    assert.equal(s2.createdBy, "0.1.4");
+    assert.equal(s2.createdBy, APP_VERSION);
     assert.ok(s2.log.some((l) => l.type === "replaced_outdated" && l.oldState === "received"));
     assert.equal(b.tabs().length, tabsBefore + 1, "mở lại màn quét Nextwaves cho phiên mới");
     await grant(b);
@@ -871,7 +872,7 @@ test("P2.4: onInstalled (update, cùng extension ID) xoá phiên + cấp phép c
     assert.deepEqual(Object.keys(b.store.sessions), [KEY]);
     assert.deepEqual(Object.keys(b.store.grants), ["STG:GR03878"]);
     const u = b.store.lastUpgrade;
-    assert.deepEqual([u.reason, u.from, u.to, u.removedSessions, u.removedGrants], ["update", "0.1.2", "0.1.4", [{ key: oldKey, state: "received" }], 1]);
+    assert.deepEqual([u.reason, u.from, u.to, u.removedSessions, u.removedGrants], ["update", "0.1.2", APP_VERSION, [{ key: oldKey, state: "received" }], 1]);
     // Lý do khác (vd. chrome_update) không đụng storage.
     delete b.store.lastUpgrade;
     b.fireInstalled({ reason: "chrome_update" });

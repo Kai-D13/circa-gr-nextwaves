@@ -14,10 +14,23 @@ const clone = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)
 const TUNING = { pollMs: 10, collectTries: 3, collectDelayMs: 5, reloadDelayMs: 5, qrConcurrency: 4, httpTimeoutMs: 2000, leaseRenewMs: 50 };
 const BG_TUNING = { grantTtlMs: 60000, leaseMs: 2000, retryCooldownMs: 0 };
 
+// Như Chrome / Edge: duyệt các mục content_scripts khớp trang theo thứ tự manifest; MỘT file chỉ được nạp MỘT lần mỗi trang
+// (mục đứng trước được nạp, kể cả khác world). Trả danh sách file ISOLATED thực sự được nạp (MAIN world không chạy trong
+// trình duyệt giả — hook được mô phỏng bằng tab.post). ui/panel.js thay bằng panel giả.
 function isolatedScriptsFor(url) {
   const origin = new URL(url).origin;
-  const cs = MANIFEST.content_scripts.find((c) => c.world !== "MAIN" && c.matches.some((m) => m.replace(/\/\*$/, "") === origin));
-  return cs ? cs.js.filter((f) => f !== "ui/panel.js") : null;
+  const matching = MANIFEST.content_scripts.filter((c) => c.matches.some((m) => m.replace(/\/\*$/, "") === origin));
+  if (!matching.some((c) => c.world !== "MAIN")) return null;
+  const injected = new Set();
+  const isolated = [];
+  for (const c of matching) {
+    for (const f of c.js) {
+      if (injected.has(f)) continue;
+      injected.add(f);
+      if (c.world !== "MAIN") isolated.push(f);
+    }
+  }
+  return isolated.filter((f) => f !== "ui/panel.js");
 }
 
 function run(ctx, file) {

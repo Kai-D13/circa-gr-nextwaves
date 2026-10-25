@@ -2,6 +2,10 @@
  * Cấu hình môi trường + nhận dạng URL. Thuần: dùng được trong content script, service worker, trang (MAIN world) và Node test.
  * Một gói cho cả STG và PRD; chế độ do operator chọn trong popup (STG / PRD hoặc dán URL thuộc một môi trường đã biết).
  * Không có môi trường "tự do": URL lạ không mở quyền host nào.
+ *
+ * Có BẢN SAO Y HỆT ở src/main/env.js cho content script MAIN world (hook). Chrome / Edge chỉ nạp một file MỘT lần cho mỗi
+ * trang dù file được khai ở nhiều mục content_scripts (mục đứng trước được nạp) — dùng chung lib/env.js làm ISOLATED world
+ * thiếu env (lỗi T1 25/10). Sửa file này thì chép lại sang src/main/env.js; tests/manifest.test.js kiểm hai file giống nhau.
  */
 (function (root) {
   "use strict";
