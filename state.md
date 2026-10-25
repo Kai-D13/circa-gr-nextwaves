@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **25/10/2026 (lần 16, PM audit v0.1.4)**. Giai đoạn: **v0.1.4 trên nhánh `batch/v0.1-staging` (mã `91e3bd1`, đầu nhánh `49bf0a4`, gói `10A29BC4`); P2.4 đạt gate source/test local; T1 chỉ đọc được phép với v0.1.2 hoặc v0.1.4; chưa qua gate merge / ghi**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **25/10/2026 (lần 17, T1 lần 1 lỗi → dev sửa v0.1.5)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`) sửa lỗi nạp `env.js` mà T1 lần 1 gặp; T1 chạy lại với v0.1.5; chờ PM xem bản sửa; chưa qua gate merge / ghi**. Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -64,6 +64,11 @@ Cập nhật: **25/10/2026 (lần 16, PM audit v0.1.4)**. Giai đoạn: **v0.1.4
   - Bộ test: sửa 3 lỗi của trình duyệt giả có thể làm treo file test. 82 test; đột biến 58/58 trên `49bf0a4`, không ca nào do hết giờ.
   - v0.1.3 `DF493307` chỉ dựng nội bộ, không giao.
 - **Lần 16 (25/10, PM audit v0.1.4):** `docs/pm/AUDIT-v0.1.4-STG-20261025.md`. PM chạy lại 82/82 và 5 lần liên tiếp đều đạt; kiểm ZIP và bản cài 17/17 file khớp source. P2.4 và chốt chống vòng lặp đạt gate source/test local. Dev tự báo 58/58 đột biến và Edge nâng cấp giữ ID; PM chưa chạy lại đột biến/Edge. T1 chỉ đọc được phép; K1, response thật sau nhận và W1 vẫn chặn gate merge/ghi.
+- **Lần 17 (25/10, T1 lần 1 + dev sửa):**
+  - **T1 lần 1:** operator chạy với v0.1.4. Khung POS báo "Lỗi extension — Cannot read properties of undefined (reading 'envFromConfig')", không mở Nextwaves.
+  - **Nguyên nhân** (tái hiện trên Edge thật): `lib/env.js` khai ở cả mục MAIN và ISOLATED của `content_scripts`; trình duyệt chỉ nạp một lần vào MAIN, nên ISOLATED thiếu `env`. Có từ v0.1.0.
+  - **Sửa v0.1.5** (`456205a`, gói `CDD02C3D`, `C:\circa-gr-nextwaves-v0.1.5`): `src/main/env.js` là bản sao y hệt cho MAIN; thêm test manifest; trình duyệt giả nạp như Chrome; thêm `scripts/edge-check.js` kiểm trên trình duyệt thật (v0.1.5 9/9, v0.1.4 6/9).
+  - Báo cáo `docs/dev/FIX-T1-v0.1.5.md`. **T1 chạy lại với v0.1.5** theo `docs/dev/T1-STG-HUONG-DAN.md`.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -418,6 +423,11 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
   - PM audit v0.1.2: P1.6 / P1.7 đạt gate source/test local; T1 chỉ đọc với v0.1.2; thêm P2.4.
   - Dev xử lý P2.4 → v0.1.4 (`91e3bd1`, đầu nhánh `49bf0a4`, gói `10A29BC4`), kèm chốt chặn vòng lặp tạo phiên.
 
+- 25/10/2026 (lần 16–17):
+  - PM audit v0.1.4: đạt gate source/test local; T1 được phép.
+  - T1 lần 1 lỗi nạp `env.js` (mọi bản trước đều dính) → dev sửa v0.1.5 (`456205a`, gói `CDD02C3D`).
+  - Bài học: bộ test giả phải nạp content script như trình duyệt thật; mỗi bản phát hành chạy `scripts/edge-check.js` trên trình duyệt thật.
+
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
 2. Operator mở session PM Codex bằng `docs/PROMPT-PM-CODEX.md`. PM chốt hướng §3 / §6 và ra spec v0.1 staging chia batch.
@@ -430,7 +440,16 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-17. **Hiện hành (sau PM audit v0.1.4, 25/10):**
+18. **Hiện hành (sau T1 lần 1, 25/10):**
+    - **Operator — T1 chạy lại với v0.1.5:**
+      - gỡ mọi bản cũ, Load unpacked `C:\circa-gr-nextwaves-v0.1.5`, chọn lại Staging, không cấp phép điền;
+      - tải lại tab POS, mở GR03878;
+      - gửi ảnh khung hai tab + popup + Copy response tìm GR theo SO `1593858` và tìm đơn Nextwaves `SOBD1593858` (giữ `total / page / limit`, bỏ credential).
+    - **PM:** xem bản sửa theo `docs/dev/FIX-T1-v0.1.5.md`:
+      - DIFF `git diff 49bf0a4 456205a -- src tests package.json scripts`;
+      - chạy được `npm test` và `node scripts/edge-check.js C:\circa-gr-nextwaves-v0.1.5`.
+    - K1 → lượt nhận thật → hợp đồng "đã nhận" → W1 có operator cho phép. Chưa merge mã ghi.
+17. (cũ, thay bằng mục 18) Sau PM audit v0.1.4:
     - **Operator — T1 chỉ đọc với v0.1.2 hoặc v0.1.4:** tắt bản cũ, chọn Staging, không cấp phép điền, mở GR03878; gửi ảnh khung hai tab + Copy response tìm đơn Nextwaves và tìm GR theo SO `1593858` (giữ `total / page / limit`, bỏ credential).
     - K1 → lượt nhận thật → hợp đồng "đã nhận" → W1 có operator cho phép. Chưa merge mã ghi.
 16. (cũ, thay bằng mục 17) PM audit P2.4 theo `docs/dev/FIX-AUDIT-v0.1.2-STG.md`; kết quả ở `docs/pm/AUDIT-v0.1.4-STG-20261025.md`.

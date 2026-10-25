@@ -1,6 +1,7 @@
 # T1 — thử chỉ đọc trên staging (hướng dẫn operator)
 
 Người viết: dev-team, 25/10/2026. Theo `docs/pm/AUDIT-v0.1.4-STG-20261025.md` §Gate 1.
+**Cập nhật 25/10: dùng v0.1.5.** v0.1.2 và v0.1.4 bị lỗi "Lỗi extension — Cannot read properties of undefined (reading 'envFromConfig')" (lần T1 đầu); xem `docs/dev/FIX-T1-v0.1.5.md`.
 Mục đích: chạy extension trên **phiên đăng nhập thật** của staging, **không ghi gì**, để PM đối chiếu hành vi của extension với response thật.
 
 ## 0. Không làm trong T1
@@ -9,17 +10,17 @@ Mục đích: chạy extension trên **phiên đăng nhập thật** của stagi
 - **Không** bấm "Xác nhận nhận hàng" trên Nextwaves. PO28237814 còn lỗi K1, và đó là thao tác ghi bên Nextwaves.
 - **Không** bấm HOÀN THÀNH, không quét QR / RFID vào phiếu GR03878.
 - **Không** gửi cURL hay header (`authorization`, cookie). Chỉ dùng **Copy response**.
-- **Không** cài `C:\circa-gr-nextwaves-v0.1.3`: đó là bản dựng nội bộ, không phát hành.
+- **Không** cài `C:\circa-gr-nextwaves-v0.1.3`: đó là bản dựng nội bộ, không phát hành. Cũng không dùng v0.1.2 / v0.1.4 cho T1 (lỗi ở trên).
 
 ## 1. Cài bản extension
 
-PM cho phép T1 với v0.1.2 hoặc v0.1.4. Dev đề xuất **v0.1.4** (mới nhất, đã qua gate local; phần đọc giống v0.1.2).
+Dùng **v0.1.5**: chỉ sửa cách nạp script so với v0.1.4, logic đọc / ghi không đổi.
 
 1. Chrome → `chrome://extensions` → bật **Developer mode**.
-2. **Tắt hoặc gỡ** mọi bản "Circa GR ← Nextwaves" cũ (v0.1.0 / v0.1.1 / v0.1.2 …).
-   Chỉ được để **một** bản bật.
-3. **Load unpacked** → chọn thư mục `C:\circa-gr-nextwaves-v0.1.4`.
-4. Bấm icon extension, kiểm dòng tiêu đề có **v0.1.4**.
+2. **Gỡ** (Remove) mọi bản "Circa GR ← Nextwaves" cũ (v0.1.0 … v0.1.4). Chỉ được để **một** bản.
+3. **Load unpacked** → chọn thư mục `C:\circa-gr-nextwaves-v0.1.5`.
+4. Bấm icon extension, kiểm dòng tiêu đề có **v0.1.5**.
+   Bản nạp từ thư mục mới là extension mới, nên cấu hình trống: **phải chọn lại môi trường** ở bước 5.
 5. Popup → **Môi trường = Staging** → **Lưu**.
    - Dòng mô tả phải là: "Staging: POS https://pos.stg.circa-v2.buymed.tech · Nextwaves https://circa-stg.nextwaves.app · chỉ cửa hàng 64a8663b-…".
    - Mục "Cho phép điền phiếu (từng lần)" hiện ra; **để trống, không bấm**.
@@ -31,6 +32,7 @@ PM cho phép T1 với v0.1.2 hoặc v0.1.4. Dev đề xuất **v0.1.4** (mới n
 
 ## 3. Chạy T1 trên GR03878
 
+0. Sau khi cài / đổi bản extension, **tải lại (F5) hoặc mở mới** các tab POS / Nextwaves đang mở. Script của extension chỉ được nạp khi trang tải.
 1. Ở tab POS, mở DevTools (**F12**) → tab **Network** → ô lọc gõ `goods-receipt/search`.
 2. Ngay trong tab đó, mở `https://pos.stg.circa-v2.buymed.tech/danh-sach-phieu-nhan-hang/2de6c0ec-2ea8-4038-8616-659fa3f5820a` (GR03878).
 3. Kỳ vọng:
@@ -62,6 +64,7 @@ PM cho phép T1 với v0.1.2 hoặc v0.1.4. Dev đề xuất **v0.1.4** (mới n
 
 | Khung báo | Nghĩa |
 |---|---|
+| "Lỗi extension — Cannot read properties of undefined (reading 'envFromConfig')" | Đang chạy bản cũ (v0.1.4 trở xuống) hoặc tab chưa tải lại sau khi cài v0.1.5 |
 | "Staging: extension chỉ chạy cho cửa hàng thử" | Đang đăng nhập cửa hàng khác 2222 |
 | "Không xác định được cửa hàng đang đăng nhập" | POS chưa gửi `x-store-id` — tải lại trang POS |
 | "… không nối được tới SO thuocsi" | PO / GR / cửa hàng không khớp (dòng dưới nêu lý do) |
