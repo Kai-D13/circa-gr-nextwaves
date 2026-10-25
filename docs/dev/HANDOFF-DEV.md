@@ -82,6 +82,8 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
   - `FIX-AUDIT-v0.1.2-STG.md`
   - `FIX-T1-v0.1.5.md`
   - `T1-STG-HUONG-DAN.md` (hướng dẫn operator)
+  - `T1-KET-QUA-v0.1.5-20261025.md` (T1 lần 2, PM đóng gate)
+  - `K1-LOI-STG-HUONG-DAN.md` (hướng dẫn thử nhánh lỗi K1 — một lượt ghi Nextwaves, operator tự quyết)
 - **Logic gốc:** `docs/dev/LOGIC-v0.3.md`.
 
 ## 6. Kiểm thử và công cụ (chạy trên nhánh batch)
