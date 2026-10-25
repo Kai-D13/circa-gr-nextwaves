@@ -193,10 +193,70 @@ CÓ MỤC HỎNG (6/9)
 ℹ duration_ms 6869.1904
 ```
 
-**Đột biến** (`python -I scripts/mutate-v0.1.5.py`, 60 ca = 58 cũ + 2 ca manifest "hook dùng chung lib/env.js"; đột biến trên `env.js` áp lên cả hai bản):
+**Đột biến: 60/60 bị bắt, không ca nào do hết giờ** (`python -I scripts/mutate-v0.1.5.py`, 60 ca = 58 cũ + 2 ca manifest "hook dùng chung lib/env.js"; đột biến trên `env.js` áp lên cả hai bản):
 
 ```
-(đang chạy trên 456205a — kết quả sẽ bổ sung vào file này)
+KILLED P1.1 chọn trên trang chưa đủ | ✖ total > số dòng đọc được (2 trang, đơn khớp có thể ở trang 2) → search
+KILLED P1.1 bỏ qua ứng viên đọc lỗi | ✖ một GET ứng viên hết giờ / lỗi HTTP → chặn cả lượt dù đơn đúng vẫn đọc
+KILLED P1.1 bỏ kiểm trường ứng viên | ✖ ứng viên thiếu trường (bên bán / kho / refId / status) → candidate_sch
+KILLED P1.2 bỏ kiểm UID sai lô | ✖ P1.2: UID nằm sai lô (cùng sản phẩm) → uid_on_wrong_detail, không comp || ✖ P1.2: UID nằm ở dòng sản phẩm khác / ở hai lô / mã bị nối trùng → chặn
+KILLED P1.2 bỏ kiểm lượng nhất quán | ✖ P1.2: received_quantity lệch với UID đang nằm trên lô (thiếu / thừa / 
+KILLED P1.2 bỏ kiểm lượng không mã | ✖ P1.2: received_quantity lệch với UID đang nằm trên lô (thiếu / thừa / 
+KILLED P1.2 bỏ kiểm UID nhiều lô | ✖ P1.2: UID nằm ở dòng sản phẩm khác / ở hai lô / mã bị nối trùng → chặn
+KILLED P1.3 giành quyền không cần cấp phép | ✖ P1.3: cấp phép cho phiếu khác / đã hết hạn → 0 PUT; content script khô || ✖ background: giành quyền ghi — chỉ từ trang POS; đúng một lần cho một c
+KILLED P1.3 cấp phép dùng nhiều lần | ✖ E2E STG GR03878: GR → Nextwaves ?po=SOBD1593858 → khớp PO28237814 → nh || ✖ P1.3: PUT lỗi → dừng; cấp phép đã tiêu nên thử lại cần cấp phép MỚI, r
+KILLED P1.3 content tự cấp phép | ✖ P1.3: cấp phép cho phiếu khác / đã hết hạn → 0 PUT; content script khô
+KILLED P1.3 PRD được ghi | ✖ P1.3: production chỉ đọc — không cấp phép được, phiên PRD không giành 
+KILLED P1.3 hiện nút khi chưa cấp phép | ✖ E2E STG GR03878: GR → Nextwaves ?po=SOBD1593858 → khớp PO28237814 → nh || ✖ P1.3: PUT lỗi → dừng; cấp phép đã tiêu nên thử lại cần cấp phép MỚI, r
+KILLED P1.4 bỏ bắt buộc x-store-id | ✖ P1.4: thiếu / sai cửa hàng ở đường mở GR và đường /chi-tiet-so → dừng 
+KILLED P1.4 PO / GR thiếu cửa hàng vẫn qua | ✖ P1.4: cửa hàng phải có đủ x-store-id, GR.pos_info.id, PO.pos_id và trù
+KILLED P1.4 GR thiếu pos_info vẫn qua | ✖ P1.4: thiếu / sai cửa hàng ở đường mở GR và đường /chi-tiet-so → dừng 
+KILLED P1.5 gia hạn lease không kiểm chủ | ✖ P1.5: tab mất lease giữa chừng (tab khác tiếp quản) → không gửi PUT kế || ✖ background: giành quyền ghi — chỉ từ trang POS; đúng một lần cho một c
+KILLED P1.5 bỏ kiểm lease trước PUT | ✖ P1.5: mất quyền ghi (lease) trước một PUT → dừng lease_lost, không gửi || ✖ P1.5: tab mất lease giữa chừng (tab khác tiếp quản) → không gửi PUT kế
+KILLED P1.5 giành khi lease còn hạn | ✖ P1.5: PUT treo quá giờ ở tab 1 → kết quả không rõ + hạ nhiệt; tab 2 ch || ✖ background: giành quyền ghi — chỉ từ trang POS; đúng một lần cho một c
+KILLED P1.5 không phải chủ vẫn kết thúc | ✖ P1.5: tab mất lease giữa chừng (tab khác tiếp quản) → không gửi PUT kế || ✖ background: giành quyền ghi — chỉ từ trang POS; đúng một lần cho một c
+KILLED P1.5 bỏ hạ nhiệt sau kết quả không rõ | ✖ P1.5: PUT treo quá giờ ở tab 1 → kết quả không rõ + hạ nhiệt; tab 2 ch
+KILLED P2.1 về POS khi chưa có lượt 2xx | ✖ P2.1: tải lại trang Nextwaves sau khi đơn đã nhận nhưng phiên chưa thấ
+KILLED P2.1 bỏ kiểm biên nhận | ✖ P2.1: thiếu bằng chứng nhận → problems (phiếu gửi chưa ghi nhận EPC, b
+KILLED P2.1 bỏ kiểm biên nhận mới | ✖ P2.1: lượt 2xx nhưng không có biên nhận mới so với lúc khớp đơn → khôn || ✖ P2.1: thiếu bằng chứng nhận → problems (phiếu gửi chưa ghi nhận EPC, b
+KILLED P2.1 bỏ kiểm phiếu gửi đã nhận | ✖ P2.1: thiếu bằng chứng nhận → problems (phiếu gửi chưa ghi nhận EPC, b
+KILLED P2.1 tải lại trang tự chuyển | ✖ Chống vòng lặp tạo phiên: background không trả lại phiên vừa tạo → POS || ✖ E2E STG GR03878: GR → Nextwaves ?po=SOBD1593858 → khớp PO28237814 → nh
+KILLED P2.2 QR thiếu trường vẫn dùng | ✖ P2.2: tra QR phải có productId số, lô, hạn DD-MM-YYYY (1.9654ms)
+KILLED P2.2 thiếu kết quả tra QR | ✖ P2.2: thiếu kết quả tra QR / QR thiếu productId hoặc lô → chặn trước k
+KILLED P2.3 bỏ so toàn phiếu | ✖ P2.3: phiếu đổi ở chi tiết KHÁC (quét tay giữa chừng) → dừng trước bướ
+KILLED P3 bỏ khoá ghi | ✖ P1.6 đường mở GR: tìm GR theo SO chưa đủ / không rõ / nhiều GR → phiên || ✖ P1.7: Nextwaves có đơn cùng SO khác lần giao → khoá nw_many_orders; ta
+KILLED P3 / P1.7 session:update ghi cả trường khác state | ✖ P1.7: session:nwMatched — chỉ từ trang Nextwaves, chỉ khi phiên chờ, k
+KILLED P1.7 session:update không state ghi được khoá | ✖ P1.7: Nextwaves có đơn cùng SO khác lần giao → khoá nw_many_orders; ta || ✖ P3: SO có 2 phiếu nhận ở cửa hàng → phiên khoá ghi; có cấp phép vẫn ch
+KILLED P3 bỏ khoá nhiều đơn Nextwaves | ✖ P1.7: Nextwaves có đơn cùng SO khác lần giao → khoá nw_many_orders; ta || ✖ loại rõ ràng: bên bán khác / kho khác / đơn huỷ; còn đơn cùng SO lệch 
+KILLED P3 bỏ khoá SO nhiều GR | ✖ P1.6 đường /chi-tiet-so: danh sách chưa đủ / không rõ → dừng, không mở || ✖ P1.6 đường mở GR: tìm GR theo SO chưa đủ / không rõ / nhiều GR → phiên
+KILLED P1.6 bỏ kiểm total GR theo SO | ✖ P1.6 đường /chi-tiet-so: danh sách chưa đủ / không rõ → dừng, không mở || ✖ P1.6 đường mở GR: tìm GR theo SO chưa đủ / không rõ / nhiều GR → phiên
+KILLED P1.6 bỏ kiểm page / limit | ✖ P1.6 đường /chi-tiet-so: danh sách chưa đủ / không rõ → dừng, không mở || ✖ P1.6 đường mở GR: tìm GR theo SO chưa đủ / không rõ / nhiều GR → phiên
+KILLED P1.6 dòng thiếu trường vẫn đếm | ✖ P1.6: danh sách GR theo SO phải đọc đủ (total / page / limit) và rõ từ
+KILLED P1.6 dòng cửa hàng khác vẫn đếm | ✖ P1.6: danh sách GR theo SO phải đọc đủ (total / page / limit) và rõ từ
+KILLED P1.6 phiên không mang khoá SO | ✖ P1.6 đường /chi-tiet-so: danh sách chưa đủ / không rõ → dừng, không mở || ✖ P1.6 đường mở GR: tìm GR theo SO chưa đủ / không rõ / nhiều GR → phiên
+KILLED P1.6 đường /chi-tiet-so đi tiếp khi chưa đủ | ✖ P1.6 đường /chi-tiet-so: danh sách chưa đủ / không rõ → dừng, không mở
+KILLED P1.7 khớp đơn nhiều lần | ✖ P1.7: Nextwaves có đơn cùng SO khác lần giao → khoá nw_many_orders; ta || ✖ P1.7: session:nwMatched — chỉ từ trang Nextwaves, chỉ khi phiên chờ, k
+KILLED P1.7 khớp đơn từ trang bất kỳ | ✖ P1.7: Nextwaves có đơn cùng SO khác lần giao → khoá nw_many_orders; ta || ✖ P1.7: session:nwMatched — chỉ từ trang Nextwaves, chỉ khi phiên chờ, k
+KILLED P1.7 nhận khoá lạ | ✖ P1.7: session:nwMatched — chỉ từ trang Nextwaves, chỉ khi phiên chờ, k
+KILLED P1.7 nhận refId khác SO | ✖ P1.7: session:nwMatched — chỉ từ trang Nextwaves, chỉ khi phiên chờ, k
+KILLED P1.7 giành quyền từ trang bất kỳ | ✖ background: giành quyền ghi — chỉ từ trang POS; đúng một lần cho một c
+KILLED P1.7 tạo phiên từ trang bất kỳ | ✖ P1.3: PUT lỗi → dừng; cấp phép đã tiêu nên thử lại cần cấp phép MỚI, r || ✖ P1.7: session:nwMatched — chỉ từ trang Nextwaves, chỉ khi phiên chờ, k
+KILLED P1.7 scanOk phiếu gửi lạ | ✖ P1.7: session:nwMatched — chỉ từ trang Nextwaves, chỉ khi phiên chờ, k
+KILLED P1.7 received từ trang bất kỳ | ✖ P1.7: session:nwMatched — chỉ từ trang Nextwaves, chỉ khi phiên chờ, k
+KILLED P2.4 phiên bản cũ vẫn được ghi | ✖ P2.4: phiên bản cũ (không schema, thiếu khoá) không được ghi / tìm lại
+KILLED P2.4 mở lại phiếu giữ phiên bản cũ | ✖ P2.4: phiên bản cũ (không schema, thiếu khoá) không được ghi / tìm lại
+KILLED P2.4 session:get trả phiên bản cũ | ✖ P2.4: phiên bản cũ (không schema, thiếu khoá) không được ghi / tìm lại
+KILLED P2.4 trang Nextwaves tìm thấy phiên bản cũ | ✖ P2.4: phiên bản cũ (không schema, thiếu khoá) không được ghi / tìm lại || ✖ P2.4: trang Nextwaves không nhận phiên bản cũ (không tìm, không khớp đ
+KILLED P2.4 cấp phép kiểu cũ vẫn dùng được | ✖ P2.4: phiên bản cũ (không schema, thiếu khoá) không được ghi / tìm lại
+KILLED P2.4 khớp đơn cho phiên bản cũ | ✖ P2.4: trang Nextwaves không nhận phiên bản cũ (không tìm, không khớp đ
+KILLED P2.4 scanOk cho phiên bản cũ | ✖ P2.4: trang Nextwaves không nhận phiên bản cũ (không tìm, không khớp đ
+KILLED P2.4 received cho phiên bản cũ | ✖ P2.4: phiên bản cũ (không schema, thiếu khoá) không được ghi / tìm lại
+KILLED P2.4 nâng cấp không dọn phiên cũ | ✖ P2.4: onInstalled (update, cùng extension ID) xoá phiên + cấp phép của
+KILLED P2.4 nâng cấp giữ cấp phép cũ | ✖ P2.4: onInstalled (update, cùng extension ID) xoá phiên + cấp phép của
+KILLED Chống vòng lặp: bỏ chốt chặn tạo phiên lặp | ✖ Chống vòng lặp tạo phiên: background không trả lại phiên vừa tạo → POS
+KILLED Manifest: hook POS dùng chung lib/env.js (lỗi T1) | ✖ Chưa chọn môi trường / môi trường PRD → không làm gì trên POS staging  || ✖ Chế độ STG trên trang POS production → không làm gì, không gọi host nà
+KILLED Manifest: hook Nextwaves dùng chung lib/env.js (lỗi T1) | ✖ E2E STG GR03878: GR → Nextwaves ?po=SOBD1593858 → khớp PO28237814 → nh || ✖ Hai tab POS cùng GR03878, một cấp phép: bấm ở cả hai tab → chỉ một tab
+60/60 bị bắt (từ ca 1)
 ```
 
 ## 6. Ảnh hưởng tới T1
