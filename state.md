@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **26/10/2026 (lần 33, PM đính chính G0 v0.2)**. Giai đoạn: **`main` tại `728dc2b` có v0.1.5 và plan v0.2 rev 2, chưa có code/build v0.2. Dev được bắt đầu code Đợt 1 trên nhánh riêng từ UI v0.1.6 `b4017d7`; G0 ảnh/response/DOM thật là gate chốt tích hợp và nghiệm thu, không chặn khởi công. Chưa merge v0.1.6/v0.2 hay cho dùng v0.2 trên staging thật; mọi lượt nhận/ghi cần phép riêng. Production chỉ đọc; O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **27/10/2026 (lần 34, dev giao v0.2.0 để PM audit)**. Giai đoạn: **`main` có v0.1.5. v0.2.0 (nút "Nhận hàng bằng RFID" trên danh sách GR, chỉ tạo phiên khi bấm) đã code / test / đóng gói trên nhánh `batch/v0.2-rfid` (đầu `ef67a7b`, gói `096D97D9`), chờ PM audit G1 / G2; G0 ảnh / response / DOM thật vẫn là gate chốt tích hợp, merge và cài. Chưa merge v0.1.6 / v0.2, chưa cài v0.2; mọi lượt nhận / ghi cần phép riêng. Production chỉ đọc; O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -164,6 +164,17 @@ Cập nhật: **26/10/2026 (lần 33, PM đính chính G0 v0.2)**. Giai đoạn:
   - **Chưa code, chờ G0.**
 
 - **Lần 33 (26/10, PM sửa điều kiện khởi công):** `docs/pm/CORRECTION-G0-v0.2-20261026.md` thay quy tắc “không code đến G0” ở các review trước. Dev được code/test v0.2 ngay trên nhánh riêng từ `b4017d7`. UI/response/DOM thật dùng để chốt selector/hợp đồng, Edge và gate merge/cài, không phải đầu vào bắt buộc cho mọi code. Dev/PM tự lấy bằng chứng chỉ đọc trên máy staging nếu có phiên đăng nhập; operator chỉ hỗ trợ nếu cần. Lượt nhận/ghi staging vẫn cần operator cho phép riêng, production chỉ đọc.
+
+- **Lần 34 (27/10, dev giao v0.2.0):** `docs/dev/BATCH-v0.2.0.md` (spec hiệu lực rev 1 + rev 2, diff, test, đột biến, Edge, hiệu năng, G0 còn thiếu, cài đặt).
+  - Nhánh `batch/v0.2-rfid` từ `b4017d7`: `24d0070`, `d7d2cbd`, `b0129a4`, `ef67a7b` (runtime cuối), `682c509` (chỉ test). Gói `096D97D9`, giải nén `C:\circa-gr-nextwaves-v0.2.0`. **Chưa cài.**
+  - `npm test` 131/131. Đột biến 93/93 (lượt 2 sót 1 ca; sửa test `682c509`, chạy lại ca 76–93: 18/18). Edge thật trên bản giải nén 16/16 (v0.1.6 đối chứng hỏng 6/16).
+  - Đột biến lần 1 sót 6 ca. Nguyên nhân chính: GET hết giờ bị coi là "huỷ", báo nhầm "Danh sách đã đổi" và che test R2 → đã sửa mã + test.
+  - Hiệu năng (Edge, trang giả):
+    - danh sách 20 dòng: mỗi lượt quét ≤ 1,8 ms;
+    - bão 300 thay đổi DOM: 2 lượt, tổng 1,2 ms; CPU extension 5,0 ms / trang 22,3 ms;
+    - trang bán hàng: 0,0 ms, 0 request.
+    Chưa có baseline trên POS thật.
+  - G0 còn thiếu: ảnh UI v0.1.6, Copy response danh sách GR, outerHTML dòng danh sách / vùng nút HOÀN THÀNH. Selector `gr-list.js` dựa trên giả định theo extension Nextwaves.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -539,7 +550,16 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-33. **Hiện hành (sau PM đính chính G0, 26/10):**
+34. **Hiện hành (sau dev giao v0.2.0, 27/10):**
+    - **PM:** audit nhánh `batch/v0.2-rfid` (đầu `682c509`, runtime `ef67a7b`) và gói `096D97D9` theo `docs/dev/BATCH-v0.2.0.md` (G1 test / đột biến, G2 Edge / hiệu năng). Chốt gate UI v0.1.6 khi có ảnh thật.
+    - **Operator (hoặc dev chỉ đọc nếu operator mở phiên / cho phép Claude in Chrome):** G0:
+      - 5 ảnh UI v0.1.6 (3 POS trên GR03878, 2 Nextwaves);
+      - Copy response danh sách GR `/danh-sach-phieu-nhan-hang`;
+      - outerHTML một dòng danh sách + vùng nút HOÀN THÀNH / Hủy (đã làm sạch).
+      Chưa nhận / điền / HOÀN THÀNH để lấy G0.
+    - **Dev:** đối chiếu G0 với giả định `gr-list.js` (`rowCode` / `slotOf`) và hợp đồng hook. Khác thì sửa, ra gói mới, PM audit lại. Không cài v0.2 trước khi PM cho phép.
+    - Staging nhận / PUT / HOÀN THÀNH vẫn cần phép riêng từng lượt; production chỉ đọc; Đợt 2 (O1, mã QR sau HOÀN THÀNH, reader Florita, PRD Florita) spec riêng.
+33. (cũ, thay bằng mục 34) **Sau PM đính chính G0, 26/10:**
     - **Dev:** bắt đầu code/test Đợt 1 v0.2 trên nhánh riêng từ `b4017d7`; dùng mẫu giả cho phần chưa có DOM thật. Song song thu response/DOM staging chỉ đọc khi truy cập được; bàn giao G1/G2 theo spec rev 2 và đính chính PM.
     - **PM:** cùng dev kiểm giao diện v0.1.6 và dữ liệu danh sách thật; dùng bằng chứng để chốt selector/hợp đồng và gate merge/cài v0.2. Không yêu cầu operator tự làm đủ năm ảnh trước khi dev code.
     - **Operator:** chỉ cần hỗ trợ mở phiên staging hoặc gửi bằng chứng còn thiếu nếu dev/PM không truy cập được. Mọi thao tác nhận hàng/PUT/HOÀN THÀNH trên staging vẫn cần phép riêng từng lượt; production chỉ đọc.

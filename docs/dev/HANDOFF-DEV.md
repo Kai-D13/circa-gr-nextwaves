@@ -1,4 +1,4 @@
-# Bàn giao dev-team — circa-gr-nextwaves (cập nhật 26/10/2026)
+# Bàn giao dev-team — circa-gr-nextwaves (cập nhật 27/10/2026)
 
 Đọc theo thứ tự: `agent.md` (vai trò, luật, môi trường) → `state.md` (§0 tóm tắt, §8 nhật ký, §9 mục hiện hành) → **file này** → báo cáo PM mới nhất trong `docs/pm/`.
 File này giữ đủ ngữ cảnh để session dev mới làm tiếp không cần lịch sử chat.
@@ -14,7 +14,10 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
   - Operator: người dùng, cầu nối.
   - **Dev-team:** Claude Code (session này), build, test, đóng gói.
   - PM: Codex; spec / audit, không sửa mã. Làm việc trên cùng thư mục local.
-- **Repo:** https://github.com/Kai-D13/circa-gr-nextwaves (public). Tài liệu push thẳng `main`. **Mã chỉ ở nhánh `batch/v0.1-staging`**, chưa merge (chờ gate ghi).
+- **v0.2 (đang audit):** chỉ tạo phiên khi dược sĩ **bấm** nút "Nhận hàng bằng RFID" (trên từng dòng danh sách `/danh-sach-phieu-nhan-hang`, trong khung trang phiếu, hoặc ở `/chi-tiet-so`). Mở phiếu không còn tự chạy. Spec hiệu lực: `docs/dev/BATCH-v0.2.0.md` §1.
+- **Repo:** https://github.com/Kai-D13/circa-gr-nextwaves (public). Tài liệu push thẳng `main`.
+  - `main` có mã v0.1.5 (merge `aa42dcc`, sau gate T3/W1).
+  - v0.1.6 ở nhánh `batch/v0.1.6-ui`; v0.2.0 ở nhánh `batch/v0.2-rfid` (tách từ `b4017d7`). Chưa merge, chờ PM.
 - **Quy ước commit:**
   - File PM viết: commit nguyên trạng, tiền tố `PM:`.
   - File dev viết: tiền tố `Dev:` (tài liệu) hoặc mô tả mã.
@@ -39,7 +42,7 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 | K1 | 24/10: PO28237814 nhận bị `400 … tagged_unit_unsupported`. **25/10 23:46: Nextwaves đã sửa** — `receive-scan` 200, 12/12, biên nhận PO GRN96438872 `7bec38d2…` (`docs/dev/T3-KET-QUA-PO28237814-20261025.md`) |
 | Production | Chỉ đọc (`PRD.writeEnabled=false`). Bảng kho mới có Florita `c476efb2…` → `eb5e2b4f…` |
 
-## 3. Mã (nhánh `batch/v0.1-staging`)
+## 3. Mã (v0.1.5 trên `main`; phần v0.2.0 ghi chú ở cuối bảng)
 
 | File | Vai trò |
 |---|---|
@@ -51,6 +54,8 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 | `src/nw/nw-content.js` | Tìm / khớp đơn qua `resolve.js` → `session:nwMatched` (một lần); chuyển về POS chỉ sau lượt 2xx + biên nhận mới (P2.1) |
 | `src/background.js` | Phiên (`SESSION_SCHEMA=1`), cấp phép một lần / một GR / 30 phút (chỉ popup), `claimApply` / `renewLease` / `finishApply`, kiểm nguồn gửi (P1.7), `session:update` chỉ đổi `state`, `onInstalled` dọn phiên cũ (P2.4) |
 | `src/popup/*`, `src/ui/panel.js` | Popup: môi trường + cấp phép từng lần + danh sách phiên. Khung Shadow DOM (closed) |
+| **v0.2.0** `src/pos/gr-list.js` (mới) | Chỉ DOM: nút `button.cgn-rfid-btn` trên dòng danh sách, MutationObserver (chờ yên 250 ms, tối đa 1 s), `rowValid`, `stats()` |
+| **v0.2.0** `pos-hook.js` / `pos-content.js` / `background.js` | Hook bắt response danh sách của trang (R1 `reqSeq` lúc gửi) + route. Content: `startFromGr` một hàm cho mọi lối vào, `clickToken` / `stillValid` (R2), header S3, cache QR S6. Background tự dựng `returnUrl` (S4), `scanAt` |
 
 ## 4. Phiên bản và gói (không ghi đè gói đã có)
 
@@ -62,7 +67,8 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 | v0.1.3 | DF493307 | 761d734 | chỉ dựng nội bộ, không giao |
 | v0.1.4 | 10A29BC4 | 91e3bd1 (đầu `49bf0a4`) | PM đạt P2.4; **T1 lần 1 lỗi `envFromConfig`** (mọi bản ≤ 0.1.4 dính) |
 | **v0.1.5** | **CDD02C3D** | **456205a** (đầu nhánh `fa66de6`; **đã merge vào `main` `aa42dcc`** 26/10) | Sửa nạp `env.js`; **PM đạt** (`docs/pm/AUDIT-T1-FIX-v0.1.5-STG-20261025.md`); **T1 lần 2 trên phiên thật**: PM đóng gate. `0b9aeb3` mẫu T1, `afd98d5` mẫu T3 + test, `25082b2` mẫu chạy trọn luồng GR03880 + test, `7eadfe3` sửa test chạy đua, `fa66de6` request receive-scan từ HAR (không đổi `src/`) |
-| v0.1.6 | 34B4AE1A | b4017d7 (nhánh `batch/v0.1.6-ui`) | Khung không che nút trang (POS HOÀN THÀNH / Hủy, NW Xác nhận nhận hàng) + thu nhỏ gọn; `docs/dev/FIX-UI-v0.1.6.md`; **chờ PM audit gói, chưa cài** |
+| v0.1.6 | 34B4AE1A | b4017d7 (nhánh `batch/v0.1.6-ui`) | Khung không che nút trang (POS HOÀN THÀNH / Hủy, NW Xác nhận nhận hàng) + thu nhỏ gọn; `docs/dev/FIX-UI-v0.1.6.md`; PM đạt gate source / gói (`AUDIT-UI-v0.1.6-SOURCE-PACK`); **chờ ảnh UI chỉ đọc trên trang thật** |
+| **v0.2.0** | **096D97D9** | **ef67a7b** (đầu nhánh `batch/v0.2-rfid` `682c509`, chỉ thêm test) | Nút danh sách GR + chỉ tạo phiên khi bấm + sửa lỗi tồn + hiệu năng; `docs/dev/BATCH-v0.2.0.md`; **chờ PM audit G1 / G2 + G0 trang thật; chưa cài** |
 
 - Bản giải nén để cài: `C:\circa-gr-nextwaves-v0.1.x` (đối chiếu từng file với `src/` của commit).
 - ZIP: `dist/` (không vào git).
@@ -89,6 +95,10 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
   - `FULL-KET-QUA-GR03880-20261026.md` (lần 1: W1 5 PUT khớp kế hoạch #E33C777A; POS thêm mã QR khi HOÀN THÀNH)
   - Công cụ đọc Net Capture (không đọc header / token): mẫu script `cap-list.py`, `w1-check.py`, `full-samples.py` nằm ở scratchpad session dev; dựng lại nếu cần. Nguyên tắc: chỉ đọc `meta.json` (url / method / status / startedAt) + body; không mở `tokens.json` / `cookies.json` / `storage.json` / HAR
   - `T3-KET-QUA-PO28237814-20261025.md` (T3 thật: mẫu, P2.1 trên dữ liệu thật, kế hoạch #60070071 khớp khung thật, O1–O3 cho PM)
+  - `FIX-UI-v0.1.6.md` (khung tránh nút trang)
+  - `PLAN-v0.2-RFID-BUTTON-PROD.md` (kế hoạch v0.2 + Spec Đợt 1 rev 1 / rev 2)
+  - `BATCH-v0.2.0.md` (spec hiệu lực, diff, test, đột biến, Edge, hiệu năng, G0 còn thiếu, cài đặt)
+- **PM (v0.1.6 / v0.2):** `AUDIT-T3-W1-FULL-STG`, `REVIEW-UI-v0.1.6-PRELIM`, `AUDIT-UI-v0.1.6-SOURCE-PACK`, `REVIEW-PLAN-v0.2-RFID-BUTTON-PROD`, `REVIEW-PLAN-v0.2-REV1`, `CORRECTION-G0-v0.2` (tất cả trong `docs/pm/`, hậu tố ngày 20261026).
 - **Logic gốc:** `docs/dev/LOGIC-v0.3.md`.
 
 ## 6. Kiểm thử và công cụ (chạy trên nhánh batch)
@@ -98,6 +108,7 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 | `npm test` | **100 test trên `main`** (nhánh `batch/v0.1.6-ui`: 106, thêm `panel.test.js` 6) (`node --test --test-timeout=60000`): env-keys 7, hooks 5, manifest 3, models 15, plan-apply 19, resolve 8, runtime 29, t1-real 2 (response T1 thật), t3-real 5 (lượt nhận thật 25/10), full-real 7 (lượt trọn luồng GR03880 26/10: tra QR, 5 PUT, HOÀN THÀNH, storage — toàn bộ phía POS là dữ liệu thật). Chạy ~10 s. Cặp GR03878 còn dựng lại 10/12 kết quả tra QR POS |
 | `python -I scripts/mutate-v0.1.5.py [từ_ca]` | 60 đột biến (nhánh v0.1.6: `mutate-v0.1.6.py` 65 ca = 60 + 5 ca khung), chép sang thư mục tạm, ~45 phút. **Chạy một mình**: không chạy stress / test khác đè lên. Ca "bị bắt vì hết giờ 240 s" **không phải bằng chứng**, phải tìm nguyên nhân treo |
 | `node scripts/edge-check.js <thư mục cài>` | Edge / Chrome **thật** (hồ sơ tạm, không đăng nhập). Kiểm 2 world trên Nextwaves; đường POS GR03878 với CDP Fetch trả `samples/`; phiên; tab Nextwaves; không token. v0.1.5: 9/9. Nhánh v0.1.6: thêm 3 mục bố cục (trang POS giả có nút HOÀN THÀNH góc dưới phải) → 12 mục; v0.1.6 12/12, v0.1.5 2/12 |
+| **Nhánh `batch/v0.2-rfid`** | `npm test` **131** (thêm `v02.test.js` 19 ca: danh sách, R1, R2, S3, S4, hết giờ GET). `python -I scripts/mutate-v0.2.0.py` **93 ca**. `node scripts/edge-check.js` **16 mục** (trang danh sách giả 20 dòng, bão 300 thay đổi DOM, CPU quy cho extension qua CDP Profiler, trang bán hàng). Bẫy: R2 phải huỷ **trước** hạn hết giờ GET 2 s của trình duyệt giả, nếu không hết giờ che mất ca thiếu kiểm |
 | `node scripts/edge-upgrade-check.js <bản cũ> <bản mới>` | Nâng cấp giữ cùng extension ID (P2.4) trên Edge thật |
 | `python -I scripts/pack.py` | `src/` → `dist/*.zip` + SHA-256 (8 ký tự đầu = mã gói); tái lập được từ checkout sạch |
 
@@ -129,6 +140,14 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 
 ## 8. Trạng thái và việc tiếp theo
 
+0. **Hiện hành (27/10):**
+   - v0.2.0 (gói `096D97D9`, nhánh `batch/v0.2-rfid`, giải nén `C:\circa-gr-nextwaves-v0.2.0`) đã giao PM audit theo `docs/dev/BATCH-v0.2.0.md`. **Chưa cài**, chưa nhận / ghi staging bằng v0.2.
+   - **G0 còn thiếu** (chốt tích hợp / merge / cài):
+     - 5 ảnh UI v0.1.6 chỉ đọc (3 POS, 2 Nextwaves);
+     - Copy response danh sách GR;
+     - outerHTML một dòng danh sách và vùng nút HOÀN THÀNH / Hủy.
+     Nếu DOM thật khác giả định thì sửa `rowCode` / `slotOf` trong `gr-list.js`, ra gói mới.
+   - **Đợt 2** (spec riêng): O1, mã QR POS thêm sau HOÀN THÀNH, xung đột reader trên máy Florita, PRD Florita chỉ đọc → W1-PRD.
 1. **T1 lần 2 (25/10) đã chạy với v0.1.5, dev đánh giá đạt:** `docs/dev/T1-KET-QUA-v0.1.5-20261025.md`.
    - Response thật lưu ở `samples/*-T1-20261025.json`, test `tests/t1-real.test.js` (nhánh `0b9aeb3`).
    - Ảnh popup bước 3.8 đã gửi bổ sung. **PM đóng gate T1** (`docs/pm/AUDIT-T1-LIVE-v0.1.5-STG-20261025.md`, state lần 20).
