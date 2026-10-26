@@ -34,4 +34,25 @@ Response thật do operator lấy ("Copy response" hoặc cURL đã bỏ token),
 | `nw-stg-po-PO28237814-T3-sau-20261025.json` | STG | `GET /api/v1/purchase-orders/<poId>` | **T3**, 23:46:05 (extension đọc sau 200): RECEIVED, biên nhận `GRN96438872` `7bec38d2…` cùng kho, `receivedUnits` 12. sha256 `92a87c8b…` |
 | `nw-stg-shipment-34e67fb9-T3-sau-20261025.json` | STG | `GET /api/v1/inter-tenant-shipments/<shipmentId>` | **T3**, 23:46:05 (extension đọc sau 200): `status received`, `receivedEpcs` = `epcs` từng dòng; timeline accepted → received cùng lượt. sha256 `61a70928…` |
 
+**FULL-STG lượt 1 (26/10 12:08–12:33, v0.1.5): GR03880 / PO00006754 / SO 1593849 ↔ Nextwaves PO76458756 (`900e9a9d…`, refId SOBD1593849-1056738).**
+Nguồn:
+- Net Capture tab POS: `net-capture-2026-10-26T05-14-40.zip` (điền phiếu), `…05-34-40.zip` (HOÀN THÀNH).
+- Net Capture tab Nextwaves: `…05-38-39.zip`.
+- chrome.storage của extension.
+
+Chỉ lấy body, kèm url / status / giờ. Tên nhân viên đã thay. Hash = 8 ký tự đầu sha256 của file trong repo.
+
+| File | Môi trường | Nguồn API | Ghi chú |
+|---|---|---|---|
+| `pos-stg-gr-GR03880-truoc-20261026.json` | STG | `GET /backend/v1/order/goods-receipt/<id>` | 12:08:45, WAITING_TO_RECEIVE, 3 dòng / 5 chi tiết theo lô, chưa có mã. `a6ca5560` |
+| `pos-stg-po-PO00006754-SOBD1593849-20261026.json` | STG | `GET /backend/v1/pos/<posId>/po/<poId>` | `sale_order_number` 1593849, `thuocsi_delivery_code` SOBD1593849-F. `68c64532` |
+| `pos-stg-gr-search-so-1593849-20261026.json` | STG | `GET …/goods-receipt/search?query=so_thuocsi=1593849,…` | total 1 / page 1 / limit 1000, chỉ GR03880. `d101a2f9` |
+| `pos-stg-qrcode-GR03880-11uid-20261026.json` | STG | `GET <POS>/thuocsi-warehouse/qrcode?code=<UID>` | **Tra QR thật 11/11 UID** (vòng đầu, 12:10:02): productId / lot / hạn. `a445b763` |
+| `pos-stg-gr-W1-GR03880-20261026.json` | STG | `GET` GR + `PUT …/item/<i>/detail/<d>` | **Lượt điền thật** 12:11:13–17: 10 GET + 5 PUT 200 theo đúng thứ tự, PUT kèm body gửi. `4f93657a` |
+| `pos-stg-gr-GR03880-W1-sau-20261026.json` | STG | `GET …/goods-receipt/<id>` | Sau khi điền: RECEIVING, 5 chi tiết nhận 1, 11 mã. `b3c8997f` |
+| `pos-stg-gr-status-COMPLETED-GR03880-20261026.json` | STG | `PUT …/goods-receipt/<id>/status/COMPLETED` | HOÀN THÀNH (POS gửi lúc 12:33:26): không body, 200, response rỗng. `b7c5f0f2` |
+| `pos-stg-gr-GR03880-completed-20261026.json` | STG | `GET …/goods-receipt/<id>` | Sau HOÀN THÀNH: COMPLETED. **Mỗi chi tiết thêm đúng `received_quantity` mã QR mới** (không phải UID Nextwaves, không trùng). `788928be` |
+| `nw-stg-receiving-search-q-SOBD1593849-sau-20261026.json` | STG | `GET /api/v1/inter-tenant-orders/receiving?…q=SOBD1593849` | Sau khi nhận: total 0. `020c5dee` |
+| `ext-stg-storage-GR03878-GR03880-20261026.json` | STG | `chrome.storage.local` (operator export) | Phiên GR03878 (25/10, kế hoạch #60070071, 6 apply_done) + GR03880 (#E33C777A, 5 apply_done, gr_completed); có `units` extension đã dùng. Không có token. `1518fc53` |
+
 PO staging PO00006745 (của GR03877) chỉ ghi tóm tắt trong `state.md` §2.1, không có file.

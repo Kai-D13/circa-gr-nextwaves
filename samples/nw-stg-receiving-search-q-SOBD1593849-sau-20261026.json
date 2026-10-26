@@ -1,0 +1,12 @@
+[
+  {
+    "capturedAt": "2026-10-26T05:38:13.753Z",
+    "method": "GET",
+    "url": "https://api-circa-stg.nextwaves.app/api/v1/inter-tenant-orders/receiving?pageSize=50&q=SOBD1593849",
+    "status": 200,
+    "response": {
+      "items": [],
+      "total": 0
+    }
+  }
+]
