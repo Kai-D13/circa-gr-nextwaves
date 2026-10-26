@@ -206,7 +206,8 @@ for (const [name, change, title] of R2_CASES) {
       pos.grListCtrl.onSelect(r, GR_ID, "GR03878", "start");
       await until(() => calls(srv, /goods-receipt\/2de6c0ec/) === 1);
       change(pos, r);
-      if (title) await until(() => pos.view && pos.view.title === title); // huỷ ngay, GET GR vẫn đang treo
+      // Huỷ ngay khi GET GR vẫn đang treo — trước hạn hết giờ của GET (2 s trong trình duyệt giả).
+      if (title) await until(() => pos.view && pos.view.title === title, 1500);
       else await settle(30);
       release();
       await settle(120);
@@ -218,6 +219,39 @@ for (const [name, change, title] of R2_CASES) {
     }
   });
 }
+
+// URL đổi mà hook KHÔNG báo route (dự phòng chỉ dò mỗi 3 s): không có huỷ chủ động → phải dừng nhờ kiểm sau từng await.
+test("R2: URL đổi mà hook không báo — khi đang đọc GR → dừng trước GET PO; khi đang tìm theo SO → không tạo phiên", async () => {
+  for (const kind of ["gr", "search"]) {
+    const { b, srv, pos } = await openList();
+    try {
+      const release = hold(srv.st, kind);
+      pos.grListCtrl.onSelect({ code: "GR03878" }, GR_ID, "GR03878", "start");
+      await until(() => calls(srv, kind === "gr" ? /goods-receipt\/2de6c0ec/ : /goods-receipt\/search/) === 1);
+      pos.url = `${LIST_URL}?page=3`; // không post "route"
+      release();
+      await settle(150);
+      assert.equal(b.session(KEY), null, kind);
+      assert.equal(nwTabs(b).length, 0, kind);
+      if (kind === "gr") assert.equal(calls(srv, /\/po\//), 0, "dừng ngay sau GET GR");
+    } finally {
+      b.close();
+    }
+  }
+});
+
+test("GET GR hết giờ (mạng) → báo lỗi mạng, KHÔNG báo nhầm 'Danh sách đã đổi'; không tạo phiên", async () => {
+  const { b, srv, pos } = await openList();
+  try {
+    hold(srv.st, "gr"); // treo quá hạn hết giờ GET (2 s trong trình duyệt giả)
+    pos.grListCtrl.onSelect({ code: "GR03878" }, GR_ID, "GR03878", "start");
+    await until(() => pos.view && /chưa mở được Nextwaves/.test(pos.view.title), 3500);
+    assert.match(pos.view.lines.join("\n"), /Hết giờ \/ mất kết nối/);
+    assert.equal(b.session(KEY), null);
+  } finally {
+    b.close();
+  }
+});
 
 test("R2: danh sách đổi ngay trước session:start (đang tìm GR theo SO) → huỷ; bấm lại sau khi ổn định → chạy bình thường", async () => {
   const { b, srv, pos } = await openList();

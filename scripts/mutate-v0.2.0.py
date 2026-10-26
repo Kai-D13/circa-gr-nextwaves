@@ -128,6 +128,7 @@ muts = [
     ("src/pos/pos-content.js", "    if (click && click.kind === \"list\" && p.reqSeq > click.reqSeq) cancelClick(LIST_CHANGED);", "", "R2 không huỷ ngay khi có request danh sách mới"),
     ("src/pos/pos-content.js", "      onDomChanged: () => {\n        if (click && click.kind === \"list\" && !stillValid(click)) cancelClick(LIST_CHANGED);", "      onDomChanged: () => {", "R2 không huỷ ngay khi DOM dòng đổi"),
     ("src/pos/pos-content.js", '    cancelClick("Đã rời trang — huỷ lượt chuẩn bị");', "", "R2 không huỷ ngay khi đổi route"),
+    ("src/pos/pos-content.js", '      if (err && err.name === "AbortError") return fail(', '      if (err && err.name === "AbortError") return { status: "cancelled", message: LIST_CHANGED }; (', "R2 GET hết giờ báo nhầm là danh sách đổi"),
     ("src/pos/pos-content.js", "      if (code && gr.code !== code) return { status: \"cancelled\", message: LIST_CHANGED };", "", "S1 GR đọc lại khác mã dòng vẫn tạo phiên"),
     ("src/pos/pos-content.js", "      if (!P.isReceivable(gr)) return fail(", "      if (false) return fail(", "S1 GR đã HOÀN THÀNH vẫn tạo phiên"),
     # v0.2 — S3 header cửa hàng

@@ -182,11 +182,14 @@ test("pos-hook v0.2: A gửi → B gửi → B về → A về: response A mang 
   assert.notEqual(res[0].queryKey, res[1].queryKey, "trang khác → khoá khác");
   sendList(h).finish(500, "{}");
   sendList(h).finish(200, "không phải json");
-  const big = H.sample("pos-stg-gr-search-so-1593858.json");
-  big.data.goods_receipts = Array.from({ length: 201 }, () => big.data.goods_receipts[0]);
-  sendList(h).finish(200, JSON.stringify(big));
+  // 201 dòng nhỏ (dưới 2 MB) → vượt giới hạn số dòng; 200 dòng → vẫn nhận.
+  const mini = (n) => JSON.stringify({ data: { goods_receipts: Array.from({ length: n }, (_, i) => ({ id: GR_ID, code: `GR${i}`, status: "WAITING_TO_RECEIVE" })), total: n, page: 1, limit: n } });
+  sendList(h).finish(200, mini(200));
+  assert.equal(typed(h, "gr-list").pop().ok, true, "200 dòng vẫn nhận");
+  sendList(h).finish(200, mini(201));
   sendList(h).finish(200, "x".repeat(2 * 1024 * 1024 + 1));
-  assert.deepEqual(typed(h, "gr-list").slice(2).map((r) => r.ok), [false, false, false, false]);
+  // 500 · không phải JSON · 200 dòng · 201 dòng · > 2 MB
+  assert.deepEqual(typed(h, "gr-list").slice(2).map((r) => r.ok), [false, false, true, false, false]);
 });
 
 test("pos-hook v0.2: không bắt danh sách ngoài trang danh sách / tìm theo SO / API khác; fetch cũng bắt (clone)", async () => {

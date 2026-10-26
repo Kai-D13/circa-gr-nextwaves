@@ -271,7 +271,9 @@
       if (!s) return fail(`${gr.code}: không đọc lại được phiên vừa tạo.`);
       return { status: "started", session: s, gr };
     } catch (err) {
-      if (err === CANCELLED || (err && err.name === "AbortError") || (tok && tok.cancelled)) return { status: "cancelled", message: (tok && tok.reason) || LIST_CHANGED };
+      // Chỉ cú bấm bị huỷ thật mới là "danh sách đã đổi"; GET hết giờ / mất kết nối là lỗi mạng (không báo nhầm cho dược sĩ).
+      if (err === CANCELLED || (tok && tok.cancelled)) return { status: "cancelled", message: (tok && tok.reason) || LIST_CHANGED };
+      if (err && err.name === "AbortError") return fail("Hết giờ / mất kết nối khi đọc dữ liệu POS — thử lại.");
       return fail(String((err && err.message) || err));
     }
   }
