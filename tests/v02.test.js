@@ -221,16 +221,18 @@ for (const [name, change, title] of R2_CASES) {
 }
 
 // URL đổi mà hook KHÔNG báo route (dự phòng chỉ dò mỗi 3 s): không có huỷ chủ động → phải dừng nhờ kiểm sau từng await.
-test("R2: URL đổi mà hook không báo — khi đang đọc GR → dừng trước GET PO; khi đang tìm theo SO → không tạo phiên", async () => {
-  for (const kind of ["gr", "search"]) {
-    const { b, srv, pos } = await openList();
+test("R2: URL đổi mà hook không báo — khi đang đọc GR → dừng ngay sau GET GR; khi đang tìm theo SO → không tạo phiên", async () => {
+  // GR trả về đã HOÀN THÀNH: kiểm ngay sau GET GR → "Danh sách đã đổi"; thiếu kiểm đó thì lộ lỗi trạng thái phiếu của một cú bấm đã hết hiệu lực.
+  for (const [kind, server] of [["gr", { grStatus: "COMPLETED" }], ["search", {}]]) {
+    const { b, srv, pos } = await openList({ server });
     try {
       const release = hold(srv.st, kind);
       pos.grListCtrl.onSelect({ code: "GR03878" }, GR_ID, "GR03878", "start");
       await until(() => calls(srv, kind === "gr" ? /goods-receipt\/2de6c0ec/ : /goods-receipt\/search/) === 1);
       pos.url = `${LIST_URL}?page=3`; // không post "route"
       release();
-      await settle(150);
+      await until(() => pos.view && /Danh sách đã đổi — bấm lại|chưa mở được Nextwaves/.test(pos.view.title));
+      assert.match(pos.view.title, /Danh sách đã đổi — bấm lại/, kind);
       assert.equal(b.session(KEY), null, kind);
       assert.equal(nwTabs(b).length, 0, kind);
       if (kind === "gr") assert.equal(calls(srv, /\/po\//), 0, "dừng ngay sau GET GR");
