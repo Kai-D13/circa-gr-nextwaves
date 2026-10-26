@@ -11,6 +11,11 @@ Lượt 25/10 23:46 trên PO28237814 đã có T3 thật (Net Capture tab Nextwav
 Làm **từng PO một**. Giữ PO thứ hai để chạy lại sau khi dev / PM xem kết quả PO thứ nhất.
 Thứ tự gate PM (T3 được duyệt rồi mới W1) được operator gộp vào một lượt trên staging. Dev ghi rõ điều này trong báo cáo.
 
+> **Làm ngay, trước 23:00 ngày 26/10 (kể cả khi chưa chạy lượt mới):** bước 12, export `chrome.storage` → `extension-storage.json`.
+> - Extension tự xoá phiên quá 24 giờ không cập nhật, kèm nhật ký của phiên.
+> - Phiên GR03878 (điền khoảng 23:49 ngày 25/10) là bằng chứng duy nhất còn lại của lượt điền đó, vì không có traffic POS.
+> - Thao tác này chỉ đọc. Không bấm gì trong popup.
+
 ## 0. Điều kiện
 
 - SO mới giao **cửa hàng 2222** (POS staging) và có đơn Nextwaves `circa-stg` cùng SO, kho **CIRCA FLORITA**. Nếu khác, extension sẽ chặn và báo lý do. Khi đó dừng và gửi ảnh.

@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **25/10/2026 (lần 20, PM audit T1 live v0.1.5)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`; `0b9aeb3` thêm mẫu + test); T1 chỉ đọc đạt gate trên phiên thật; K1 còn chặn T3 thành công; chưa qua gate W1 / merge mã ghi**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **26/10/2026 (lần 22, dev lưu mẫu T3 thật)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`; `0b9aeb3` mẫu T1, `afd98d5` mẫu T3 + test); T1 đạt gate; T3 có lượt 200 thật trên PO28237814 (K1 đã sửa), chờ PM audit; W1 chưa có bằng chứng phía POS; chưa merge mã ghi**. Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -85,6 +85,18 @@ Cập nhật: **25/10/2026 (lần 20, PM audit T1 live v0.1.5)**. Giai đoạn: 
   - **Không có traffic PUT phía POS** (Net Capture chỉ ghi tab Nextwaves, dừng 23:46:44), nên W1 trên GR03878 chưa đủ bằng chứng.
   - Operator chọn chạy trọn luồng trên SO staging khác (còn 2 PO) theo `docs/dev/FULL-STG-HUONG-DAN.md`.
   - Mẫu T3 thật chưa lưu vào `samples/`; dev sẽ gộp cùng lượt mới.
+- **Lần 22 (26/10, dev lưu mẫu T3, chưa có lượt mới):** báo cáo `docs/dev/T3-KET-QUA-PO28237814-20261025.md`, chờ PM audit.
+  - Nhánh `afd98d5`, không đổi `src/`:
+    - 7 mẫu Nextwaves thật (PO / `/receiving` trước – sau, `receive-scan` 200, phiếu gửi sau, tìm theo SO sau);
+    - `tests/helpers.js` dùng mẫu thật thay phần dựng lại;
+    - +6 test → 93/93; đột biến 60/60 bị bắt (`mutate-v0.1.5.py` chạy một mình, không ca nào do hết giờ).
+  - Bản dựng lại cũ trùng hoàn toàn dữ liệu thật qua parser. **Mã kế hoạch tính lại = #60070071 = khung POS thật**, tức cách phân bổ 12 UID / 6 lô khớp, gồm cả UID Soffell giả định.
+  - Trong lượt đó extension chỉ gọi 3 GET Nextwaves. `integrations/circa/hub-orders` (404) là của web Nextwaves.
+  - **Sự thật mới:** sau khi nhận, tìm theo SO trả `total 0` và `/receiving` có `shipments []`.
+    - Phiên mất giữa "Nextwaves đã nhận" và "POS đã điền" → mở lại GR báo "Không có đơn Nextwaves khớp", không điền được (O1, fail closed).
+    - Phiên mất ở đây là: huỷ / xoá phiên, nâng cấp extension, hoặc quá 24 giờ không cập nhật.
+  - **Gấp:** nhật ký nằm trong phiên, và phiên quá 24 giờ không cập nhật bị xoá. Phiên GR03878 (điền khoảng 23:49 ngày 25/10) mất từ khoảng 23:49 ngày 26/10.
+    - Operator cần làm bước 12 (export storage) trước 23:00 ngày 26/10. Đã ghi đầu `FULL-STG-HUONG-DAN.md`.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -460,7 +472,12 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-21. **Hiện hành (sau PM audit T1 live, 25/10):**
+22. **Hiện hành (26/10, sau lần 22):**
+    - **Operator — gấp, trước 23:00 ngày 26/10:** export `chrome.storage` (bước 12 của `docs/dev/FULL-STG-HUONG-DAN.md`) để giữ nhật ký phiên GR03878 trước khi bị xoá.
+    - **PM:** audit `docs/dev/T3-KET-QUA-PO28237814-20261025.md` và nhánh `afd98d5` (mẫu T3, test, không đổi runtime); quyết O1 (chỉ hướng dẫn, hay cần khôi phục phiên sau khi đã nhận).
+    - **Operator:** chạy trọn luồng trên SO mới theo `FULL-STG-HUONG-DAN.md` (Net Capture tab POS suốt lượt). Dev lấy bằng chứng W1 / HOÀN THÀNH và tra QR thật từ lượt đó.
+    - Merge mã ghi chỉ sau gate W1 và PM đồng ý.
+21. (cũ, thay bằng mục 22) **Hiện hành (sau PM audit T1 live, 25/10):**
     - **T1 đã đóng:** popup và hai response đã đối chiếu; không cần chạy lại cùng ca để lấy thêm bằng chứng T1.
     - **Operator chọn SO hiện tại:** nếu muốn thử nhánh lỗi K1 trên PO28237814, cho phép riêng một lượt bấm "Xác nhận nhận hàng" ở Nextwaves; ghi trạng thái shipment/`/receiving` trước và sau, response, khung và GR. Nextwaves có thể chấp nhận phiếu gửi trước khi báo lỗi nhận, nên không tự thử lại. Không cấp phép điền POS; phản hồi 400 không đạt gate T3.
     - **K1 → T3 thành công:** ưu tiên Nextwaves/Buymed sửa đơn hiện tại; nếu không được, tạo SO staging khác cùng cửa hàng 2222 rồi chạy T1 cho cặp mới. T3 cần response 2xx `receive-scan`, GET PO, shipment và `/receiving` sau nhận để PM audit.
