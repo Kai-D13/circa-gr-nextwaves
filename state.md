@@ -145,6 +145,16 @@ Cập nhật: **26/10/2026 (lần 29, PM review kế hoạch v0.2)**. Giai đo�
     - PRD Florita (allowlist, `writeEnabled` false) → T1-PRD chỉ đọc → gate W1-PRD.
 
 - **Lần 29 (26/10, PM duyệt hướng v0.2 và gate):** `docs/pm/REVIEW-PLAN-v0.2-RFID-BUTTON-PROD-20261026.md`. PM kiểm source v0.1.5/v0.1.6 và commit `650c24a`: chưa có runtime/test/ZIP v0.2. Duyệt hướng bấm nút trên danh sách mới tạo phiên, POS ở danh sách đến khi Nextwaves nhận xong rồi về GR; phiên đã tồn tại vẫn tự tiếp tục. Đợt 0 chỉ đọc được làm; Đợt 1 theo spec PM sau ảnh UI v0.1.6 thật và response/outerHTML danh sách đã làm sạch. P1: `gr_list` phải có nhánh riêng, dữ liệu dòng chỉ gợi ý UI và GET GR/PO phải xác minh lại, không ghép header cửa hàng qua phiên khác, huỷ lượt chuẩn bị khi đổi trang, giới hạn `returnUrl`. P2: cache/refresh, hiệu năng, panel tránh nút, nâng cấp giữ ID có gate riêng. O1/production Florita cần spec/gate riêng; chưa duyệt ghi production hoặc E2E ghi staging mới.
+- **Lần 30 (26/10, dev cập nhật kế hoạch theo review PM):** `docs/dev/PLAN-v0.2-RFID-BUTTON-PROD.md` thêm **"Spec Đợt 1 — rev 1"** (S1–S8).
+  - S1: dòng danh sách chỉ là gợi ý; khi bấm đọc lại GR / PO và kiểm đủ trước `session:start`.
+  - S2: nhánh `gr_list` riêng, một bộ điều khiển; không tự tạo phiên; phiên cũ tiếp tục; không tạo trùng.
+  - S3: header cửa hàng đã xác nhận / chưa xác nhận.
+  - S4: Abort + kiểm sau mỗi `await`; background tự dựng `returnUrl`.
+  - S5: hợp đồng response danh sách + nút.
+  - S6: cache QR theo `nwResult.at` + lọc refresh.
+  - S7: giữ panel v0.1.6 tới khi có DOM thật; đo hiệu năng so baseline.
+  - S8: hướng dẫn nâng cấp.
+  - Kèm danh sách test G1. **Chưa code, chờ G0.**
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 

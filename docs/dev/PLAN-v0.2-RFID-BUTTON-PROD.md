@@ -1,7 +1,16 @@
 # Kế hoạch v0.2 — nút "Nhận hàng bằng RFID" trên POS, sửa lỗi tồn, sẵn sàng production (Florita)
 
-**Trạng thái:** đề xuất của dev-team ngày 26/10/2026. Operator đã đồng ý hướng; **chờ PM (Codex) duyệt spec** trước khi code Đợt 1.
-Căn cứ: yêu cầu operator 26/10, mã tham khảo extension Nextwaves `circa-rfid` (chỉ đọc, không chạy), audit mã hiện tại, response danh sách GR thật trong Net Capture 26/10 12:08.
+**Trạng thái:**
+- Đề xuất của dev-team ngày 26/10/2026, operator đồng ý hướng.
+- **PM duyệt hướng** (`docs/pm/REVIEW-PLAN-v0.2-RFID-BUTTON-PROD-20261026.md`, gate G0–G4).
+- **Đợt 1 chỉ code khi G0 đạt.**
+- **Phần "Spec Đợt 1 — rev 1" ở cuối file thay mọi chỗ mâu thuẫn trong §Đợt 1 bên dưới.**
+
+Căn cứ:
+- yêu cầu operator 26/10;
+- mã tham khảo extension Nextwaves `circa-rfid` (chỉ đọc, không chạy);
+- audit mã hiện tại;
+- response danh sách GR thật trong Net Capture 26/10 12:08.
 
 ## Context
 
@@ -164,3 +173,162 @@ Nhánh `batch/v0.2-rfid` tách từ `main` sau khi v0.1.6 merge (hoặc gộp v0
    - có extension Nextwaves `circa-rfid` (tự kết nối reader) / circa-qr-scan-log không;
    - xác nhận `pos_id` `c476efb2…`, tenant `circa`, kho `eb5e2b4f…`;
    - một GR SO thật ở Florita để làm T1-PRD.
+5. (PM G0) `Copy response` danh sách GR mà trang danh sách tự gọi: `goods-receipt/search?query=pos_id=…`. Giữ `total / page / limit`; dev sẽ bỏ tên người trước khi lưu mẫu.
+
+---
+
+## Spec Đợt 1 — rev 1 theo review PM (26/10)
+
+Trả lời từng finding P1 / P2 của PM. **Chưa code. Bắt đầu khi G0 đạt.** Nếu DOM / response thật khác giả định dưới đây, dev báo PM sửa spec trước khi code phần đó.
+
+### S1. Dòng danh sách chỉ là gợi ý hiển thị (P1.1)
+
+**Dữ liệu dòng**
+- Bảng `rowsBySeq`, nhận từ hook, mỗi response danh sách là một lượt `seq` tăng dần.
+- Lượt mới (trang / bộ lọc / trang số khác) **thay toàn bộ** bảng cũ.
+- Response đến muộn (`seq` cũ hơn lượt đang hiện) bị bỏ.
+
+**Ghép nút vào dòng**
+- Dòng trong DOM có ô lá chữ `/^GR\d{5,}$/` **và** mã đó có trong lượt hiện tại.
+- Không khớp thì không có nút. Không đoán theo thứ tự dòng.
+
+**Khi bấm**, `startFromGr(grId, codeOnRow, clickToken)` làm lần lượt:
+1. `GET GR` theo `id`. Kiểm `code` = mã trên dòng (khác thì dừng: "Danh sách đã đổi — bấm lại").
+2. Kiểm trạng thái nhận được (`isReceivable`) và `pos_info.id` = cửa hàng của header đã xác nhận (S3).
+3. `GET PO`, rồi `resolveDelivery`: cửa hàng PO = GR = phiên; có mã giao SO thuocsi.
+4. Kho: `warehouseForStore`.
+5. `searchGrsOfSo` + `checkSoGrs` + `soWriteLock`: duy nhất SO / GR, kèm khoá ghi hiện có.
+6. Chỉ khi tất cả đạt mới `session:start`.
+
+Session chỉ nhận dữ liệu từ GR / PO **vừa đọc**, không lấy `id` / `code` từ `postMessage` hay DOM.
+
+**Nhãn nút**
+- Nhãn luôn là "Nhận hàng bằng RFID" (trung tính), hiện ở GR chờ / đang nhận.
+- Sau khi bấm, nếu không có SO thì báo "Phiếu này không đi từ SO thuocsi — không nhận bằng RFID được". Ghi nhớ trong tab để ẩn nút dòng đó.
+
+### S2. Hai lối vào, một bộ điều khiển (P1.2)
+
+**Phân nhánh trang**
+- `env.js` (hai bản giống từng byte): `classifyPosPage` trả thêm `{kind: "gr_list"}`.
+- `evaluate()` có nhánh **riêng** `gr_list` → `evaluateGrList()`. Không rơi xuống `evaluateSo()`. Test cố định điều này.
+
+**Bộ điều khiển duy nhất (`pos-content.js`)**
+- `gr-list.js` chỉ lo DOM / sự kiện: tìm dòng, chèn / gỡ nút, bắt click / phím.
+- `gr-list.js` nạp trước `pos-content.js` và khai `C.grList = { attach(controller) }`.
+- Trước khi `attach`, nó **không vẽ nút** (không có hàng đợi click mồ côi).
+- `pos-content.js` gọi `C.grList.attach({ rowsFor, onSelect, rowState })` một lần khi khởi động.
+
+**Không tự tạo phiên**
+- Mở GR / SO **không tự tạo phiên, không mở Nextwaves**.
+- Trang phiếu hiện nút "Nhận hàng bằng RFID" (dùng lại nhánh nút hiện có). Trang SO hiện nút mỗi GR như hiện tại, nhưng bỏ tự chạy khi chỉ có một GR.
+
+**Phiên đã có thì tiếp tục như hiện hành**
+- Áp cho mọi trạng thái `waiting_nw` / `nw_ready` / `received` / `applying` / `applied` / `apply_stopped`: `renderSession`, lập kế hoạch khi `received`.
+- Trên danh sách, dòng có phiên hiện trạng thái thay vì nút tạo: "Đang chờ nhận trên Nextwaves" + "Mở Nextwaves"; "Đã nhận — mở phiếu để điền" + "Mở phiếu".
+
+**Không tạo trùng**
+- Mỗi `grId` có một lượt chuẩn bị (single-flight); nút bị khoá trong lúc chạy.
+- Hai tab / tải lại / quay lại danh sách: background `startSession` đã trả phiên active sẵn, không mở tab thứ hai (`src/background.js:225`). Test thêm hai tab bấm cùng lúc → một phiên, một tab Nextwaves.
+
+### S3. Header cửa hàng (P1.3)
+
+Mỗi request quan sát được trong `pos-content.js` xử lý theo bảng:
+
+| Request mới | Xử lý |
+|---|---|
+| Có đủ `authorization`, `x-client-id`, `x-store-id` | Thay bộ header, đánh dấu **đã xác nhận** |
+| Thiếu `x-store-id`, cùng host, `authorization` và `x-client-id` **trùng** bộ đã xác nhận | Giữ bộ cũ |
+| Thiếu `x-store-id`, token hoặc client khác | Bộ header **chưa xác nhận**. Mọi lượt chuẩn bị dừng với "Đang chờ POS xác nhận cửa hàng" tới khi có request đủ header |
+
+- `pos_id` trong query danh sách **không** dùng làm bằng chứng cửa hàng.
+- Trước `session:start` luôn so `pos_info.id` của GR và cửa hàng PO vừa đọc với cửa hàng của header đã xác nhận.
+
+### S4. Rời trang giữa lúc chuẩn bị + `returnUrl` (P1.4)
+
+**Trong `pos-content.js`**
+- Mỗi lượt bấm có `AbortController` + `clickToken`. Mọi GET chuẩn bị nhận `signal`.
+- Sau **mỗi** `await` và ngay trước `session:start`, kiểm lại: trang hiện tại (route), môi trường, cửa hàng đã xác nhận, `clickToken` còn hiệu lực.
+- Lệch thì dừng, không tạo phiên.
+- Nếu `session:start` đã gửi thì phiên vẫn còn (không xoá âm thầm). Danh sách / popup / trang phiếu hiện trạng thái phiên đó.
+
+**Trong `background.js`**
+- `session:start` **tự dựng** `returnUrl = <posOrigin của env>/danh-sach-phieu-nhan-hang/<grId>`.
+- Nếu message gửi `returnUrl` khác thì từ chối (`bad_return_url`). Không điều hướng theo URL lấy từ DOM / message.
+
+### S5. Hợp đồng response danh sách + nút (P2.5)
+
+**Hook (`pos-hook.js`, MAIN)**
+- Chỉ đọc response:
+  - method `GET`, status 2xx;
+  - URL = `<posApiBase của env>/v1/order/goods-receipt/search` với `query` có `pos_id=`.
+- Đọc body sau khi trang đã nhận response (không chặn POS):
+  - XHR: `responseText` lúc `loadend`;
+  - fetch: `res.clone()`.
+- Giới hạn: body ≤ 2 MB, ≤ 200 dòng. Vượt giới hạn hoặc sai dạng thì gửi `{seq, ok:false}`, và **không có nút** (fail closed).
+- Gửi qua `postMessage` (cùng origin, mark `cgn/pos-hook`, type `gr-list`) gói sau:
+  - `{seq, envId, page, limit, total, rows:[{id, code, status, poId, posId}]}`;
+  - không body thô, không header, không tên người.
+
+**Nút**
+- `<button type="button" class="cgn-rfid-btn" data-cgn-gr="<id>">`, dùng chuột và bàn phím được.
+- Chặn `mousedown` / `pointerdown` / `click` / `keydown` (Enter / Space) lan lên dòng hay form.
+- Đặt trong `div.flex` ô cuối của dòng (theo outerHTML thật ở G0). Không đụng `.circa-rfid-po-link`, chèn cạnh nút đó nếu có.
+- Không trùng: tối đa một nút `.cgn-rfid-btn` mỗi dòng; mã dòng đổi thì thay nút.
+
+### S6. Cache tra QR + lọc refresh (P2.6)
+
+**Cache**
+- Khoá cache: `sessionKey | nwResult.at | uid`.
+- Mất hiệu lực khi:
+  - `nwResult.at` đổi (dữ liệu nhận đổi);
+  - quá 10 phút;
+  - người dùng bấm "Tra lại".
+- Kết quả lỗi / HTTP lỗi không cache.
+
+**`planAndOffer`**
+- Single-flight theo `sessionKey`: lượt đang chạy thì gom các lần gọi tiếp thành **một** lượt chạy lại sau.
+- `runApply` không đổi: mỗi bước PUT vẫn GET GR mới, so ảnh chụp, và dùng **mã kế hoạch hiện tại** (`apply.js` giữ nguyên).
+
+**Lọc refresh**
+- **Grant:** chỉ refresh khi bản ghi grant của **đúng** `env:grCode` đang xem đổi (thêm / xoá / hết hạn).
+- **Phiên:** refresh khi `state`, `nwResult.at`, `applyError`, `scanOk` hoặc `retryNotBefore` của phiên đang xem đổi. Đổi `posTabId` / `lease` / `log` thì bỏ qua.
+- Test: không bỏ lỡ `received`, `apply_stopped`, grant vừa cấp.
+
+### S7. Panel / hiệu năng (P2.7)
+
+**Panel:** giữ nguyên cơ chế tránh nút v0.1.6 (quét `button`, `a`, `[role=button]`, `input`; mỗi 1 s; cả khi thu nhỏ) **cho tới khi** có ảnh / DOM thật. Chỉ tối ưu nếu số đo vượt ngân sách, và kèm số đo.
+
+**Không làm gì trên trang bán hàng / trang không liên quan**
+- Không panel, không observer, không GET.
+- Đổi URL theo sự kiện: hook vá `pushState` / `replaceState` + `popstate` → `postMessage`. Bộ đếm dự phòng 3 s.
+
+**Đo trên Edge với DOM thật làm mẫu**, so **cùng trang không cài extension**:
+1. Trang bán hàng giả: 0 GET, 0 observer, 0 panel của extension.
+2. Danh sách 20 dòng + bơm 300 thay đổi DOM: 0 GET mới khi chỉ xem; thời gian handler của ta (đo bằng `performance.now()` quanh handler, ghi vào biến chỉ đọc qua CDP).
+3. `PerformanceObserver('longtask')` có quy thuộc `attribution` cho script extension.
+
+Ngân sách: < 2 ms mỗi lượt handler, 0 long task > 50 ms quy cho extension. Vượt thì báo số đo + nguyên nhân + sửa trước G2.
+
+### S8. Nâng cấp / phiên (P2.8)
+
+Hướng dẫn cài trong bàn giao v0.2.0:
+1. Trước khi đổi thư mục hoặc nâng cấp: popup không còn phiên `received` / `applying` / `apply_stopped` dở; export `chrome.storage` làm bản lưu.
+2. Thư mục cố định chỉ giữ ID khi cập nhật **đúng extension đã cài từ chính đường dẫn đó**; không chuyển phiên từ ID cũ.
+3. Sau cập nhật, kiểm `chrome.runtime.id` (trang `chrome://extensions`) và `lastUpgrade` trong storage.
+4. Không thay file khi đang có lượt nhận / điền.
+
+O1 **không** coi là đã giải bằng việc giữ đường dẫn. O1 nằm trong spec Đợt 2 riêng.
+
+### Test G1 (bổ sung theo PM)
+
+- **Môi trường / cửa hàng:** STG / PRD / host lạ / cửa hàng khác.
+- **Response danh sách:** đến muộn; trang đổi dòng; thiếu trường; vượt giới hạn.
+- **Thao tác:** click / phím / double click / hai tab.
+- **Dữ liệu đổi:** GR / PO đổi sau khi đã hiện danh sách (`code`, trạng thái, cửa hàng, PO không SO).
+- **Không tự tạo phiên khi mở GR / SO; phiên cũ tiếp tục.**
+- **Rời trang:** route đổi sau từng `await` (từng bước 1–6 ở S1).
+- **Header:** thiếu `x-store-id` cùng token → giữ; khác token → dừng.
+- **Grant / QR:** grant đúng / khác GR; cache QR theo `nwResult.at`; tra lại.
+- **Nhật ký:** `scanAt` ISO, `at` log luôn ISO.
+- **Ghi:** một chặn → không PUT.
+- **Đột biến** cho từng rào mới. Chạy một mình, không tính ca hết giờ / neo lệch.
