@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **26/10/2026 (lần 24, PM audit T3/W1 staging)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`; `afd98d5` mẫu T3, `25082b2` mẫu W1/HOÀN THÀNH, `7eadfe3` sửa test, `fa66de6` request T3 từ HAR); T1, T3 và W1 staging đã qua gate PM; cho merge mã staging, production vẫn chỉ đọc; O1 và ý nghĩa mã QR thêm sau HOÀN THÀNH còn mở trước production**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **26/10/2026 (lần 25, PM review sơ bộ UI v0.1.6 và quy đổi)**. Giai đoạn: **`main` đã merge v0.1.5 tại `aa42dcc`; nhánh UI v0.1.6 ở `b4017d7`, đột biến/gói đang chờ; chưa qua gate phát hành UI. T3/W1 staging đã đạt, production chỉ đọc. Quy đổi lô vỉ → hộp giữ luật nguyên hộp và một chặn thì không ghi cả GR.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -111,6 +111,7 @@ Cập nhật: **26/10/2026 (lần 24, PM audit T3/W1 staging)**. Giai đoạn: *
   - Nhánh `25082b2`: 10 mẫu thật + `tests/full-real.test.js` (6). `7eadfe3` sửa test P1.3 chạy đua (3/15 → 0/25). `fa66de6`: request receive-scan từ HAR + 1 test. Không đổi `src/`; 100/100.
   - P3: tra QR lặp 3 vòng / lượt; `at` của `scan_ok` dạng số.
 - **Lần 24 (26/10, PM audit T3/W1):** `docs/pm/AUDIT-T3-W1-FULL-STG-20261026.md`. PM kiểm Net Capture gốc: `receive-scan` PO28237814 trùng fixture, 12/12 và biên nhận mới; 5 PUT GR03880 trùng request gốc, mỗi GET sau ghi đúng UID/lô, GR chuyển RECEIVING; POS `COMPLETED` 200 và GET sau là COMPLETED. HAR đã lọc của PO76458756 có request/status 200, thiếu body response. Chạy 100/100 test trên `fa66de6`, test P1.3 riêng 20/20 trên `7eadfe3`; `src/` không đổi. **T3 và W1 đạt gate staging, cho merge nhánh; production chỉ đọc.** GR03878 thiếu traffic POS riêng. O1 chấp nhận fail-closed ở staging, phải giải trước production hoặc stakeholder chấp nhận nhập tay. Sau HOÀN THÀNH có 5 mã QR mới khác UID Nextwaves, nguồn/ảnh hưởng kinh doanh chưa xác định; cần tra QR và chốt trước production. P3 đọc QR lặp/giờ log để sau.
+- **Lần 25 (26/10, merge + PM review UI sơ bộ):** Dev đã merge `fa66de6` vào `main` tại `aa42dcc`; PM kiểm parent merge và `src/` trên `main` trùng v0.1.5. Dev làm bản sửa khung v0.1.6 trên `batch/v0.1.6-ui` (`b4017d7`), báo 106/106 test 10 lượt, Edge POS giả 12/12 (v0.1.5 hỏng 2/12); 65 ca đột biến và gói còn đang chạy. PM review source trong `docs/pm/REVIEW-UI-v0.1.6-PRELIM-20261026.md`: chưa cho phát hành/cài, cần gói và kiểm nút trên POS/Nextwaves staging thật. Quy đổi vỉ → hộp: giữ chặn toàn GR nếu một lô lẻ, không làm tròn hoặc điền một phần trong batch UI; không mặc định nhập tay được 0,5 hộp.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -486,11 +487,12 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-24. **Hiện hành (sau PM audit T3/W1, 26/10):**
-    - **Dev:** có thể merge `batch/v0.1-staging` tại `fa66de6` vào `main` sau khi kiểm diff/test/bí mật; production vẫn chỉ đọc. Nếu runtime đổi, version/ZIP/SHA-256 mới và PM audit lại.
-    - **Operator/dev (chỉ đọc):** tra QR một mã POS thêm sau HOÀN THÀNH và một UID Nextwaves để xác định sản phẩm/đơn vị/lô; hỏi stakeholder ảnh hưởng tới tồn kho/bán hàng trước production.
-    - **O1:** staging dùng đường xử lý tay khi mất phiên sau nhận; production cần khôi phục an toàn hoặc quyết định chấp nhận nhập tay của stakeholder. PO staging còn lại chỉ dùng cho lượt thử có mục đích đã chốt, ghi cả tab Nextwaves.
-    - **P3:** tối ưu tra QR lặp và định dạng `scan_ok.at` ở batch sau; không chặn merge staging.
+25. **Hiện hành (sau PM review UI sơ bộ, 26/10):**
+    - **Dev:** hoàn tất đột biến 65 ca, gói/SHA-256/bản giải nén v0.1.6 và báo gate cuối; `main` đã merge v0.1.5. Chưa cài bản UI cho operator cho tới khi PM audit source/gói.
+    - **PM:** kiểm kết quả đột biến và gói; nếu đạt, cho một lượt xem UI **chỉ đọc** trên POS/Nextwaves staging thật để xác nhận khung không che nút.
+    - **Quy đổi:** v0.1.6 giữ all-or-nothing theo từng lô; lô lẻ không PUT, không làm tròn/điền một phần. Operator/Buymed/POS xác nhận cách sửa đơn vị/chứng từ nếu ca này xảy ra.
+    - **Trước production:** O1 và ý nghĩa mã QR POS thêm sau HOÀN THÀNH vẫn mở; tra QR chỉ đọc và quyết nghiệp vụ. PO staging còn lại giữ cho lượt thử đã chốt mục đích.
+24. (cũ, thay bằng mục 25) PM audit T3/W1 đã cho merge mã staging; O1, mã QR sau HOÀN THÀNH và P3 còn mở.
 23. (cũ, thay bằng mục 24) PM audit T3/W1, O1, mã QR sau HOÀN THÀNH, P3; giữ PO thứ hai để thử sau.
 22. (cũ, thay bằng mục 23) **Hiện hành (26/10, sau lần 22):**
     - **Operator — gấp, trước 23:00 ngày 26/10:** export `chrome.storage` (bước 12 của `docs/dev/FULL-STG-HUONG-DAN.md`) để giữ nhật ký phiên GR03878 trước khi bị xoá.
