@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **26/10/2026 (lần 23, chạy trọn luồng lần 1 GR03880)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`; `0b9aeb3` mẫu T1, `afd98d5` mẫu T3, `25082b2` mẫu chạy trọn luồng + test, `7eadfe3` sửa test chạy đua); T1 đạt gate; T3 + W1 + HOÀN THÀNH có lượt thật đạt theo dev trên GR03880, chờ PM audit; chưa merge mã ghi**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **26/10/2026 (lần 23, chạy trọn luồng lần 1 GR03880)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`; `0b9aeb3` mẫu T1, `afd98d5` mẫu T3, `25082b2` mẫu chạy trọn luồng + test, `7eadfe3` sửa test chạy đua, `fa66de6` request receive-scan từ HAR); T1 đạt gate; T3 + W1 + HOÀN THÀNH có lượt thật đạt theo dev trên GR03880, chờ PM audit; chưa merge mã ghi**. Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -100,7 +100,7 @@ Cập nhật: **26/10/2026 (lần 23, chạy trọn luồng lần 1 GR03880)**. 
 - **Lần 23 (26/10 12:08–12:33, chạy trọn luồng lần 1 — GR03880 / PO00006754 / SO 1593849 ↔ PO76458756):** báo cáo `docs/dev/FULL-KET-QUA-GR03880-20261026.md`.
   - Operator gộp T1 → T3 → W1 → HOÀN THÀNH trong một lượt staging.
   - Bằng chứng: Net Capture tab POS (điền + HOÀN THÀNH), export chrome.storage, Net Capture tab Nextwaves (chỉ có tìm theo SO sau nhận).
-  - **T1 đạt.** **T3 đạt theo nhật ký:** `receive_scan` 200, 11 EPC; không có traffic tab Nextwaves.
+  - **T1 đạt.** **T3 đạt:** `receive_scan` 200; HAR tab màn quét (request, không body) cho thấy 11 EPC gửi = dự kiến = đã nhận.
   - **Kế hoạch #E33C777A:** dev tính lại từ dữ liệu thật ra đúng mã đó.
   - **W1 đạt:** 5 PUT 200 khớp từng bước (thứ tự + body). GR → RECEIVING.
   - **HOÀN THÀNH đạt:** `status/COMPLETED` 200 → COMPLETED.
@@ -108,7 +108,7 @@ Cập nhật: **26/10/2026 (lần 23, chạy trọn luồng lần 1 GR03880)**. 
     - Extension chặn kế hoạch trên phiếu đó (`gr_has_foreign_codes`).
     - Không dùng mã QR của GR đã COMPLETED để đối chiếu UID.
   - **GR03878 (25/10):** nhật ký storage có 6 `apply_done` (#60070071) → `applied`.
-  - Nhánh `25082b2`: 10 mẫu thật + `tests/full-real.test.js` (6). `7eadfe3` sửa test P1.3 chạy đua (3/15 → 0/25). Không đổi `src/`; 99/99.
+  - Nhánh `25082b2`: 10 mẫu thật + `tests/full-real.test.js` (6). `7eadfe3` sửa test P1.3 chạy đua (3/15 → 0/25). `fa66de6`: request receive-scan từ HAR + 1 test. Không đổi `src/`; 100/100.
   - P3: tra QR lặp 3 vòng / lượt; `at` của `scan_ok` dạng số.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
@@ -486,7 +486,7 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
 23. **Hiện hành (26/10, sau lần 23):**
-    - **PM:** audit `docs/dev/FULL-KET-QUA-GR03880-20261026.md` + nhánh `25082b2` / `7eadfe3`, cùng báo cáo T3 (`afd98d5`). Chốt:
+    - **PM:** audit `docs/dev/FULL-KET-QUA-GR03880-20261026.md` + nhánh `25082b2` / `7eadfe3` / `fa66de6`, cùng báo cáo T3 (`afd98d5`). Chốt:
       - gate T3 / W1 staging (operator đã gộp lượt);
       - O1;
       - hành vi mã QR sau HOÀN THÀNH;
