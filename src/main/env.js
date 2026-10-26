@@ -43,6 +43,8 @@
 
   const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
   const GR_PAGE_RE = new RegExp("^/danh-sach-phieu-nhan-hang/(" + UUID + ")/?$", "i");
+  const GR_LIST_PAGE_RE = /^\/danh-sach-phieu-nhan-hang\/?$/i;
+  const UUID_RE = new RegExp("^" + UUID + "$", "i");
   const SO_PAGE_RE = /^\/chi-tiet-so\/([^/?#]+)\/?$/i;
   const NW_RECEIVE_RE = /^\/[a-z]{2}\/purchases\/receive\/?$/i;
 
@@ -79,12 +81,13 @@
     return null;
   }
 
-  // Trang POS của môi trường env: {kind:"gr", grId} | {kind:"so", so} | null.
+  // Trang POS của môi trường env: {kind:"gr", grId} | {kind:"gr_list"} | {kind:"so", so} | null.
   function classifyPosPage(url, env) {
     const u = parseUrl(url);
     if (!u || !env || u.origin.toLowerCase() !== env.posOrigin.toLowerCase()) return null;
     let m = GR_PAGE_RE.exec(u.pathname);
     if (m) return { kind: "gr", grId: m[1].toLowerCase() };
+    if (GR_LIST_PAGE_RE.test(u.pathname)) return { kind: "gr_list" };
     m = SO_PAGE_RE.exec(u.pathname);
     if (m) return { kind: "so", so: decodeURIComponent(m[1]) };
     return null;
@@ -142,7 +145,25 @@
     nwPoDetail: (env, poId) => `${env.nwApiBase}/v1/purchase-orders/${enc(poId)}`,
     // Trang
     nwReceivePage: (env, po) => `${env.nwUiOrigin}/vi/purchases/receive?po=${enc(po)}`,
+    // Trang phiếu nhận POS: đích quay về sau khi Nextwaves nhận xong (background tự dựng, không lấy từ trang — PM rev 1 S4).
+    posGrPage: (env, grId) => `${env.posOrigin}/danh-sach-phieu-nhan-hang/${enc(grId)}`,
   };
+
+  const isUuid = (s) => UUID_RE.test(String(s || ""));
+
+  // Request danh sách phiếu nhận mà CHÍNH trang danh sách POS gửi (Spec v0.2 S5 / R1):
+  // GET <posApiBase>/v1/order/goods-receipt/search có query `pos_id=` (không phải tìm theo SO của extension).
+  // → {queryKey} — khoá chuẩn hoá: path + mọi tham số query, sắp theo tên (bộ lọc / trang / sắp xếp đổi thì khoá đổi). Không khớp → null.
+  function posGrListCall(url, method, env) {
+    if (String(method || "GET").toUpperCase() !== "GET" || !isPosApiUrl(url, env)) return null;
+    const u = parseUrl(url);
+    const base = new URL(env.posApiBase).pathname.replace(/\/$/, "");
+    if (u.pathname.replace(/\/$/, "") !== base + "/v1/order/goods-receipt/search") return null;
+    const q = u.searchParams.get("query") || "";
+    if (!/(^|,)pos_id=/.test(q) || /(^|,)so_thuocsi=/.test(q)) return null;
+    const params = [...u.searchParams.entries()].sort((a, b) => (a[0] === b[0] ? (a[1] < b[1] ? -1 : a[1] > b[1] ? 1 : 0) : a[0] < b[0] ? -1 : 1));
+    return { queryKey: u.pathname + "?" + params.map(([k, v]) => `${k}=${v}`).join("&") };
+  }
 
   // Lời gọi "Xác nhận nhận hàng" của web Nextwaves: POST …/inter-tenant-shipments/<id>/receive-scan.
   function nwReceiveScanCall(url, method, env) {
@@ -170,8 +191,10 @@
     storeAllowed,
     warehouseForStore,
     api,
+    isUuid,
     nwReceiveScanCall,
     posGrStatusCall,
+    posGrListCall,
   };
   root.__CGN__ = root.__CGN__ || {};
   root.__CGN__.env = lib;

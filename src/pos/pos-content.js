@@ -1,9 +1,13 @@
 /*
- * Trang POS (ISOLATED world). Hai đường vào:
- *   (1) /danh-sach-phieu-nhan-hang/<grId>
- *   (2) "Nhập SO thuocsi" → /chi-tiet-so/<SO>
- * GR → PO POS → thuocsi_delivery_code → SO gốc → background mở màn quét Nextwaves (/vi/purchases/receive?po=<SO>).
- * Khi phiên sang "received" (tab Nextwaves đã đọc xong kết quả nhận): tra QR từng UID trên POS → kế hoạch → bảng kế hoạch.
+ * Trang POS (ISOLATED world) — bộ điều khiển duy nhất. Ba lối vào (v0.2, PM duyệt hướng 26/10):
+ *   (1) danh sách phiếu nhận /danh-sach-phieu-nhan-hang — nút "Nhận hàng bằng RFID" trên từng dòng (DOM do pos/gr-list.js lo);
+ *   (2) trang phiếu /danh-sach-phieu-nhan-hang/<grId>;
+ *   (3) "Nhập SO thuocsi" → /chi-tiet-so/<SO>.
+ * CHỈ TẠO PHIÊN KHI DƯỢC SĨ BẤM (bỏ tự chạy khi mở phiếu). Phiên đã có thì mở phiếu vẫn tự đọc trạng thái và đi tiếp.
+ * Bấm → đọc lại GR + PO, kiểm trạng thái / cửa hàng / mã giao SO / duy nhất SO–GR → background mở màn quét Nextwaves
+ * (/vi/purchases/receive?po=<SO>). Dữ liệu dòng danh sách chỉ dùng để hiện nút, không bao giờ ghi thẳng vào phiên (Spec v0.2 S1).
+ * Cú bấm gắn với dòng + lượt danh sách + bộ lọc + route: kiểm lại sau mỗi `await` và ngay trước `session:start`, sai thì huỷ (R2).
+ * Khi phiên sang "received" (tab Nextwaves đã đọc xong kết quả nhận): tab POS về trang phiếu (background), tra QR từng UID → kế hoạch.
  * Ghi W1 chỉ khi operator đã cấp phép một lần cho đúng phiếu này (popup) VÀ bấm nút mang mã kế hoạch (PM audit 24/10 P1.3).
  * Dược sĩ tự bấm HOÀN THÀNH; extension chỉ nghe lời gọi đổi trạng thái để đóng phiên.
  * Header xác thực chỉ lấy từ hook (chính app POS gửi), giữ trong bộ nhớ tab, không ghi ra storage.
@@ -19,13 +23,17 @@
   const P = C.pos;
   const PL = C.plan;
   const A = C.apply;
-  const T = Object.assign({ pollMs: 700, qrConcurrency: 4, reloadDelayMs: 800, httpTimeoutMs: 30000, leaseRenewMs: 15000, restartGuardMs: 10000 }, C.tuning || {});
+  const L = C.grList;
+  const T = Object.assign({ pollMs: 3000, qrConcurrency: 4, reloadDelayMs: 800, httpTimeoutMs: 30000, leaseRenewMs: 15000, qrTtlMs: 10 * 60 * 1000, listSessionsDebounceMs: 300 }, C.tuning || {});
   const HOOK = "cgn/pos-hook";
   const ME = "cgn/pos-content";
   // Khung không được che nút thao tác của phiếu (operator 26/10: che HOÀN THÀNH).
   const panel = C.ui.createPanel("GR ← Nextwaves", { avoidButtons: /^(hoàn thành|hủy|huỷ|hủy phiếu|huỷ phiếu)$/iu });
   const tabToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
   const lower = (s) => String(s || "").toLowerCase();
+  const ACTIVE = new Set(["waiting_nw", "nw_ready", "received", "applying", "applied", "apply_stopped"]);
+  const START_LABEL = "Nhận hàng bằng RFID";
+  const LIST_CHANGED = "Danh sách đã đổi — bấm lại";
 
   const LINK_MSG = {
     gr_unreadable: "Không đọc được phiếu nhận",
@@ -80,15 +88,31 @@
   };
 
   let config = null;
-  const authByEnv = {}; // envId → header (chỉ trong bộ nhớ tab)
+  // envId → {headers, confirmed}. `confirmed` = bộ header có x-store-id (Spec v0.2 S3). Chỉ trong bộ nhớ tab.
+  const authByEnv = {};
   let lastHref = "";
   let running = false;
   let again = false;
   let applying = false;
   let reloading = false;
-  let watched = { key: null, state: null }; // phiên của trang đang mở — đổi trạng thái thì đánh giá lại
-  let chosenGrId = null; // đường (2): GR dược sĩ chọn khi SO có nhiều GR
-  let lastStart = { grId: null, at: 0 }; // lần tạo phiên gần nhất trong tab (chống vòng lặp tạo phiên)
+  // Phiên của trang đang mở: đổi trạng thái / dữ liệu nhận / cấp phép của đúng phiếu này thì đánh giá lại (S6).
+  let watched = { key: null, sig: null, envId: null, grCode: null };
+  let chosenGrId = null; // đường (3): GR dược sĩ chọn khi SO có nhiều GR
+  let click = null; // cú bấm đang chuẩn bị phiên (một lúc chỉ một)
+  let clickSeq = 0;
+
+  // ---- trạng thái trang danh sách ----
+  const list = { envId: null, latestReqSeq: 0, shownSeq: 0, shownQueryKey: null, ok: false, rows: new Map() };
+  let onList = false;
+  let listCtx = null; // {env, storeId}
+  let listSessions = new Map(); // grId → phiên đang hoạt động
+  let listNote = null; // thông báo của cú bấm gần nhất trên danh sách
+  const notLinkable = new Set(); // grId đã biết không đi từ SO thuocsi (nhớ trong tab)
+  let listSessionsTimer = null;
+
+  // ---- tra QR: một lần mỗi phiên + lượt nhận (S6) ----
+  const qrCache = new Map(); // `${scope}|${uid}` → {at, r}
+  let qrForce = false;
 
   // ---------- tiện ích ----------
   async function bg(type, extra) {
@@ -98,11 +122,15 @@
   }
   const logTo = (key, log) => bg("session:log", { key, log }).catch(() => {});
 
-  // Lỗi mạng / hết giờ → NÉM (người gọi quyết: đọc thì báo lỗi, PUT thì "kết quả không rõ").
+  // Lỗi mạng / hết giờ / bị huỷ → NÉM (người gọi quyết: đọc thì báo lỗi, PUT thì "kết quả không rõ").
   async function http(url, opts) {
     const o = opts || {};
     const ac = typeof AbortController === "function" ? new AbortController() : null;
     const timer = ac ? setTimeout(() => ac.abort(), T.httpTimeoutMs) : null;
+    if (ac && o.signal) {
+      if (o.signal.aborted) ac.abort();
+      else o.signal.addEventListener("abort", () => ac.abort(), { once: true });
+    }
     try {
       const res = await fetch(url, { method: o.method || "GET", headers: o.headers || {}, body: o.body, cache: "no-store", signal: ac ? ac.signal : undefined });
       const text = await res.text();
@@ -119,11 +147,12 @@
   }
 
   function apiHeaders(env, withBody) {
-    const h = Object.assign({}, authByEnv[env.id] || {});
+    const a = authByEnv[env.id];
+    const h = Object.assign({}, (a && a.headers) || {});
     if (withBody) h["content-type"] = "application/json";
     return h;
   }
-  const posGet = (env, url) => http(url, { headers: apiHeaders(env, false) });
+  const posGet = (env, url, signal) => http(url, { headers: apiHeaders(env, false), signal });
   const posPut = (env, url, body) => http(url, { method: "PUT", headers: apiHeaders(env, true), body: JSON.stringify(body) });
 
   function httpError(what, r) {
@@ -136,20 +165,115 @@
     panel.show({ tone: "err", title, lines: [].concat(lines || []), buttons: buttons || [] });
   }
 
-  const dismissKey = (envId, grId) => `cgn:dismiss:${envId}:${grId}`;
-  function isDismissed(envId, grId) {
-    try {
-      return sessionStorage.getItem(dismissKey(envId, grId)) === "1";
-    } catch (_) {
-      return false;
-    }
+  const sessionSig = (s) => JSON.stringify([s.state, (s.nwResult && s.nwResult.at) || null, s.applyError || null, !!s.scanOk, s.retryNotBefore || null]);
+  const unwatch = () => (watched = { key: null, sig: null, envId: null, grCode: null });
+
+  // ---------- header cửa hàng (Spec v0.2 S3) ----------
+  // Có x-store-id → bộ mới, đã xác nhận. Thiếu x-store-id: giữ bộ đã xác nhận nếu cùng authorization + x-client-id;
+  // khác token / client → bộ chưa xác nhận: mọi lượt chuẩn bị dừng tới khi POS gửi lại request đủ header.
+  function onAuth(envId, headers) {
+    const cur = authByEnv[envId] || null;
+    const before = cur ? `${cur.confirmed}|${lower(cur.headers["x-store-id"])}|${cur.headers.authorization}` : "";
+    if (headers["x-store-id"]) authByEnv[envId] = { headers, confirmed: true };
+    else if (cur && cur.confirmed && cur.headers.authorization === headers.authorization && (cur.headers["x-client-id"] || "") === (headers["x-client-id"] || "")) return false;
+    else authByEnv[envId] = { headers, confirmed: false };
+    const a = authByEnv[envId];
+    const after = `${a.confirmed}|${lower(a.headers["x-store-id"])}|${a.headers.authorization}`;
+    if (before && after !== before) cancelClick("Phiên đăng nhập / cửa hàng POS vừa đổi — bấm lại");
+    return !cur || after !== before;
   }
-  function setDismissed(envId, grId, v) {
+
+  function currentStore(env) {
+    const a = authByEnv[env.id];
+    return a && a.confirmed ? lower(a.headers["x-store-id"]) : "";
+  }
+
+  // ---------- cú bấm (Spec v0.2 S4 / rev 2 R2) ----------
+  const CANCELLED = new Error("cancelled");
+
+  function newClick(fields) {
+    clickSeq += 1;
+    click = Object.assign({ nonce: clickSeq, route: location.href, ac: typeof AbortController === "function" ? new AbortController() : null, cancelled: false, reason: null }, fields);
+    return click;
+  }
+
+  function cancelClick(reason) {
+    if (!click || click.cancelled) return;
+    click.cancelled = true;
+    click.reason = reason;
     try {
-      if (v) sessionStorage.setItem(dismissKey(envId, grId), "1");
-      else sessionStorage.removeItem(dismissKey(envId, grId));
+      if (click.ac) click.ac.abort();
     } catch (_) {
       /* bỏ qua */
+    }
+  }
+
+  function stillValid(tok) {
+    if (!tok || !click || click.nonce !== tok.nonce || tok.cancelled) return false;
+    const env = E.envFromConfig(config);
+    if (!env || env.id !== tok.envId || currentStore(env) !== tok.storeId) return false;
+    if (location.href !== tok.route) return false;
+    if (tok.kind === "list") {
+      if (list.latestReqSeq !== tok.reqSeq || list.shownSeq !== tok.reqSeq || list.shownQueryKey !== tok.queryKey) return false;
+      const r = list.rows.get(tok.code);
+      if (!r || r.id !== tok.grId) return false;
+      if (!L || !L.rowValid(tok.row, tok.code, tok.grId)) return false;
+    }
+    return true;
+  }
+
+  // Đọc lại GR + PO, kiểm đủ rồi mới tạo phiên. Kết quả: {status: started|existing|not_linkable|cancelled|error, …}.
+  async function startFromGr(env, storeId, grId, code, tok) {
+    const guard = () => {
+      if (!stillValid(tok)) throw CANCELLED;
+    };
+    const signal = tok.ac ? tok.ac.signal : undefined;
+    const fail = (message) => ({ status: "error", message });
+    try {
+      guard();
+      const g = await posGet(env, E.api.grDetail(env, grId), signal);
+      guard();
+      if (!g.ok) return fail(httpError("GET phiếu nhận", g));
+      const gr = P.normalizeGr(g.json);
+      if (!gr) return fail("Phiếu nhận: response không đúng dạng.");
+      if (gr.id !== grId) return fail("Phiếu nhận đọc được không đúng phiếu đã chọn.");
+      if (code && gr.code !== code) return { status: "cancelled", message: LIST_CHANGED };
+      if (!gr.posId || gr.posId !== storeId) return fail(`${gr.code}: phiếu nhận thuộc cửa hàng khác cửa hàng đang đăng nhập (hoặc thiếu cửa hàng).`);
+      if (!P.isReceivable(gr)) return fail(`${gr.code}: phiếu không còn ở trạng thái chờ nhận / đang nhận.`);
+      const s0 = await bg("session:get", { envId: env.id, grId: gr.id });
+      guard();
+      if (s0 && ACTIVE.has(s0.state)) return { status: "existing", session: s0, gr };
+      const p = await posGet(env, E.api.poDetail(env, gr.posId, gr.poId), signal);
+      guard();
+      if (!p.ok) return fail(httpError("GET PO", p));
+      const link = P.resolveDelivery(gr, P.normalizePo(p.json), storeId);
+      if (!link.ok) {
+        if (link.errors.length === 1 && link.errors[0] === "no_delivery_code") return { status: "not_linkable", gr };
+        return fail(`${gr.code}: không nối được tới SO thuocsi — ${link.errors.map((c) => LINK_MSG[c] || c).join("; ")}`);
+      }
+      // Khoá ghi phía POS (PM P3 / P1.6): SO phải có đúng một phiếu nhận (chưa huỷ) ở cửa hàng này, đọc đủ, và đó là phiếu này.
+      const found = await searchGrsOfSo(env, storeId, link.soBase, signal);
+      guard();
+      const lock = P.soWriteLock(found, gr.id);
+      guard(); // ngay trước khi tạo phiên
+      const s = await bg("session:start", {
+        envId: env.id,
+        grId: gr.id,
+        grCode: gr.code,
+        poPosId: gr.poId,
+        poPosCode: gr.poCode,
+        posId: gr.posId,
+        deliveryCode: link.deliveryCode,
+        soBase: link.soBase,
+        warehouseId: E.warehouseForStore(env, gr.posId),
+        fingerprint: P.grFingerprintSource(gr),
+        writeLocks: lock ? [lock] : [],
+      });
+      if (!s) return fail(`${gr.code}: không đọc lại được phiên vừa tạo.`);
+      return { status: "started", session: s, gr };
+    } catch (err) {
+      if (err === CANCELLED || (err && err.name === "AbortError") || (tok && tok.cancelled)) return { status: "cancelled", message: (tok && tok.reason) || LIST_CHANGED };
+      return fail(String((err && err.message) || err));
     }
   }
 
@@ -176,40 +300,42 @@
     if (applying || reloading) return;
     const env = E.envFromConfig(config);
     const page = env ? E.classifyPosPage(location.href, env) : null;
+    if (!page || page.kind !== "gr_list") leaveList();
     if (!page) {
-      watched = { key: null, state: null };
+      unwatch();
       panel.hide();
       return;
     }
     if (!authByEnv[env.id]) {
-      panel.show({ tone: "busy", title: "Đang chờ POS tải dữ liệu…", lines: [] });
+      if (page.kind !== "gr_list") panel.show({ tone: "busy", title: "Đang chờ POS tải dữ liệu…", lines: [] });
       return;
     }
-    // Cửa hàng đang đăng nhập là điều kiện bắt buộc của cả hai đường vào (PM P1.4).
+    // Cửa hàng đang đăng nhập (đã xác nhận) là điều kiện bắt buộc của mọi lối vào (PM P1.4, Spec v0.2 S3).
     const storeId = currentStore(env);
     if (!storeId) {
-      watched = { key: null, state: null };
+      unwatch();
+      if (page.kind === "gr_list") return clearListButtons();
       return showError("Không xác định được cửa hàng đang đăng nhập", "POS chưa gửi x-store-id — extension không chạy.");
     }
-    if (!E.storeAllowed(env, storeId)) return showStoreNotAllowed(env);
-    if (page.kind === "gr") return evaluateGr(env, storeId, page.grId, location.href);
+    if (!E.storeAllowed(env, storeId)) {
+      if (page.kind === "gr_list") return clearListButtons();
+      return showStoreNotAllowed(env);
+    }
+    if (page.kind === "gr") return evaluateGr(env, storeId, page.grId);
+    if (page.kind === "gr_list") return evaluateGrList(env, storeId);
     return evaluateSo(env, storeId, page.so);
   }
 
-  function currentStore(env) {
-    return lower((authByEnv[env.id] || {})["x-store-id"]);
-  }
-
   function showStoreNotAllowed(env) {
-    watched = { key: null, state: null };
+    unwatch();
     panel.show({ tone: "info", title: `${env.label}: extension chỉ chạy cho cửa hàng thử`, lines: ["Cửa hàng đang đăng nhập không thuộc danh sách chạy thử của môi trường này."] });
   }
 
-  // Tìm GR theo SO + kiểm đọc đủ / rõ (pos-model.checkSoGrs — PM audit v0.1.1 P1.6). Dùng chung cho hai đường vào.
-  async function searchGrsOfSo(env, storeId, so) {
+  // Tìm GR theo SO + kiểm đọc đủ / rõ (pos-model.checkSoGrs — PM audit v0.1.1 P1.6). Dùng chung cho các lối vào.
+  async function searchGrsOfSo(env, storeId, so, signal) {
     const digits = K.soDigits(so);
     if (!digits) return { ok: false, reason: "so_unreadable", error: "Không đọc được số SO" };
-    const r = await posGet(env, E.api.grSearchBySo(env, digits, storeId));
+    const r = await posGet(env, E.api.grSearchBySo(env, digits, storeId), signal);
     if (!r.ok) return { ok: false, reason: "http", error: httpError("Tìm GR theo SO", r) };
     const check = P.checkSoGrs(r.json, storeId);
     if (!check.ok) return Object.assign({}, check, { error: soCheckText(check) });
@@ -221,30 +347,30 @@
     return (SO_CHECK_MSG[c.reason] || c.reason) + facts + (c.code ? ` — ${c.code}` : "");
   }
 
-  // Đường (2): /chi-tiet-so/<SO>
+  // Đường (3): /chi-tiet-so/<SO>
   async function evaluateSo(env, storeId, so) {
     const found = await searchGrsOfSo(env, storeId, so);
     if (!found.ok) {
-      watched = { key: null, state: null };
+      unwatch();
       return showError("Không đọc đủ danh sách phiếu nhận của SO — extension không đi tiếp", found.error, [{ label: "Thử lại", onClick: refresh }]);
     }
     const all = found.list;
-    if (chosenGrId && all.some((g) => g.id === chosenGrId)) return evaluateGr(env, storeId, chosenGrId, location.href);
+    if (chosenGrId && all.some((g) => g.id === chosenGrId)) return evaluateGr(env, storeId, chosenGrId);
     const receivable = all.filter(P.isReceivable);
-    if (receivable.length === 1) return evaluateGr(env, storeId, receivable[0].id, location.href);
+    if (receivable.length === 1) return evaluateGr(env, storeId, receivable[0].id);
     if (receivable.length === 0) {
       for (const g of all) {
         const s = await bg("session:get", { envId: env.id, grId: g.id });
-        if (s) return evaluateGr(env, storeId, g.id, location.href);
+        if (s) return evaluateGr(env, storeId, g.id);
       }
-      watched = { key: null, state: null };
+      unwatch();
       return panel.show({ tone: "info", title: `SO ${so}: không có phiếu nhận đang chờ nhận`, lines: [] });
     }
-    watched = { key: null, state: null };
+    unwatch();
     panel.show({
       tone: "warn",
       title: `SO ${so} có ${receivable.length} phiếu nhận đang chờ`,
-      lines: ["Chọn phiếu muốn nhận bằng Nextwaves (chỉ đọc; điền phiếu bị khoá khi SO có nhiều phiếu):"],
+      lines: ["Chọn phiếu muốn nhận bằng RFID (chỉ đọc; điền phiếu bị khoá khi SO có nhiều phiếu):"],
       buttons: receivable.map((g) => ({
         label: `${g.code} · ${g.poCode}`,
         onClick: () => {
@@ -255,8 +381,8 @@
     });
   }
 
-  // Đường (1) (và (2) sau khi đã chọn được GR).
-  async function evaluateGr(env, storeId, grId, returnUrl) {
+  // Đường (2) (và (3) sau khi đã chọn được GR). Không tự tạo phiên: chỉ hiện nút; phiên đã có thì đi tiếp.
+  async function evaluateGr(env, storeId, grId) {
     const g = await posGet(env, E.api.grDetail(env, grId));
     if (!g.ok) return showError("Không đọc được phiếu nhận", httpError("GET phiếu nhận", g), [{ label: "Thử lại", onClick: refresh }]);
     const gr = P.normalizeGr(g.json);
@@ -268,74 +394,201 @@
     if (!P.isReceivable(gr)) {
       if (s && gr.status === "COMPLETED" && s.state !== "done" && s.state !== "applying") s = await bg("session:update", { key: s.key, patch: { state: "done" }, log: { type: "gr_completed_seen" } });
       if (s) return renderSession(env, gr, s);
-      watched = { key: null, state: null };
+      unwatch();
       return panel.hide();
     }
 
     if (!s || s.state === "done") {
+      unwatch();
       const p = await posGet(env, E.api.poDetail(env, gr.posId, gr.poId));
       if (!p.ok) return showError("Không đọc được PO của phiếu nhận", httpError("GET PO", p), [{ label: "Thử lại", onClick: refresh }]);
       const link = P.resolveDelivery(gr, P.normalizePo(p.json), storeId);
       if (!link.ok) {
-        watched = { key: null, state: null };
         // PO không có mã giao thuocsi: không phải phiếu từ thuocsi → không phải việc của extension.
         if (link.errors.length === 1 && link.errors[0] === "no_delivery_code") return panel.hide();
         return showError(`${gr.code}: không nối được tới SO thuocsi`, link.errors.map((c) => LINK_MSG[c] || c));
       }
-      const start = async () => {
-        setDismissed(env.id, gr.id, false);
-        lastStart = { grId: gr.id, at: Date.now() };
-        // Khoá ghi phía POS (PM P3 / P1.6): SO phải có đúng một phiếu nhận (chưa huỷ) ở cửa hàng này, đọc đủ, và đó là phiếu này.
-        const found = await searchGrsOfSo(env, storeId, link.soBase);
-        const lock = P.soWriteLock(found, gr.id);
-        const writeLocks = lock ? [lock] : [];
-        await bg("session:start", {
-          envId: env.id,
-          grId: gr.id,
-          grCode: gr.code,
-          poPosId: gr.poId,
-          poPosCode: gr.poCode,
-          posId: gr.posId,
-          deliveryCode: link.deliveryCode,
-          soBase: link.soBase,
-          warehouseId: E.warehouseForStore(env, gr.posId),
-          fingerprint: P.grFingerprintSource(gr),
-          writeLocks,
-          returnUrl,
-        });
-        refresh();
-      };
       const codes = gr.items.reduce((n, it) => n + it.details.reduce((m, d) => m + d.qrCodes.length, 0), 0);
-      if (isDismissed(env.id, gr.id) || codes > 0) {
-        watched = { key: null, state: null };
-        return panel.show({
-          tone: codes > 0 ? "warn" : "info",
-          title: `${gr.code} · ${link.deliveryCode}`,
-          lines: codes > 0 ? [`Phiếu đã có ${codes} mã quét. Kết quả Nextwaves phải chứa đúng các mã này, đúng lô, thì mới điền tiếp được.`] : ["Đã huỷ nhận bằng Nextwaves cho phiếu này trong tab."],
-          buttons: [{ label: "Nhận bằng Nextwaves", onClick: start }],
-        });
-      }
-      // Chống vòng lặp: vừa tạo phiên cho phiếu này mà background vẫn không trả lại phiên → báo lỗi, không tạo lại
-      // (tránh đọc GR / PO / tìm GR liên tục lên API POS).
-      if (lastStart.grId === gr.id && Date.now() - lastStart.at < T.restartGuardMs) {
-        watched = { key: null, state: null };
-        return showError(`${gr.code}: không đọc lại được phiên vừa tạo`, "Extension dừng để không gọi API POS lặp lại. Tải lại trang hoặc báo dev.", [
-          {
-            label: "Thử lại",
-            onClick: () => {
-              lastStart = { grId: null, at: 0 };
-              refresh();
-            },
-          },
-        ]);
-      }
-      await start();
-      return;
+      return panel.show({
+        tone: codes > 0 ? "warn" : "info",
+        title: `${gr.code} · ${link.deliveryCode}`,
+        lines: [
+          codes > 0
+            ? `Phiếu đã có ${codes} mã quét. Kết quả Nextwaves phải chứa đúng các mã này, đúng lô, thì mới điền tiếp được.`
+            : "Bấm “Nhận hàng bằng RFID” để mở màn quét Nextwaves cho phiếu này.",
+        ],
+        buttons: [{ label: START_LABEL, onClick: () => startOnGrPage(env, storeId, gr) }],
+      });
     }
     if (s.posId && s.posId !== storeId) return showError("Phiên này thuộc cửa hàng khác cửa hàng đang đăng nhập", s.grCode);
     return renderSession(env, gr, s);
   }
 
+  async function startOnGrPage(env, storeId, gr) {
+    if (click) return;
+    const tok = newClick({ kind: "gr", grId: gr.id, code: gr.code, envId: env.id, storeId });
+    panel.show({ tone: "busy", title: `Đang kiểm ${gr.code}…`, lines: ["Đọc lại phiếu, PO và SO trước khi mở Nextwaves."] });
+    const res = await startFromGr(env, storeId, gr.id, gr.code, tok);
+    if (click === tok) click = null;
+    if (res.status === "started" || res.status === "existing") return refresh();
+    if (res.status === "cancelled") return refresh();
+    if (res.status === "not_linkable") return refresh();
+    showError(`${gr.code}: chưa mở được Nextwaves`, res.message, [{ label: "Thử lại", onClick: refresh }]);
+  }
+
+  // ---------- trang danh sách ----------
+  function leaveList() {
+    if (!onList) return;
+    onList = false;
+    listCtx = null;
+    listNote = null;
+    if (listSessionsTimer) clearTimeout(listSessionsTimer);
+    listSessionsTimer = null;
+    if (L) L.deactivate();
+  }
+
+  function clearListButtons() {
+    listCtx = null;
+    if (onList && L) L.show(null);
+    panel.hide();
+  }
+
+  async function loadListSessions(env) {
+    const all = await bg("session:list");
+    const m = new Map();
+    for (const s of all || []) if (s.envId === env.id && ACTIVE.has(s.state)) m.set(s.grId, s);
+    listSessions = m;
+  }
+
+  async function evaluateGrList(env, storeId) {
+    unwatch();
+    if (!onList) {
+      onList = true;
+      if (L) L.activate();
+    }
+    listCtx = { env, storeId };
+    await loadListSessions(env);
+    renderList();
+    if (listNote) panel.show(listNote);
+    else panel.hide();
+  }
+
+  function renderList() {
+    if (!L || !onList) return;
+    const ctx = listCtx;
+    if (!ctx || list.envId !== ctx.env.id || !list.ok) return L.show(null);
+    const byCode = new Map();
+    for (const r of list.rows.values()) {
+      if (!P.isReceivable({ status: r.status }) || r.posId !== ctx.storeId || notLinkable.has(r.id)) continue;
+      const s = listSessions.get(r.id);
+      let v;
+      if (click && click.kind === "list" && click.grId === r.id) v = { kind: "busy", label: "Đang kiểm phiếu…", disabled: true };
+      else if (s && (s.state === "waiting_nw" || s.state === "nw_ready")) v = { kind: "open_nw", label: "Đang nhận trên Nextwaves", title: "Mở lại tab Nextwaves của phiếu này" };
+      else if (s) v = { kind: "open_gr", label: s.state === "applied" ? "Đã điền — mở phiếu" : "Đã nhận — mở phiếu", title: "Mở phiếu để lập kế hoạch / điền / HOÀN THÀNH" };
+      else v = { kind: "start", label: START_LABEL, disabled: !!click, title: "Đọc lại phiếu + PO + SO rồi mở màn quét Nextwaves" };
+      byCode.set(r.code, Object.assign({ grId: r.id }, v));
+    }
+    L.show({ byCode });
+  }
+
+  function scheduleListSessions() {
+    if (!onList || !listCtx) return;
+    if (listSessionsTimer) clearTimeout(listSessionsTimer);
+    listSessionsTimer = setTimeout(async () => {
+      listSessionsTimer = null;
+      if (!onList || !listCtx) return;
+      try {
+        await loadListSessions(listCtx.env);
+        renderList();
+      } catch (_) {
+        /* bỏ qua */
+      }
+    }, T.listSessionsDebounceMs);
+  }
+
+  async function onListSelect(row, grId, code, kind) {
+    const ctx = listCtx;
+    if (!ctx || !onList) return;
+    const { env, storeId } = ctx;
+    const r = list.rows.get(code);
+    if (!r || r.id !== grId) return;
+    if (kind === "open_nw") {
+      const s = listSessions.get(grId);
+      if (s) bg("session:reopenNw", { key: s.key }).catch(() => {});
+      return;
+    }
+    if (kind === "open_gr") return location.assign(E.api.posGrPage(env, grId));
+    if (kind !== "start" || click) return;
+    const tok = newClick({ kind: "list", grId, code, row, reqSeq: list.shownSeq, queryKey: list.shownQueryKey, envId: env.id, storeId });
+    listNote = { tone: "busy", title: `Đang kiểm ${code}…`, lines: ["Đọc lại phiếu, PO và SO trước khi mở Nextwaves."] };
+    panel.show(listNote);
+    renderList();
+    const res = await startFromGr(env, storeId, grId, code, tok);
+    if (click === tok) click = null;
+    if (!onList) return;
+    if (res.status === "started" || res.status === "existing") {
+      listNote = { tone: "ok", title: `${code}: đã mở màn quét Nextwaves`, lines: ["Nhận hàng trên tab Nextwaves. Nhận xong, extension tự mở phiếu này để lập kế hoạch điền."] };
+    } else if (res.status === "not_linkable") {
+      notLinkable.add(grId);
+      listNote = { tone: "info", title: `${code}: không nhận bằng RFID được`, lines: ["Phiếu này không đi từ SO thuocsi (PO không có mã giao)."] };
+    } else if (res.status === "cancelled") {
+      listNote = { tone: "warn", title: res.message || LIST_CHANGED, lines: [] };
+    } else {
+      listNote = { tone: "err", title: `${code}: chưa mở được Nextwaves`, lines: [res.message] };
+    }
+    listNote.buttons = [
+      {
+        label: "Đóng",
+        secondary: true,
+        onClick: () => {
+          listNote = null;
+          panel.hide();
+        },
+      },
+    ];
+    refresh();
+  }
+
+  if (L)
+    L.attach({
+      onSelect: (row, grId, code, kind) => {
+        onListSelect(row, grId, code, kind).catch((err) => {
+          if (click) click = null;
+          showError("Lỗi extension", String((err && err.message) || err));
+        });
+      },
+      onDomChanged: () => {
+        if (click && click.kind === "list" && !stillValid(click)) cancelClick(LIST_CHANGED);
+      },
+    });
+
+  function onListRequest(p) {
+    if (!E.envById(p.envId) || !(p.reqSeq > 0)) return;
+    list.latestReqSeq = Math.max(list.latestReqSeq, p.reqSeq);
+    if (click && click.kind === "list" && p.reqSeq > click.reqSeq) cancelClick(LIST_CHANGED);
+  }
+
+  // Chỉ nhận response của lượt request mới nhất đã gửi (rev 2 R1). Lượt mới nhất lỗi → xoá hết nút.
+  function onListResponse(p) {
+    if (!E.envById(p.envId) || !(p.reqSeq > 0)) return;
+    list.latestReqSeq = Math.max(list.latestReqSeq, p.latestReqSeq || 0, p.reqSeq);
+    if (p.reqSeq !== list.latestReqSeq || p.reqSeq <= list.shownSeq) return;
+    list.shownSeq = p.reqSeq;
+    list.shownQueryKey = p.queryKey || null;
+    list.envId = p.envId;
+    list.ok = !!p.ok && Array.isArray(p.rows);
+    list.rows = new Map();
+    if (list.ok) {
+      for (const r of p.rows) {
+        if (!r || !r.code || !E.isUuid(r.id)) continue;
+        list.rows.set(String(r.code), { id: lower(r.id), code: String(r.code), status: String(r.status || ""), poId: lower(r.poId), posId: lower(r.posId) });
+      }
+    }
+    if (click && click.kind === "list" && !stillValid(click)) cancelClick(LIST_CHANGED);
+    renderList();
+  }
+
+  // ---------- phiên ----------
   function sessionLines(s) {
     return [`Phiếu ${s.grCode} · ${s.poPosCode} · mã giao ${s.deliveryCode}`, s.nwPoNumber ? `Nextwaves: ${s.nwPoNumber} (${s.nwRefId || s.soBase})` : `Nextwaves: tìm theo ${s.soBase}`];
   }
@@ -350,14 +603,13 @@
         } catch (err) {
           return showError("Không huỷ được phiên", String((err && err.message) || err));
         }
-        setDismissed(env.id, s.grId, true);
         refresh();
       },
     };
   }
 
   async function renderSession(env, gr, s) {
-    watched = { key: s.key, state: s.state };
+    watched = { key: s.key, sig: sessionSig(s), envId: env.id, grCode: s.grCode };
     switch (s.state) {
       case "waiting_nw":
       case "nw_ready":
@@ -408,21 +660,33 @@
   }
 
   // ---------- kế hoạch + ghi ----------
-  async function lookupQr(env, uids) {
+  // Tra QR có cache theo phiên + lượt nhận (`scope`), TTL qrTtlMs; kết quả lỗi không cache; "Kiểm tra lại" tra lại hết (S6).
+  async function lookupQr(env, uids, scope) {
     const out = {};
+    const force = qrForce;
+    qrForce = false;
+    const now = Date.now();
+    const need = [];
+    for (const uid of uids) {
+      const c = force ? null : qrCache.get(`${scope}|${uid}`);
+      if (c && now - c.at < T.qrTtlMs) out[uid] = c.r;
+      else need.push(uid);
+    }
+    if (qrCache.size > 5000) qrCache.clear();
     let i = 0;
     async function worker() {
-      while (i < uids.length) {
-        const uid = uids[i++];
+      while (i < need.length) {
+        const uid = need[i++];
         try {
           const r = await http(E.api.qrLookup(env, uid));
           out[uid] = r.ok ? P.normalizeQrLookup(r.json, uid) : { ok: false, reason: `http_${r.status}` };
         } catch (_) {
           out[uid] = { ok: false, reason: "network" };
         }
+        if (out[uid] && out[uid].ok) qrCache.set(`${scope}|${uid}`, { at: Date.now(), r: out[uid] });
       }
     }
-    await Promise.all(Array.from({ length: Math.min(T.qrConcurrency, uids.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(T.qrConcurrency, need.length) }, worker));
     return out;
   }
 
@@ -441,7 +705,8 @@
     const units = (s.nwResult && s.nwResult.units) || [];
     panel.show({ tone: "busy", title: `Đang tra ${units.length} UID trên POS…`, lines: sessionLines(s) });
     // Tra QR MỌI UID (kể cả UID đã nằm trên phiếu — PM P1.2 / P2.2).
-    const qrByUid = await lookupQr(env, [...new Set(units.map((u) => u.uid).filter(Boolean))]);
+    const scope = `${s.key}|${(s.nwResult && s.nwResult.at) || ""}`;
+    const qrByUid = await lookupQr(env, [...new Set(units.map((u) => u.uid).filter(Boolean))], scope);
     const plan = PL.buildPlan(gr, units, qrByUid);
     logTo(s.key, { type: "plan", ok: plan.ok, complete: plan.complete, hash: plan.hash, steps: plan.steps.length, blocked: plan.blocked.map((b) => b.code), summary: plan.summary });
 
@@ -455,7 +720,16 @@
         tone: "err",
         title: `${gr.code}: không điền được — ${plan.blocked.length} điểm chặn`,
         lines: sessionLines(s).concat(["Không ghi gì vào phiếu (chặn cả gói).", ...blockedLines(plan)]),
-        buttons: [{ label: "Kiểm tra lại", onClick: refresh }, cancelButton(env, s)],
+        buttons: [
+          {
+            label: "Kiểm tra lại",
+            onClick: () => {
+              qrForce = true;
+              refresh();
+            },
+          },
+          cancelButton(env, s),
+        ],
       });
     }
     const stopped = s.state === "apply_stopped" && s.applyError;
@@ -576,15 +850,24 @@
   }
 
   // ---------- sự kiện ----------
+  function onRoute(href) {
+    if (href === lastHref) return;
+    lastHref = href;
+    chosenGrId = null;
+    cancelClick("Đã rời trang — huỷ lượt chuẩn bị");
+    refresh();
+  }
+
   window.addEventListener("message", (e) => {
     if (e.source !== window || e.origin !== location.origin) return;
     const m = e.data;
     if (!m || m.mark !== HOOK || !m.payload) return;
     if (m.type === "auth" && E.envById(m.payload.envId) && m.payload.headers && m.payload.headers.authorization) {
-      const first = !authByEnv[m.payload.envId];
-      authByEnv[m.payload.envId] = m.payload.headers;
-      if (first) refresh();
+      if (onAuth(m.payload.envId, m.payload.headers)) refresh();
     } else if (m.type === "gr-status") onGrStatus(m.payload);
+    else if (m.type === "gr-list-request") onListRequest(m.payload);
+    else if (m.type === "gr-list") onListResponse(m.payload);
+    else if (m.type === "route") onRoute(location.href);
   });
 
   async function onGrStatus(p) {
@@ -605,22 +888,25 @@
       refresh();
       return;
     }
-    if (changes.grants && watched.key) {
-      refresh();
-      return;
+    // Cấp phép: chỉ khi bản ghi của ĐÚNG phiếu đang xem đổi (thêm / dùng / thu hồi).
+    if (changes.grants && watched.key && watched.grCode) {
+      const k = `${watched.envId}:${String(watched.grCode).trim().toUpperCase()}`;
+      const o = (changes.grants.oldValue || {})[k] || null;
+      const n = (changes.grants.newValue || {})[k] || null;
+      if (JSON.stringify(o) !== JSON.stringify(n)) refresh();
     }
-    if (changes.sessions && watched.key) {
-      const s = (changes.sessions.newValue || {})[watched.key];
-      if (!s || s.state !== watched.state) refresh();
+    if (changes.sessions) {
+      if (watched.key) {
+        // Chỉ khi trạng thái / dữ liệu nhận / lỗi điền / lượt nhận / hạ nhiệt đổi — bỏ qua posTabId / lease / log.
+        const s = (changes.sessions.newValue || {})[watched.key];
+        if (!s || sessionSig(s) !== watched.sig) refresh();
+      } else if (onList) scheduleListSessions();
     }
   });
 
+  // Dự phòng khi hook chưa báo đổi route (vd. trang đổi URL theo cách hook không thấy).
   setInterval(() => {
-    if (location.href !== lastHref) {
-      lastHref = location.href;
-      chosenGrId = null;
-      refresh();
-    }
+    if (location.href !== lastHref) onRoute(location.href);
   }, T.pollMs);
 
   bg("config:get")

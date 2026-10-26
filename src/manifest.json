@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Circa GR ← Nextwaves",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "description": "Nhận hàng thuocsi bằng RFID trên Nextwaves rồi điền phiếu nhận (GR) trên POS Circa. Một gói cho Staging và Production.",
   "minimum_chrome_version": "111",
   "permissions": ["storage"],
@@ -25,7 +25,7 @@
     },
     {
       "matches": ["https://pos.stg.circa-v2.buymed.tech/*", "https://pos.v2.circa.vn/*"],
-      "js": ["lib/env.js", "lib/keys.js", "lib/pos-model.js", "lib/plan.js", "lib/apply.js", "ui/panel.js", "pos/pos-content.js"],
+      "js": ["lib/env.js", "lib/keys.js", "lib/pos-model.js", "lib/plan.js", "lib/apply.js", "ui/panel.js", "pos/gr-list.js", "pos/pos-content.js"],
       "run_at": "document_start"
     },
     {

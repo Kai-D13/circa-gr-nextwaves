@@ -79,13 +79,29 @@ async function getGrants() {
   return all;
 }
 
+// Chỉ ra ký tự làm mã cấp phép bị từ chối (operator 25/10: ô hiện "GR03878" mà vẫn bị từ chối). Luật kiểm giữ nguyên.
+function grCodeHint(code) {
+  if (!code) return " — ô đang trống";
+  if (!code.startsWith("GR")) return " — phải bắt đầu bằng GR";
+  for (let i = 2; i < code.length; i++) {
+    const ch = code[i];
+    if (/\d/.test(ch)) continue;
+    const pos = i + 1;
+    if (ch === "O") return ` — có chữ O (không phải số 0) ở vị trí ${pos}`;
+    if (/\s/.test(ch)) return ` — có khoảng trắng ở vị trí ${pos}`;
+    if (/[​-‏⁠﻿­]/.test(ch) || ch.charCodeAt(0) < 32) return ` — có ký tự ẩn ở vị trí ${pos} (thường do dán), hãy gõ tay`;
+    return ` — có ký tự "${ch}" ở vị trí ${pos}`;
+  }
+  return " — thiếu phần số sau GR";
+}
+
 async function createGrant(msg, sender) {
   if (sender && sender.tab) throw new Error("Chỉ cấp phép từ popup extension");
   const env = E.envById(msg.envId);
   if (!env) throw new Error("Môi trường không hợp lệ");
   if (!env.writeEnabled) throw new Error(`${env.label}: chỉ đọc, chưa qua gate ghi`);
   const grCode = String(msg.grCode || "").trim().toUpperCase();
-  if (!/^GR\d+$/.test(grCode)) throw new Error("Mã phiếu nhận phải dạng GR + số, ví dụ GR03878");
+  if (!/^GR\d+$/.test(grCode)) throw new Error("Mã phiếu nhận phải dạng GR + số, ví dụ GR03878" + grCodeHint(grCode));
   const all = await getGrants();
   const now = Date.now();
   all[grantKey(env.id, grCode)] = { schema: SESSION_SCHEMA, envId: env.id, grCode, createdAt: now, expiresAt: now + T.grantTtlMs };
@@ -219,6 +235,10 @@ async function startSession(msg, sender) {
   requireOrigin(sender, env.posOrigin, "session:start");
   if (!K.soBase(msg.soBase)) throw new Error("soBase");
   if (!msg.posId || !E.storeAllowed(env, msg.posId)) throw new Error("store");
+  if (!E.isUuid(msg.grId)) throw new Error("grId");
+  // Đích quay về luôn là trang phiếu của đúng GR, do background dựng (PM rev 1 S4) — không điều hướng theo URL từ trang.
+  const returnUrl = E.api.posGrPage(env, String(msg.grId).toLowerCase());
+  if (msg.returnUrl !== undefined && msg.returnUrl !== returnUrl) throw new Error("bad_return_url");
   const key = keyOf(env.id, msg.grId);
   const all = await getSessions();
   const cur = all[key];
@@ -240,7 +260,7 @@ async function startSession(msg, sender) {
     fingerprint: msg.fingerprint || [],
     writeLocks: Array.isArray(msg.writeLocks) ? msg.writeLocks.map(String) : [], // khoá ghi phía POS: đặt lúc tạo phiên, không đổi được
     nwWriteLocks: [], // khoá ghi phía Nextwaves: chỉ session:nwMatched đặt, một lần
-    returnUrl: msg.returnUrl,
+    returnUrl,
     posTabId: sender && sender.tab ? sender.tab.id : null,
     nwTabId: null,
     state: "waiting_nw",
@@ -439,7 +459,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         const scan = msg.scan || {};
         if (!Array.isArray(s.shipmentIds) || !s.shipmentIds.includes(String(scan.shipmentId || "").toLowerCase())) throw new Error("session:scanOk: phiếu gửi không thuộc đơn đã khớp");
         if (!(scan.httpStatus >= 200 && scan.httpStatus < 300)) throw new Error("session:scanOk: không phải lượt 2xx");
-        return updateSession(msg.key, { scanOk: scan }, Object.assign({ type: "scan_ok" }, scan));
+        // Nhật ký: `at` của mục log luôn là giờ ISO lúc ghi; giờ của lượt nhận ghi riêng `scanAt` (PM P3 26/10: `scan.at` dạng số từng đè `at`).
+        const scanAt = Number.isFinite(scan.at) ? new Date(scan.at).toISOString() : null;
+        return updateSession(msg.key, { scanOk: scan }, { type: "scan_ok", shipmentId: scan.shipmentId, httpStatus: scan.httpStatus, sentEpcs: scan.sentEpcs === undefined ? null : scan.sentEpcs, scanAt });
       }
       case "session:received":
         return received(msg.key, msg.payload, sender);

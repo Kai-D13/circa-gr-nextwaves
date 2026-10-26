@@ -130,8 +130,10 @@ const viewTitle = (t) => (t.view ? t.view.title : null);
 const fillButton = (t) => t.view && t.view.buttons && t.view.buttons.find((x) => x.label.startsWith("Điền vào phiếu GR03878 · kế hoạch #"));
 const codesOnGr = (srv) => srv.st.gr.data.items.flatMap((i) => i.details).flatMap((d) => d.thuocsi_qr_codes || []);
 const claimMsg = (token, extra) => Object.assign({ type: "session:claimApply", key: KEY, token, grCode: "GR03878", planHash: "ABCDEF12" }, extra || {});
+// v0.2: mở phiếu không tự tạo phiên — dược sĩ bấm "Nhận hàng bằng RFID".
+const startBtn = (t) => t.view && t.view.buttons && t.view.buttons.find((x) => x.label === "Nhận hàng bằng RFID");
 
-// Mở GR trên POS → chờ tab Nextwaves → khớp đơn. Trả {b, srv, pos, nw}.
+// Mở GR trên POS → bấm "Nhận hàng bằng RFID" → chờ tab Nextwaves → khớp đơn. Trả {b, srv, pos, nw}.
 // Bước dựng hỏng thì tự đóng trình duyệt giả (không thì timer của nó giữ tiến trình test chạy mãi).
 async function openToReady(opts = {}) {
   const srv = makeServer(opts.server);
@@ -140,6 +142,7 @@ async function openToReady(opts = {}) {
     await b.setConfig(opts.config || { mode: "STG", url: "" });
     const pos = b.openTab(opts.posUrl || `${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
     pos.post(POS_AUTH);
+    (await until(() => startBtn(pos))).onClick();
     const nw = await until(() => b.tabs().find((t) => t.url.startsWith(NW)));
     nw.post(NW_AUTH);
     await sessionState(b, "nw_ready");
@@ -299,8 +302,9 @@ test("P1.3: production chỉ đọc — không cấp phép được, phiên PRD 
     assert.match(g.error, /chỉ đọc/);
     // Phiên PRD tạo từ trang POS production (cửa hàng PRD đã map kho) ở trạng thái received → claim vẫn bị chặn.
     const prd = b.openTab(`https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/${GR_ID}`);
-    const st = await b.sendFromTab(prd, { type: "session:start", envId: "PRD", grId: GR_ID, grCode: "GR03878", posId: "c476efb2-415c-429a-978e-d389b4b06607", soBase: "SOBD1", warehouseId: "eb5e2b4f-6f92-413b-90ef-6be1730b94c0", returnUrl: "https://pos.v2.circa.vn/" });
+    const st = await b.sendFromTab(prd, { type: "session:start", envId: "PRD", grId: GR_ID, grCode: "GR03878", posId: "c476efb2-415c-429a-978e-d389b4b06607", soBase: "SOBD1", warehouseId: "eb5e2b4f-6f92-413b-90ef-6be1730b94c0" });
     assert.equal(st.ok, true, st.error);
+    assert.equal(st.data.returnUrl, `https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/${GR_ID}`, "background tự dựng đích quay về");
     b.store.sessions[`PRD:${GR_ID}`].state = "received";
     const r = await b.sendFromTab(prd, claimMsg("x", { key: `PRD:${GR_ID}` }));
     assert.deepEqual(r.data, { ok: false, reason: "env_read_only" });
@@ -527,10 +531,10 @@ test("Nhận thiếu 1 UID (keep_open): giữ ở Nextwaves, báo 11/12, không 
   }
 });
 
-test("Đường (2) /chi-tiet-so/SOBD1593858: tìm GR theo SO + cửa hàng → cùng luồng, quay về trang SO", async () => {
+test("Đường /chi-tiet-so/SOBD1593858: tìm GR theo SO + cửa hàng → bấm nút → cùng luồng; đích quay về là trang phiếu (background tự dựng)", async () => {
   const { b, srv, pos } = await openToReady({ posUrl: `${POS}/chi-tiet-so/SOBD1593858` });
   try {
-    assert.equal(b.session(KEY).returnUrl, `${POS}/chi-tiet-so/SOBD1593858`);
+    assert.equal(b.session(KEY).returnUrl, `${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
     const search = srv.st.log.find((r) => r.url.includes("/goods-receipt/search"));
     assert.match(decodeURIComponent(search.url), /so_thuocsi=1593858,pos_id=64a8663b-0c9e-49c6-9626-0a4c7c4bd53d/);
     await until(() => pos.view && pos.view.title.startsWith("Đã khớp đơn Nextwaves"));
@@ -573,7 +577,7 @@ test("Chưa chọn môi trường / môi trường PRD → không làm gì trên
   }
 });
 
-test("Huỷ phiên trên POS → tải lại trang không tự mở Nextwaves; bấm 'Nhận bằng Nextwaves' → mở lại", async () => {
+test("Huỷ phiên trên POS → tải lại trang không tự mở Nextwaves; bấm 'Nhận hàng bằng RFID' → mở lại", async () => {
   const { b, pos } = await openToReady();
   try {
     const nwTabs = () => b.tabs().filter((t) => t.url.startsWith(NW)).length;
@@ -583,7 +587,7 @@ test("Huỷ phiên trên POS → tải lại trang không tự mở Nextwaves; b
     await until(() => b.session(KEY) === null);
     pos.reload();
     pos.post(POS_AUTH);
-    const start = await until(() => pos.view && pos.view.buttons && pos.view.buttons.find((x) => x.label === "Nhận bằng Nextwaves"));
+    const start = await until(() => startBtn(pos));
     await settle();
     assert.equal(nwTabs(), before, "không tự mở thêm tab");
     assert.equal(b.session(KEY), null);
@@ -714,6 +718,10 @@ test("P1.6 đường /chi-tiet-so: danh sách chưa đủ / không rõ → dừn
         const pick = await until(() => pos.view && pos.view.buttons && pos.view.buttons.find((x) => x.label.startsWith("GR03878")));
         assert.equal(pos.view.buttons.length, 2, name);
         pick.onClick();
+        // v0.2: chọn phiếu chỉ hiện nút; chưa có phiên tới khi bấm "Nhận hàng bằng RFID".
+        const start = await until(() => startBtn(pos));
+        assert.equal(b.session(KEY), null, name);
+        start.onClick();
         await sessionState(b, "waiting_nw");
         assert.deepEqual(b.session(KEY).writeLocks, ["so_many_gr"], name);
       }
@@ -766,6 +774,7 @@ test("P1.7: session:nwMatched — chỉ từ trang Nextwaves, chỉ khi phiên c
     await b.setConfig({ mode: "STG", url: "" });
     const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
     pos.post(POS_AUTH);
+    (await until(() => startBtn(pos))).onClick();
     const nw = await until(() => b.tabs().find((t) => t.url.startsWith(NW)));
     // Chưa gửi header Nextwaves → tab Nextwaves chưa tự khớp; phiên đang waiting_nw.
     await sessionState(b, "waiting_nw");
@@ -833,6 +842,7 @@ test("P2.4: phiên bản cũ (không schema, thiếu khoá) không được ghi 
     const tabsBefore = b.tabs().length;
     pos.reload();
     pos.post(POS_AUTH);
+    (await until(() => startBtn(pos))).onClick(); // v0.2: phiên bản cũ không được tìm lại → cần bấm để tạo phiên mới
     const s2 = await until(() => {
       const s = b.session(KEY);
       return s && s.schema === 1 && s;
@@ -901,7 +911,7 @@ test("P2.4: onInstalled (update, cùng extension ID) xoá phiên + cấp phép c
   }
 });
 
-test("Chống vòng lặp tạo phiên: background không trả lại phiên vừa tạo → POS tạo phiên đúng một lần rồi báo lỗi, không gọi API lặp", async () => {
+test("Không tạo phiên lặp: background không trả lại phiên vừa tạo → một lần tạo + mở Nextwaves, không gọi API lặp; chỉ còn nút để bấm lại", async () => {
   const srv = makeServer();
   // session:get luôn trả "không có phiên" (mô phỏng background / storage hỏng).
   const b = createBrowser(srv.handle, { interceptBg: (msg) => (msg.type === "session:get" ? { ok: true, data: null } : undefined) });
@@ -909,13 +919,19 @@ test("Chống vòng lặp tạo phiên: background không trả lại phiên v�
     await b.setConfig({ mode: "STG", url: "" });
     const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
     pos.post(POS_AUTH);
-    await until(() => viewTitle(pos) === "GR03878: không đọc lại được phiên vừa tạo");
-    await settle(300);
-    const poReads = srv.st.log.filter((r) => /\/backend\/v1\/pos\/.+\/po\//.test(new URL(r.url).pathname)).length;
-    const searches = srv.st.log.filter((r) => r.url.includes("/goods-receipt/search")).length;
-    assert.deepEqual([poReads, searches], [2, 1], "đọc PO 2 lần (lần tạo + lần phát hiện), tìm GR theo SO 1 lần");
+    await until(() => startBtn(pos));
+    await settle(100);
+    assert.equal(b.tabs().filter((t) => t.url.startsWith(NW)).length, 0, "mở phiếu không tự mở Nextwaves");
+    startBtn(pos).onClick();
+    await until(() => b.tabs().some((t) => t.url.startsWith(NW)));
+    await until(() => startBtn(pos)); // phiên không đọc lại được → chỉ hiện lại nút, không tự tạo
+    await settle(200);
+    const count = () => [srv.st.log.filter((r) => /\/backend\/v1\/pos\/.+\/po\//.test(new URL(r.url).pathname)).length, srv.st.log.filter((r) => r.url.includes("/goods-receipt/search")).length];
+    const c1 = count();
+    await settle(400);
+    assert.deepEqual(count(), c1, "không gọi API lặp");
+    assert.equal(c1[1], 1, "tìm GR theo SO đúng một lần (lượt bấm)");
     assert.equal(b.tabs().filter((t) => t.url.startsWith(NW)).length, 1, "chỉ mở Nextwaves một lần");
-    assert.equal(viewTitle(pos), "GR03878: không đọc lại được phiên vừa tạo");
   } finally {
     b.close();
   }

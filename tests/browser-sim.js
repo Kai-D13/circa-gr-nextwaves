@@ -160,6 +160,9 @@ function createBrowser(server, opts = {}) {
         t.reloads += 1;
         setImmediate(() => load(t));
       },
+      assign(url) {
+        setImmediate(() => !c.dead && navigate(t, String(url)));
+      },
     };
     win.addEventListener = (type, fn) => {
       if (type === "message") c.listeners.push(fn);
@@ -223,6 +226,30 @@ function createBrowser(server, opts = {}) {
           },
         }),
       },
+      // pos/gr-list.js (DOM) thay bằng bộ giả: ghi lại model nút theo mã GR; "dòng" là object {code, connected}
+      // test tự tạo / đổi để mô phỏng DOM danh sách đổi (rev 2 R2).
+      grList: {
+        attach: (ctrl) => {
+          t.grListCtrl = ctrl;
+        },
+        activate: () => {
+          if (!c.dead) t.grListActive = true;
+        },
+        deactivate: () => {
+          if (c.dead) return;
+          t.grListActive = false;
+          t.grListModel = null;
+        },
+        show: (m) => {
+          if (c.dead) return;
+          t.grListModel = m;
+          t.grListModels.push(m);
+        },
+        rowValid: (row, code, grId) => {
+          const v = t.grListModel && t.grListModel.byCode ? t.grListModel.byCode.get(code) : null;
+          return !!row && row.connected !== false && row.code === code && !!v && v.grId === grId;
+        },
+      },
     };
     vm.createContext(win);
     c.global = vm.runInContext("globalThis", win);
@@ -242,7 +269,7 @@ function createBrowser(server, opts = {}) {
   }
 
   function openTab(url) {
-    const t = { id: nextTabId++, url, closed: false, ctx: null, view: null, views: [], loads: 0, reloads: 0, focusCount: 0, ss: new Map(), post: () => {} };
+    const t = { id: nextTabId++, url, closed: false, ctx: null, view: null, views: [], loads: 0, reloads: 0, focusCount: 0, ss: new Map(), post: () => {}, grListCtrl: null, grListActive: false, grListModel: null, grListModels: [] };
     tabs.set(t.id, t);
     load(t);
     return t;

@@ -20,14 +20,38 @@ test("chế độ STG / PRD / URL → đúng môi trường; URL lạ hoặc htt
   assert.equal(env.envFromConfig(null), null);
 });
 
-test("nhận dạng trang POS: GR, chi-tiet-so; sai origin hoặc trang khác → null", () => {
+test("nhận dạng trang POS: GR, danh sách phiếu nhận (v0.2), chi-tiet-so; sai origin hoặc trang khác → null", () => {
   assert.deepEqual(env.classifyPosPage("https://pos.stg.circa-v2.buymed.tech/danh-sach-phieu-nhan-hang/2DE6C0EC-2EA8-4038-8616-659FA3F5820A", STG), { kind: "gr", grId: "2de6c0ec-2ea8-4038-8616-659fa3f5820a" });
   assert.deepEqual(env.classifyPosPage("https://pos.stg.circa-v2.buymed.tech/chi-tiet-so/1593858", STG), { kind: "so", so: "1593858" });
-  assert.equal(env.classifyPosPage("https://pos.stg.circa-v2.buymed.tech/danh-sach-phieu-nhan-hang", STG), null);
+  assert.deepEqual(env.classifyPosPage("https://pos.stg.circa-v2.buymed.tech/danh-sach-phieu-nhan-hang", STG), { kind: "gr_list" });
+  assert.deepEqual(env.classifyPosPage("https://pos.stg.circa-v2.buymed.tech/danh-sach-phieu-nhan-hang/?status=WAITING_TO_RECEIVE", STG), { kind: "gr_list" });
+  assert.equal(env.classifyPosPage("https://pos.stg.circa-v2.buymed.tech/danh-sach-phieu-nhan-hang/khong-phai-uuid", STG), null);
+  assert.equal(env.classifyPosPage("https://pos.stg.circa-v2.buymed.tech/ban-hang", STG), null);
   assert.equal(env.classifyPosPage("https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/2de6c0ec-2ea8-4038-8616-659fa3f5820a", STG), null, "trang PRD khi đang ở chế độ STG");
   assert.deepEqual(env.classifyNwPage("https://circa-stg.nextwaves.app/vi/purchases/receive?po=SOBD1593858", STG), { kind: "receive", po: "SOBD1593858" });
   assert.equal(env.classifyNwPage("https://circa-stg.nextwaves.app/vi/purchases/55bd221f-65de-4a4d-8a77-40c568a6f176", STG), null);
   assert.equal(env.classifyNwPage("https://circa.nextwaves.app/vi/purchases/receive?po=X", STG), null);
+});
+
+test("v0.2: request danh sách của trang (query pos_id=) → queryKey chuẩn hoá; tìm theo SO / POST / env khác → null; URL trang phiếu", () => {
+  const base = "https://pos.stg.circa-v2.buymed.tech/backend/v1/order/goods-receipt/search";
+  const list = `${base}?query=pos_id=64a8663b-0c9e-49c6-9626-0a4c7c4bd53d,,with_items=true,with_details=true,is_count_all_status=true&limit=20&page=1&order_by=created_at=desc`;
+  const k = env.posGrListCall(list, "GET", STG);
+  assert.ok(k && k.queryKey.startsWith("/backend/v1/order/goods-receipt/search?limit=20&order_by=created_at=desc&page=1&query=pos_id="));
+  // Cùng tham số khác thứ tự → cùng khoá; đổi trang / bộ lọc → khác khoá.
+  const reordered = `${base}?page=1&order_by=created_at=desc&limit=20&query=pos_id=64a8663b-0c9e-49c6-9626-0a4c7c4bd53d,,with_items=true,with_details=true,is_count_all_status=true`;
+  assert.equal(env.posGrListCall(reordered, "GET", STG).queryKey, k.queryKey);
+  assert.notEqual(env.posGrListCall(list.replace("page=1", "page=2"), "GET", STG).queryKey, k.queryKey);
+  assert.notEqual(env.posGrListCall(list.replace(",,with_items", ",status=WAITING_TO_RECEIVE,with_items"), "GET", STG).queryKey, k.queryKey);
+  assert.equal(env.posGrListCall(`${base}?query=so_thuocsi=1593858,pos_id=x&limit=1000`, "GET", STG), null, "tìm theo SO (của extension) không phải danh sách");
+  assert.equal(env.posGrListCall(list, "POST", STG), null);
+  assert.equal(env.posGrListCall(list, "GET", PRD), null, "URL staging khi xét PRD");
+  assert.ok(env.posGrListCall("https://api.v2.circa.vn/v1/order/goods-receipt/search?query=pos_id=abc&limit=20&page=1", "GET", PRD));
+  assert.equal(env.posGrListCall("https://pos.stg.circa-v2.buymed.tech/backend/v1/order/goods-receipt/2de6c0ec-2ea8-4038-8616-659fa3f5820a", "GET", STG), null);
+  assert.equal(env.api.posGrPage(STG, "2de6c0ec-2ea8-4038-8616-659fa3f5820a"), "https://pos.stg.circa-v2.buymed.tech/danh-sach-phieu-nhan-hang/2de6c0ec-2ea8-4038-8616-659fa3f5820a");
+  assert.equal(env.api.posGrPage(PRD, "2de6c0ec-2ea8-4038-8616-659fa3f5820a"), "https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/2de6c0ec-2ea8-4038-8616-659fa3f5820a");
+  assert.equal(env.isUuid("2de6c0ec-2ea8-4038-8616-659fa3f5820a"), true);
+  assert.equal(env.isUuid("../x"), false);
 });
 
 test("đường dẫn API đúng từng môi trường (staging /backend/v1, production api.v2/v1)", () => {
