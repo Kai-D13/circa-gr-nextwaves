@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <title>GR ← Nextwaves</title>
+    <style>
+      body { margin: 0; width: 380px; font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #111; background: #fff; }
+      main { padding: 12px 14px; }
+      h1 { font-size: 15px; margin: 0 0 10px; }
+      h1 small { color: #666; font-weight: 400; }
+      h2 { font-size: 13px; margin: 14px 0 6px; }
+      label { display: block; font-weight: 600; margin: 10px 0 4px; }
+      select, input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #bbb; border-radius: 6px; font: inherit; }
+      .note { color: #555; margin: 4px 0 0; font-size: 12px; }
+      .warn { color: #8a4b00; }
+      .row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+      .row input { flex: 1; }
+      button { border: 1px solid #111; background: #111; color: #fff; border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit; white-space: nowrap; }
+      button.sec { background: #fff; color: #111; padding: 2px 8px; font-size: 12px; }
+      .msg { color: #1a7f37; }
+      .msg.err { color: #c62828; }
+      .s { border-top: 1px solid #eee; padding: 6px 0; display: flex; gap: 8px; align-items: flex-start; }
+      .s div { flex: 1; }
+      .s b { font-weight: 600; }
+      .s span { color: #555; font-size: 12px; display: block; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>GR ← Nextwaves <small id="ver"></small></h1>
+
+      <label for="mode">Môi trường</label>
+      <select id="mode">
+        <option value="">— Chưa chọn (extension không chạy) —</option>
+        <option value="STG">Staging</option>
+        <option value="PRD">Production (chỉ đọc)</option>
+        <option value="URL">Theo URL…</option>
+      </select>
+      <input id="url" type="url" placeholder="Dán một URL POS hoặc Nextwaves của môi trường" hidden />
+      <p class="note" id="envInfo"></p>
+      <div class="row"><button id="save">Lưu</button><span class="msg" id="msg"></span></div>
+
+      <section id="grantBox" hidden>
+        <h2>Cho phép điền phiếu (từng lần)</h2>
+        <p class="note warn">Mỗi cấp phép chỉ dùng cho MỘT lượt điền của MỘT phiếu, hết hạn sau 30 phút. Chỉ cấp khi operator cho phép lượt thử đó.</p>
+        <div class="row"><input id="grCode" placeholder="Mã phiếu nhận, ví dụ GR03878" /><button id="grant">Cho phép điền 1 lần</button></div>
+        <p class="msg" id="grantMsg"></p>
+        <div id="grants"></div>
+      </section>
+
+      <h2>Phiên gần đây</h2>
+      <div id="sessions"><p class="note">Chưa có phiên.</p></div>
+    </main>
+    <script src="../lib/env.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

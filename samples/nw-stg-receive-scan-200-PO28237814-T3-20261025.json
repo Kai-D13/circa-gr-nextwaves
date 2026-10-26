@@ -1,0 +1,109 @@
+[
+    {
+        "capturedAt": "2026-10-25T16:46:05.227Z",
+        "method": "POST",
+        "url": "https://api-circa-stg.nextwaves.app/api/v1/inter-tenant-shipments/34e67fb9-ea76-4606-ab65-4c515934c0e1/receive-scan",
+        "status": 200,
+        "request": {
+            "onMissing": "keep_open",
+            "epcs": [
+                "E280F302000000017032E72A",
+                "E280F302000000017032E72B",
+                "E280F302000000017032872B",
+                "E280F3020000000170328728",
+                "E280F3020000000170328729",
+                "E280F302000000017032C72A",
+                "E280F302000000017032A728",
+                "E280F302000000017032C729",
+                "E280F302000000017032C728",
+                "E280F302000000017431E72A",
+                "E280F302000000017032A72A",
+                "E280F302000000017431E72B"
+            ]
+        },
+        "response": {
+            "id": "ea603c18-5974-44b2-8933-c6cab94c5ea7",
+            "shipmentId": "34e67fb9-ea76-4606-ab65-4c515934c0e1",
+            "shipmentDocumentId": "14a7fb91-8620-418c-bc08-7355558375ae",
+            "shipmentNumber": "IT-BUYMED-STAG-20261019092009-7938",
+            "onMissing": "keep_open",
+            "orderStatus": "received",
+            "expectedQuantity": 12,
+            "receivedQuantity": 12,
+            "missingQuantity": 0,
+            "unexpectedEpcs": [],
+            "unexpectedUnitUids": [],
+            "truncated": false,
+            "lines": [
+                {
+                    "lineId": "edba6bf3-cb98-4dc8-be8c-463da68b0c9c",
+                    "orderLineId": null,
+                    "purchaseOrderItemId": "7d55d0da-56b9-4420-8743-2f352931035c",
+                    "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+                    "productTitle": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                    "unit": "vỉ",
+                    "expected": 3,
+                    "received": 3,
+                    "missing": 0,
+                    "missingEpcs": [],
+                    "missingUnitUids": []
+                },
+                {
+                    "lineId": "2eab3586-4f49-4ef8-b1e8-ffe692afb9b3",
+                    "orderLineId": null,
+                    "purchaseOrderItemId": "7d55d0da-56b9-4420-8743-2f352931035c",
+                    "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+                    "productTitle": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+                    "unit": "vỉ",
+                    "expected": 3,
+                    "received": 3,
+                    "missing": 0,
+                    "missingEpcs": [],
+                    "missingUnitUids": []
+                },
+                {
+                    "lineId": "27650f8f-cdf4-46eb-aa7d-952c54e25405",
+                    "orderLineId": null,
+                    "purchaseOrderItemId": "248a24e4-88a1-45da-abde-26b65a7b7a35",
+                    "productId": "3b250a6b-d64b-46fb-b389-b02f6f1c6368",
+                    "productTitle": "Kem xua muỗi Soffell hương cam",
+                    "unit": "chai",
+                    "expected": 2,
+                    "received": 2,
+                    "missing": 0,
+                    "missingEpcs": [],
+                    "missingUnitUids": []
+                },
+                {
+                    "lineId": "9796be24-7371-42fe-a724-455ec3cb1ebe",
+                    "orderLineId": null,
+                    "purchaseOrderItemId": "30a2b63a-995d-470e-a755-1f5d50231dbf",
+                    "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+                    "productTitle": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                    "unit": "túi",
+                    "expected": 2,
+                    "received": 2,
+                    "missing": 0,
+                    "missingEpcs": [],
+                    "missingUnitUids": []
+                },
+                {
+                    "lineId": "592c7d5e-7eda-4bb5-9031-3578882bc703",
+                    "orderLineId": null,
+                    "purchaseOrderItemId": "30a2b63a-995d-470e-a755-1f5d50231dbf",
+                    "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+                    "productTitle": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+                    "unit": "túi",
+                    "expected": 2,
+                    "received": 2,
+                    "missing": 0,
+                    "missingEpcs": [],
+                    "missingUnitUids": []
+                }
+            ],
+            "receivedAt": "2026-10-25T16:46:06.224Z",
+            "receivedByName": "Admin User",
+            "createdAt": "2026-10-25T16:46:06.141Z"
+        }
+    }
+]

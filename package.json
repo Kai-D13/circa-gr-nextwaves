@@ -1,0 +1,9 @@
+{
+  "name": "circa-gr-nextwaves",
+  "version": "0.1.5",
+  "private": true,
+  "description": "Chrome extension: phiếu nhận hàng POS Circa → nhận bằng RFID trên Nextwaves → điền UID vào phiếu nhận.",
+  "scripts": {
+    "test": "node --test --test-timeout=60000 \"tests/*.test.js\""
+  }
+}
