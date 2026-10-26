@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **26/10/2026 (lần 27, PM audit source/gói UI v0.1.6)**. Giai đoạn: **`main` đã merge v0.1.5 tại `aa42dcc`; nhánh UI v0.1.6 ở `b4017d7` đạt gate source/gói/Edge mô phỏng và được phép cài để kiểm UI chỉ đọc trên staging. Gate UI trang thật và merge nhánh UI còn chờ. T3/W1 staging đã đạt, production chỉ đọc. Quy đổi lô vỉ → hộp giữ luật nguyên hộp và một chặn thì không ghi cả GR.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **26/10/2026 (lần 29, PM review kế hoạch v0.2)**. Giai đoạn: **`main` tại `650c24a` có v0.1.5 và kế hoạch v0.2 của dev, chưa có code/build v0.2. Hướng nút RFID trên danh sách và chỉ tạo phiên khi bấm đã được PM duyệt; Đợt 1 chờ gate UI v0.1.6 trên staging thật cùng mẫu response/DOM danh sách đã làm sạch. Nhánh UI v0.1.6 ở `b4017d7` mới đạt gate source/gói/Edge mô phỏng, chưa merge. T3/W1 staging đã đạt; production chỉ đọc, O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -143,6 +143,8 @@ Cập nhật: **26/10/2026 (lần 27, PM audit source/gói UI v0.1.6)**. Giai đ
   - Đợt 2:
     - O1 (giữ phiên `received` / `applying`, khôi phục theo capture);
     - PRD Florita (allowlist, `writeEnabled` false) → T1-PRD chỉ đọc → gate W1-PRD.
+
+- **Lần 29 (26/10, PM duyệt hướng v0.2 và gate):** `docs/pm/REVIEW-PLAN-v0.2-RFID-BUTTON-PROD-20261026.md`. PM kiểm source v0.1.5/v0.1.6 và commit `650c24a`: chưa có runtime/test/ZIP v0.2. Duyệt hướng bấm nút trên danh sách mới tạo phiên, POS ở danh sách đến khi Nextwaves nhận xong rồi về GR; phiên đã tồn tại vẫn tự tiếp tục. Đợt 0 chỉ đọc được làm; Đợt 1 theo spec PM sau ảnh UI v0.1.6 thật và response/outerHTML danh sách đã làm sạch. P1: `gr_list` phải có nhánh riêng, dữ liệu dòng chỉ gợi ý UI và GET GR/PO phải xác minh lại, không ghép header cửa hàng qua phiên khác, huỷ lượt chuẩn bị khi đổi trang, giới hạn `returnUrl`. P2: cache/refresh, hiệu năng, panel tránh nút, nâng cấp giữ ID có gate riêng. O1/production Florita cần spec/gate riêng; chưa duyệt ghi production hoặc E2E ghi staging mới.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -518,7 +520,13 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-27. **Hiện hành (sau PM audit source/gói UI v0.1.6, 26/10):**
+29. **Hiện hành (sau PM review kế hoạch v0.2, 26/10):**
+    - **Operator:** gửi ảnh UI v0.1.6 chỉ đọc trên POS/Nextwaves staging; response danh sách GR và outerHTML dòng/vùng nút đã làm sạch. Lượt nhận/ghi staging mới chỉ tiến hành khi operator cho phép riêng đúng GR/PO.
+    - **PM:** chốt gate UI v0.1.6 trên trang thật; sau đó audit Đợt 1 v0.2.0 theo `docs/pm/REVIEW-PLAN-v0.2-RFID-BUTTON-PROD-20261026.md` và bằng chứng dev. Chưa duyệt merge v0.1.6 hoặc build/ghi v0.2.0.
+    - **Dev:** cập nhật plan theo P1/P2 PM; chỉ code Đợt 1 khi G0 đạt, bàn giao nhánh/DIFF/test/gói/Edge/hiệu năng. Đợt 2 O1/PRD Florita phải có spec riêng.
+    - **Production:** chỉ đọc. O1, ý nghĩa mã QR POS sau HOÀN THÀNH và xung đột reader trên máy Florita cần giải hoặc có quyết định vận hành rõ trước gate W1-PRD.
+28. (cũ, thay bằng mục 29) Dev đề xuất kế hoạch v0.2; PM đã duyệt hướng và bổ sung gate ở lần 29.
+27. (cũ, thay bằng mục 28) **Sau PM audit source/gói UI v0.1.6, 26/10:**
     - **Operator:** sau khi chắc chắn không có phiên dở giữa Nextwaves đã nhận và POS chưa điền, cài bản giải nén `C:\circa-gr-nextwaves-v0.1.6`, chọn Staging và kiểm UI **chỉ đọc** theo `docs/dev/FIX-UI-v0.1.6.md` §6: ba ảnh POS, hai ảnh Nextwaves, thấy rõ nút thao tác và khung ở trạng thái mở/thu nhỏ, sau cuộn hoặc đổi kích thước. Không nhận hàng, cấp phép điền, điền GR hay bấm HOÀN THÀNH trong lượt này.
     - **PM:** đối chiếu ảnh trên trang thật; nếu khung tránh nút, chốt gate UI và quyết merge/dùng bản v0.1.6. Nếu còn chồng, chuyển DOM/ảnh cho dev sửa, tăng version/ZIP/SHA rồi audit lại.
     - **Quy đổi:** v0.1.6 giữ all-or-nothing theo từng lô; lô lẻ không PUT, không làm tròn/điền một phần. Operator/Buymed/POS xác nhận cách sửa đơn vị/chứng từ nếu ca này xảy ra.
