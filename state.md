@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **26/10/2026 (lần 25, PM review sơ bộ UI v0.1.6 và quy đổi)**. Giai đoạn: **`main` đã merge v0.1.5 tại `aa42dcc`; nhánh UI v0.1.6 ở `b4017d7`, đột biến/gói đang chờ; chưa qua gate phát hành UI. T3/W1 staging đã đạt, production chỉ đọc. Quy đổi lô vỉ → hộp giữ luật nguyên hộp và một chặn thì không ghi cả GR.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **26/10/2026 (lần 27, PM audit source/gói UI v0.1.6)**. Giai đoạn: **`main` đã merge v0.1.5 tại `aa42dcc`; nhánh UI v0.1.6 ở `b4017d7` đạt gate source/gói/Edge mô phỏng và được phép cài để kiểm UI chỉ đọc trên staging. Gate UI trang thật và merge nhánh UI còn chờ. T3/W1 staging đã đạt, production chỉ đọc. Quy đổi lô vỉ → hộp giữ luật nguyên hộp và một chặn thì không ghi cả GR.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -116,6 +116,8 @@ Cập nhật: **26/10/2026 (lần 25, PM review sơ bộ UI v0.1.6 và quy đổ
   - Đột biến `mutate-v0.1.6.py` **65/65 bị bắt** (60 cũ + 5 ca khung), chạy một mình, 0 ca hết giờ, 0 neo lệch.
   - **Gói v0.1.6 `34B4AE1A`** (sha256 `34b4ae1a…`, 18 file) từ commit sạch `b4017d7`; giải nén `C:\circa-gr-nextwaves-v0.1.6` khớp `src/` từng file; `edge-check` trên bản giải nén 12/12. Nhánh đã push.
   - Chưa cài cho operator: chờ PM audit gói, sau đó lượt xem UI chỉ đọc theo `FIX-UI-v0.1.6.md` §6.
+
+- **Lần 27 (26/10, PM audit độc lập UI v0.1.6):** `docs/pm/AUDIT-UI-v0.1.6-SOURCE-PACK-20261026.md`. PM chạy 106/106 test, tự dựng ZIP từ `b4017d7` ra đúng SHA-256 `34b4ae1a1cd38f2c713eeed28aaf874e571a7b9ad6323a7a745e6fea42bf077c`, 18/18 file source = ZIP = bản giải nén. Edge trên bản giải nén 12/12 đạt; đối chứng v0.1.5 hỏng đúng 2/12 ca chồng nút; 5/5 đột biến mới bị bắt, không timeout. Số 65/65 toàn bộ là kết quả dev báo, PM chưa chạy lại 60 ca cũ. **Cho operator cài v0.1.6 để kiểm UI chỉ đọc trên staging thật; chưa cho dùng để nhận/điền, chưa merge UI.** Cần ảnh nút thao tác thực trên POS/Nextwaves trước gate tiếp theo.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -491,11 +493,13 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-25. **Hiện hành (sau PM review UI sơ bộ, 26/10):**
-    - **Dev:** hoàn tất đột biến 65 ca, gói/SHA-256/bản giải nén v0.1.6 và báo gate cuối; `main` đã merge v0.1.5. Chưa cài bản UI cho operator cho tới khi PM audit source/gói.
-    - **PM:** kiểm kết quả đột biến và gói; nếu đạt, cho một lượt xem UI **chỉ đọc** trên POS/Nextwaves staging thật để xác nhận khung không che nút.
+27. **Hiện hành (sau PM audit source/gói UI v0.1.6, 26/10):**
+    - **Operator:** sau khi chắc chắn không có phiên dở giữa Nextwaves đã nhận và POS chưa điền, cài bản giải nén `C:\circa-gr-nextwaves-v0.1.6`, chọn Staging và kiểm UI **chỉ đọc** theo `docs/dev/FIX-UI-v0.1.6.md` §6: ba ảnh POS, hai ảnh Nextwaves, thấy rõ nút thao tác và khung ở trạng thái mở/thu nhỏ, sau cuộn hoặc đổi kích thước. Không nhận hàng, cấp phép điền, điền GR hay bấm HOÀN THÀNH trong lượt này.
+    - **PM:** đối chiếu ảnh trên trang thật; nếu khung tránh nút, chốt gate UI và quyết merge/dùng bản v0.1.6. Nếu còn chồng, chuyển DOM/ảnh cho dev sửa, tăng version/ZIP/SHA rồi audit lại.
     - **Quy đổi:** v0.1.6 giữ all-or-nothing theo từng lô; lô lẻ không PUT, không làm tròn/điền một phần. Operator/Buymed/POS xác nhận cách sửa đơn vị/chứng từ nếu ca này xảy ra.
     - **Trước production:** O1 và ý nghĩa mã QR POS thêm sau HOÀN THÀNH vẫn mở; tra QR chỉ đọc và quyết nghiệp vụ. PO staging còn lại giữ cho lượt thử đã chốt mục đích.
+26. (cũ, thay bằng mục 27) Dev hoàn tất gate source/gói v0.1.6; PM đã audit độc lập và cho lượt kiểm UI chỉ đọc trên staging thật.
+25. (cũ, thay bằng mục 26) PM review UI sơ bộ và quyết định quy đổi vỉ → hộp; chờ gate dev source/gói.
 24. (cũ, thay bằng mục 25) PM audit T3/W1 đã cho merge mã staging; O1, mã QR sau HOÀN THÀNH và P3 còn mở.
 23. (cũ, thay bằng mục 24) PM audit T3/W1, O1, mã QR sau HOÀN THÀNH, P3; giữ PO thứ hai để thử sau.
 22. (cũ, thay bằng mục 23) **Hiện hành (26/10, sau lần 22):**
