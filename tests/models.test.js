@@ -163,7 +163,7 @@ test("PO Nextwaves sau khi nhận (mẫu thật PO88508353): 25 receivedUnits, b
   assert.ok(all.every((u) => u.receiptId === r.id && r.epcs.includes(u.epc)), "mọi receivedUnit thuộc biên nhận và có trong epcs của biên nhận");
 });
 
-test("dấu vân tay: GR03878 khớp PO28237814 (dựng lại) nhưng KHÔNG khớp PO76458756 / PO60017570 (thật)", () => {
+test("dấu vân tay: GR03878 khớp PO28237814 (/receiving thật T3) nhưng KHÔNG khớp PO76458756 / PO60017570 (thật)", () => {
   const src = pos.grFingerprintSource(gr78());
   assert.equal(match.fingerprint(src, nw.normalizeReceiving(H.receivingPO28237814())).ok, true);
   const f76 = match.fingerprint(src, nw.normalizeReceiving(H.sample("nw-stg-receiving-PO76458756.json")));

@@ -1,6 +1,6 @@
 "use strict";
 // Chạy thật background + content script (POS, Nextwaves) trên trình duyệt giả, dữ liệu mẫu GR03878 ↔ PO28237814.
-// Phần "sau khi nhận" của Nextwaves là DỰNG LẠI (K1: chưa có lượt nhận thành công thật) — xem tests/helpers.js.
+// Phần "sau khi nhận" của Nextwaves là mẫu THẬT lượt nhận 25/10 23:46; tra QR POS còn 10/12 dựng lại — xem tests/helpers.js.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const H = require("./helpers.js");
@@ -231,6 +231,24 @@ test("E2E STG GR03878: GR → Nextwaves ?po=SOBD1593858 → khớp PO28237814 �
     assert.ok(srv.st.log.every((r) => stgOrigins.has(new URL(r.url).origin)), "chế độ STG chỉ gọi host staging");
     assert.ok(!JSON.stringify(b.store).includes("Bearer"), "không lưu token vào storage");
     assert.equal(srv.st.puts.length, 6, "không ghi thêm sau khi tải lại");
+  } finally {
+    b.close();
+  }
+});
+
+test("T3 thật: lượt 2xx mang body receive-scan thật (25/10 23:46) → về POS, kế hoạch #60070071 như khung thật, 0 PUT khi chưa cấp phép", async () => {
+  const { b, srv, pos, nw } = await openToReady();
+  try {
+    const [x] = H.sample("nw-stg-receive-scan-200-PO28237814-T3-20261025.json");
+    srv.st.nwReceived = true;
+    nw.post({ mark: "cgn/nw-hook", type: "receive-scan", payload: { envId: "STG", shipmentId: x.response.shipmentId, httpStatus: x.status, response: x.response, sentEpcs: x.request.epcs.length } });
+    const s = await sessionState(b, "received");
+    assert.deepEqual([s.scanOk.httpStatus, s.scanOk.sentEpcs, s.nwResult.units.length], [200, 12, 12]);
+    assert.deepEqual(s.nwResult.receiptIds, [H.RECEIPT_ID]);
+    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền");
+    assert.match(pos.view.lines.join("\n"), /Kế hoạch #60070071: điền 12 UID vào 6 lô\./);
+    await settle();
+    assert.equal(srv.st.puts.length, 0);
   } finally {
     b.close();
   }
