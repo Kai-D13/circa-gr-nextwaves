@@ -41,17 +41,32 @@ class FakeXHR {
   }
 }
 
-function loadHook(origin, file) {
+function loadHook(origin, file, pagePath = "/") {
   const posted = [];
   const listeners = [];
+  const popListeners = [];
   const fetchCalls = [];
+  const loc = { href: origin + pagePath, origin, pathname: pagePath };
   const win = {
     console,
     URL,
-    location: { href: origin + "/", origin },
+    location: loc,
+    // history giả: pushState đổi URL như SPA (không tải lại trang).
+    history: {
+      pushState: (_s, _t, url) => {
+        const u = new URL(url, loc.href);
+        loc.href = u.href;
+        loc.pathname = u.pathname;
+      },
+      replaceState: (_s, _t, url) => {
+        const u = new URL(url, loc.href);
+        loc.href = u.href;
+        loc.pathname = u.pathname;
+      },
+    },
     XMLHttpRequest: FakeXHR,
     postMessage: (data) => posted.push(JSON.parse(JSON.stringify(data))),
-    addEventListener: (type, fn) => type === "message" && listeners.push(fn),
+    addEventListener: (type, fn) => (type === "message" ? listeners.push(fn) : type === "popstate" ? popListeners.push(fn) : null),
     fetch: async (input, init) => {
       fetchCalls.push({ input, init });
       const res = win.__nextFetch || { status: 200, text: "{}" };
@@ -69,7 +84,9 @@ function loadHook(origin, file) {
   const xhr = () => vm.runInContext("new XMLHttpRequest()", win);
   const fetch = (url, init) => vm.runInContext("fetch", win)(url, init);
   const hello = (mark) => listeners.forEach((fn) => fn({ source: g, data: { mark, type: "hello" } }));
-  return { win, posted, xhr, fetch, hello, fetchCalls };
+  const history = () => vm.runInContext("window.history", win);
+  const popstate = () => popListeners.forEach((fn) => fn({}));
+  return { win, posted, xhr, fetch, hello, fetchCalls, history, popstate, loc };
 }
 
 const flush = () => new Promise((r) => setImmediate(r));
@@ -120,6 +137,80 @@ test("pos-hook: PUT …/status/COMPLETED (XHR và fetch) → báo gr-status kèm
   await h.fetch(`https://pos.stg.circa-v2.buymed.tech/backend/v1/order/goods-receipt/${GR_ID}/item/${GR_ID}/detail/${GR_ID}`, { method: "PUT", headers: {} });
   await flush();
   assert.equal(h.posted.filter((m) => m.type === "gr-status").length, 2);
+});
+
+// ---------- v0.2: danh sách phiếu nhận + route (Spec S5 / rev 2 R1) ----------
+const POS_ORIGIN = "https://pos.stg.circa-v2.buymed.tech";
+const LIST_PATH = "/danh-sach-phieu-nhan-hang";
+const LIST_URL = `${POS_ORIGIN}/backend/v1/order/goods-receipt/search?query=pos_id=64a8663b-0c9e-49c6-9626-0a4c7c4bd53d,,with_items=true,with_details=true,is_count_all_status=true&limit=20&page=1&order_by=created_at=desc`;
+const LIST_BODY = JSON.stringify(H.sample("pos-stg-gr-search-so-1593858.json"));
+const sendList = (h, url = LIST_URL) => {
+  const x = h.xhr();
+  x.open("GET", url);
+  x.setRequestHeader("authorization", "Bearer abc");
+  x.send();
+  return x;
+};
+const typed = (h, type) => h.posted.filter((m) => m.type === type).map((m) => m.payload);
+
+test("pos-hook v0.2: danh sách (XHR) — reqSeq cấp LÚC GỬI; kết quả rút gọn, không body / header; chào lại → gửi lại", () => {
+  const h = loadHook(POS_ORIGIN, "pos/pos-hook.js", LIST_PATH);
+  const x = sendList(h);
+  const req = typed(h, "gr-list-request");
+  assert.equal(req.length, 1, "báo lượt mới ngay khi gửi, chưa cần response");
+  assert.equal(req[0].reqSeq, 1);
+  assert.equal(req[0].envId, "STG");
+  assert.match(req[0].queryKey, /^\/backend\/v1\/order\/goods-receipt\/search\?limit=20&order_by=created_at=desc&page=1&query=pos_id=/);
+  assert.equal(typed(h, "gr-list").length, 0);
+  x.finish(200, LIST_BODY);
+  const [res] = typed(h, "gr-list");
+  assert.deepEqual([res.reqSeq, res.latestReqSeq, res.ok, res.total, res.page, res.limit], [1, 1, true, 1, 1, 1000]);
+  assert.deepEqual(res.rows, [{ id: GR_ID, code: "GR03878", status: "WAITING_TO_RECEIVE", poId: "f7678788-28e2-47bf-b5c6-a8e10a223f7d", posId: "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d" }]);
+  assert.ok(!JSON.stringify(res).includes("Bearer") && !("body" in res), "không mang token / body thô");
+  h.hello("cgn/pos-content");
+  assert.equal(typed(h, "gr-list").length, 2, "chào lại → gửi lại danh sách gần nhất");
+});
+
+test("pos-hook v0.2: A gửi → B gửi → B về → A về: response A mang latestReqSeq = B; lỗi / sai dạng / vượt giới hạn → ok:false", () => {
+  const h = loadHook(POS_ORIGIN, "pos/pos-hook.js", LIST_PATH);
+  const a = sendList(h);
+  const b = sendList(h, LIST_URL.replace("page=1", "page=2"));
+  b.finish(200, LIST_BODY);
+  a.finish(200, LIST_BODY);
+  const res = typed(h, "gr-list");
+  assert.deepEqual(res.map((r) => [r.reqSeq, r.latestReqSeq]), [[2, 2], [1, 2]]);
+  assert.notEqual(res[0].queryKey, res[1].queryKey, "trang khác → khoá khác");
+  sendList(h).finish(500, "{}");
+  sendList(h).finish(200, "không phải json");
+  const big = H.sample("pos-stg-gr-search-so-1593858.json");
+  big.data.goods_receipts = Array.from({ length: 201 }, () => big.data.goods_receipts[0]);
+  sendList(h).finish(200, JSON.stringify(big));
+  sendList(h).finish(200, "x".repeat(2 * 1024 * 1024 + 1));
+  assert.deepEqual(typed(h, "gr-list").slice(2).map((r) => r.ok), [false, false, false, false]);
+});
+
+test("pos-hook v0.2: không bắt danh sách ngoài trang danh sách / tìm theo SO / API khác; fetch cũng bắt (clone)", async () => {
+  const h = loadHook(POS_ORIGIN, "pos/pos-hook.js", `${LIST_PATH}/${GR_ID}`);
+  sendList(h).finish(200, LIST_BODY);
+  assert.equal(typed(h, "gr-list-request").length, 0, "trang phiếu: không bắt");
+  const h2 = loadHook(POS_ORIGIN, "pos/pos-hook.js", LIST_PATH);
+  sendList(h2, `${POS_ORIGIN}/backend/v1/order/goods-receipt/search?query=so_thuocsi=1593858,pos_id=x&limit=1000`).finish(200, LIST_BODY);
+  sendList(h2, `${POS_ORIGIN}/backend/v1/order/goods-receipt/${GR_ID}`).finish(200, "{}");
+  assert.equal(typed(h2, "gr-list-request").length, 0);
+  h2.win.__nextFetch = { status: 200, text: LIST_BODY };
+  await h2.fetch(LIST_URL, { headers: { authorization: "Bearer abc" } });
+  await flush();
+  await flush();
+  assert.deepEqual(typed(h2, "gr-list").map((r) => [r.reqSeq, r.ok, r.rows.length]), [[1, true, 1]]);
+});
+
+test("pos-hook v0.2: route — pushState / replaceState / popstate báo đổi route, app vẫn đổi URL như thường", () => {
+  const h = loadHook(POS_ORIGIN, "pos/pos-hook.js", LIST_PATH);
+  h.history().pushState({}, "", `${LIST_PATH}/${GR_ID}`);
+  assert.equal(h.loc.pathname, `${LIST_PATH}/${GR_ID}`);
+  h.history().replaceState({}, "", "/ban-hang");
+  h.popstate();
+  assert.deepEqual(typed(h, "route").map((r) => r.href), [`${POS_ORIGIN}${LIST_PATH}/${GR_ID}`, `${POS_ORIGIN}/ban-hang`, `${POS_ORIGIN}/ban-hang`]);
 });
 
 test("nw-hook: Authorization của API Nextwaves; POST receive-scan (XHR) → status, response, số EPC gửi", () => {

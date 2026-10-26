@@ -44,6 +44,7 @@ function makeServer(opts = {}) {
     if (u.origin === POS) {
       if (u.pathname === "/thuocsi-warehouse/qrcode") {
         const code = u.searchParams.get("code");
+        if (opts.qrDown && opts.qrDown.has(code)) return { status: 503, json: { message: "tạm lỗi" } };
         const q = qr[code];
         return { status: 200, json: { status: "OK", data: q ? [{ uniqueId: code, shortId: code, productId: q.productId, lot: q.lot, expiredDate: q.expiredDate, status: "NORMAL" }] : [] } };
       }
@@ -236,6 +237,42 @@ test("E2E STG GR03878: GR → Nextwaves ?po=SOBD1593858 → khớp PO28237814 �
     assert.equal(srv.st.puts.length, 6, "không ghi thêm sau khi tải lại");
   } finally {
     b.close();
+  }
+});
+
+test("v0.2 S6: tra QR một lần mỗi phiên + lượt nhận — 12 UID = 12 GET dù cấp phép / phiên đổi; lỗi không cache; 'Kiểm tra lại' tra lại hết", async () => {
+  const qrGets = (srv) => srv.st.log.filter((r) => new URL(r.url).pathname === "/thuocsi-warehouse/qrcode").length;
+  const { b, srv, pos } = await openToReceived();
+  try {
+    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền");
+    assert.equal(qrGets(srv), 12);
+    await grant(b); // cấp phép của đúng phiếu → lập lại kế hoạch, QR lấy từ cache
+    await until(() => fillButton(pos));
+    await grant(b, "GR09999"); // cấp phép phiếu khác → không lập lại
+    await settle(150);
+    assert.equal(qrGets(srv), 12, "không tra lại khi cấp phép / phiên đổi");
+  } finally {
+    b.close();
+  }
+  // Một UID tra lỗi (503): kế hoạch chặn; lỗi không cache → lần lập lại chỉ tra UID đó; "Kiểm tra lại" tra lại cả 12.
+  const down = new Set(["1792145819958AA1"]);
+  const ctx = await openToReceived({ server: { qrDown: down } });
+  try {
+    const recheck = await until(() => ctx.pos.view && ctx.pos.view.buttons && ctx.pos.view.buttons.find((x) => x.label === "Kiểm tra lại"));
+    await settle(150);
+    // 12 lần đầu; có thể thêm 1 nếu phiên đổi ngay lúc vừa nhận (lập lại kế hoạch: UID OK lấy cache, chỉ UID lỗi tra lại).
+    const n0 = qrGets(ctx.srv);
+    assert.ok(n0 === 12 || n0 === 13, `n0=${n0}`);
+    await grant(ctx.b); // đổi cấp phép của đúng phiếu → lập lại kế hoạch
+    await until(() => qrGets(ctx.srv) === n0 + 1);
+    await settle(100);
+    assert.equal(qrGets(ctx.srv), n0 + 1, "chỉ tra lại UID lỗi");
+    down.clear();
+    recheck.onClick();
+    await until(() => qrGets(ctx.srv) === n0 + 13);
+    await until(() => fillButton(ctx.pos));
+  } finally {
+    ctx.b.close();
   }
 });
 
