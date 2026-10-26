@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **26/10/2026 (lần 23, chạy trọn luồng lần 1 GR03880)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`; `0b9aeb3` mẫu T1, `afd98d5` mẫu T3, `25082b2` mẫu chạy trọn luồng + test, `7eadfe3` sửa test chạy đua, `fa66de6` request receive-scan từ HAR); T1 đạt gate; T3 + W1 + HOÀN THÀNH có lượt thật đạt theo dev trên GR03880, chờ PM audit; chưa merge mã ghi**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **26/10/2026 (lần 24, PM audit T3/W1 staging)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`; `afd98d5` mẫu T3, `25082b2` mẫu W1/HOÀN THÀNH, `7eadfe3` sửa test, `fa66de6` request T3 từ HAR); T1, T3 và W1 staging đã qua gate PM; cho merge mã staging, production vẫn chỉ đọc; O1 và ý nghĩa mã QR thêm sau HOÀN THÀNH còn mở trước production**. Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -110,6 +110,7 @@ Cập nhật: **26/10/2026 (lần 23, chạy trọn luồng lần 1 GR03880)**. 
   - **GR03878 (25/10):** nhật ký storage có 6 `apply_done` (#60070071) → `applied`.
   - Nhánh `25082b2`: 10 mẫu thật + `tests/full-real.test.js` (6). `7eadfe3` sửa test P1.3 chạy đua (3/15 → 0/25). `fa66de6`: request receive-scan từ HAR + 1 test. Không đổi `src/`; 100/100.
   - P3: tra QR lặp 3 vòng / lượt; `at` của `scan_ok` dạng số.
+- **Lần 24 (26/10, PM audit T3/W1):** `docs/pm/AUDIT-T3-W1-FULL-STG-20261026.md`. PM kiểm Net Capture gốc: `receive-scan` PO28237814 trùng fixture, 12/12 và biên nhận mới; 5 PUT GR03880 trùng request gốc, mỗi GET sau ghi đúng UID/lô, GR chuyển RECEIVING; POS `COMPLETED` 200 và GET sau là COMPLETED. HAR đã lọc của PO76458756 có request/status 200, thiếu body response. Chạy 100/100 test trên `fa66de6`, test P1.3 riêng 20/20 trên `7eadfe3`; `src/` không đổi. **T3 và W1 đạt gate staging, cho merge nhánh; production chỉ đọc.** GR03878 thiếu traffic POS riêng. O1 chấp nhận fail-closed ở staging, phải giải trước production hoặc stakeholder chấp nhận nhập tay. Sau HOÀN THÀNH có 5 mã QR mới khác UID Nextwaves, nguồn/ảnh hưởng kinh doanh chưa xác định; cần tra QR và chốt trước production. P3 đọc QR lặp/giờ log để sau.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -485,15 +486,12 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-23. **Hiện hành (26/10, sau lần 23):**
-    - **PM:** audit `docs/dev/FULL-KET-QUA-GR03880-20261026.md` + nhánh `25082b2` / `7eadfe3` / `fa66de6`, cùng báo cáo T3 (`afd98d5`). Chốt:
-      - gate T3 / W1 staging (operator đã gộp lượt);
-      - O1;
-      - hành vi mã QR sau HOÀN THÀNH;
-      - P3 tra QR lặp.
-    - **Operator (tuỳ chọn, chỉ đọc):** Tra cứu QR trên POS cho `1791530171312AA1` và `1792132654787AA1`, chụp kết quả.
-    - **PO thứ hai** để dành chạy lại sau khi PM chốt. Lần đó ghi cả tab Nextwaves (Net Capture thứ hai hoặc DevTools Preserve log + HAR sanitized).
-    - Merge mã ghi chỉ khi PM đồng ý gate W1.
+24. **Hiện hành (sau PM audit T3/W1, 26/10):**
+    - **Dev:** có thể merge `batch/v0.1-staging` tại `fa66de6` vào `main` sau khi kiểm diff/test/bí mật; production vẫn chỉ đọc. Nếu runtime đổi, version/ZIP/SHA-256 mới và PM audit lại.
+    - **Operator/dev (chỉ đọc):** tra QR một mã POS thêm sau HOÀN THÀNH và một UID Nextwaves để xác định sản phẩm/đơn vị/lô; hỏi stakeholder ảnh hưởng tới tồn kho/bán hàng trước production.
+    - **O1:** staging dùng đường xử lý tay khi mất phiên sau nhận; production cần khôi phục an toàn hoặc quyết định chấp nhận nhập tay của stakeholder. PO staging còn lại chỉ dùng cho lượt thử có mục đích đã chốt, ghi cả tab Nextwaves.
+    - **P3:** tối ưu tra QR lặp và định dạng `scan_ok.at` ở batch sau; không chặn merge staging.
+23. (cũ, thay bằng mục 24) PM audit T3/W1, O1, mã QR sau HOÀN THÀNH, P3; giữ PO thứ hai để thử sau.
 22. (cũ, thay bằng mục 23) **Hiện hành (26/10, sau lần 22):**
     - **Operator — gấp, trước 23:00 ngày 26/10:** export `chrome.storage` (bước 12 của `docs/dev/FULL-STG-HUONG-DAN.md`) để giữ nhật ký phiên GR03878 trước khi bị xoá.
     - **PM:** audit `docs/dev/T3-KET-QUA-PO28237814-20261025.md` và nhánh `afd98d5` (mẫu T3, test, không đổi runtime); quyết O1 (chỉ hướng dẫn, hay cần khôi phục phiên sau khi đã nhận).
