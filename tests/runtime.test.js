@@ -318,8 +318,8 @@ test("P1.3: PUT lỗi → dừng; cấp phép đã tiêu nên thử lại cần 
     const s = await sessionState(b, "apply_stopped");
     assert.deepEqual([s.applyError.reason, s.applyError.status], ["put_failed", 500]);
     assert.equal(srv.st.puts.length, 1);
-    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền");
-    assert.match(pos.view.lines.join("\n"), /Lần điền trước dừng: POS từ chối ghi \(HTTP 500\)/);
+    // Khung "Chỉ xem kế hoạch" có thể vẽ trước khi phiên sang apply_stopped (cấp phép bị tiêu → refresh) → chờ đủ cả dòng dừng.
+    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền" && /Lần điền trước dừng: POS từ chối ghi \(HTTP 500\)/.test(pos.view.lines.join("\n")));
     await grant(b);
     (await until(() => fillButton(pos))).onClick();
     await sessionState(b, "applied");
