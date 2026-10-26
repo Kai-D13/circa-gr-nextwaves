@@ -61,7 +61,8 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 | v0.1.2 | 525BCE84 | 6eeb3c0 (đầu `5d117d2`) | PM đạt P1.6 / P1.7; thêm P2.4 |
 | v0.1.3 | DF493307 | 761d734 | chỉ dựng nội bộ, không giao |
 | v0.1.4 | 10A29BC4 | 91e3bd1 (đầu `49bf0a4`) | PM đạt P2.4; **T1 lần 1 lỗi `envFromConfig`** (mọi bản ≤ 0.1.4 dính) |
-| **v0.1.5** | **CDD02C3D** | **456205a** (đầu nhánh `fa66de6`) | Sửa nạp `env.js`; **PM đạt** (`docs/pm/AUDIT-T1-FIX-v0.1.5-STG-20261025.md`); **T1 lần 2 trên phiên thật**: PM đóng gate. `0b9aeb3` mẫu T1, `afd98d5` mẫu T3 + test, `25082b2` mẫu chạy trọn luồng GR03880 + test, `7eadfe3` sửa test chạy đua, `fa66de6` request receive-scan từ HAR (không đổi `src/`) |
+| **v0.1.5** | **CDD02C3D** | **456205a** (đầu nhánh `fa66de6`; **đã merge vào `main` `aa42dcc`** 26/10) | Sửa nạp `env.js`; **PM đạt** (`docs/pm/AUDIT-T1-FIX-v0.1.5-STG-20261025.md`); **T1 lần 2 trên phiên thật**: PM đóng gate. `0b9aeb3` mẫu T1, `afd98d5` mẫu T3 + test, `25082b2` mẫu chạy trọn luồng GR03880 + test, `7eadfe3` sửa test chạy đua, `fa66de6` request receive-scan từ HAR (không đổi `src/`) |
+| v0.1.6 | 34B4AE1A | b4017d7 (nhánh `batch/v0.1.6-ui`) | Khung không che nút trang (POS HOÀN THÀNH / Hủy, NW Xác nhận nhận hàng) + thu nhỏ gọn; `docs/dev/FIX-UI-v0.1.6.md`; **chờ PM audit gói, chưa cài** |
 
 - Bản giải nén để cài: `C:\circa-gr-nextwaves-v0.1.x` (đối chiếu từng file với `src/` của commit).
 - ZIP: `dist/` (không vào git).
@@ -94,9 +95,9 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 
 | Lệnh | Nội dung |
 |---|---|
-| `npm test` | **100 test** (`node --test --test-timeout=60000`): env-keys 7, hooks 5, manifest 3, models 15, plan-apply 19, resolve 8, runtime 29, t1-real 2 (response T1 thật), t3-real 5 (lượt nhận thật 25/10), full-real 7 (lượt trọn luồng GR03880 26/10: tra QR, 5 PUT, HOÀN THÀNH, storage — toàn bộ phía POS là dữ liệu thật). Chạy ~10 s. Cặp GR03878 còn dựng lại 10/12 kết quả tra QR POS |
-| `python -I scripts/mutate-v0.1.5.py [từ_ca]` | 60 đột biến, chép sang thư mục tạm, ~45 phút. **Chạy một mình**: không chạy stress / test khác đè lên. Ca "bị bắt vì hết giờ 240 s" **không phải bằng chứng**, phải tìm nguyên nhân treo |
-| `node scripts/edge-check.js <thư mục cài>` | Edge / Chrome **thật** (hồ sơ tạm, không đăng nhập). Kiểm 2 world trên Nextwaves; đường POS GR03878 với CDP Fetch trả `samples/`; phiên; tab Nextwaves; không token. v0.1.5: 9/9 |
+| `npm test` | **100 test trên `main`** (nhánh `batch/v0.1.6-ui`: 106, thêm `panel.test.js` 6) (`node --test --test-timeout=60000`): env-keys 7, hooks 5, manifest 3, models 15, plan-apply 19, resolve 8, runtime 29, t1-real 2 (response T1 thật), t3-real 5 (lượt nhận thật 25/10), full-real 7 (lượt trọn luồng GR03880 26/10: tra QR, 5 PUT, HOÀN THÀNH, storage — toàn bộ phía POS là dữ liệu thật). Chạy ~10 s. Cặp GR03878 còn dựng lại 10/12 kết quả tra QR POS |
+| `python -I scripts/mutate-v0.1.5.py [từ_ca]` | 60 đột biến (nhánh v0.1.6: `mutate-v0.1.6.py` 65 ca = 60 + 5 ca khung), chép sang thư mục tạm, ~45 phút. **Chạy một mình**: không chạy stress / test khác đè lên. Ca "bị bắt vì hết giờ 240 s" **không phải bằng chứng**, phải tìm nguyên nhân treo |
+| `node scripts/edge-check.js <thư mục cài>` | Edge / Chrome **thật** (hồ sơ tạm, không đăng nhập). Kiểm 2 world trên Nextwaves; đường POS GR03878 với CDP Fetch trả `samples/`; phiên; tab Nextwaves; không token. v0.1.5: 9/9. Nhánh v0.1.6: thêm 3 mục bố cục (trang POS giả có nút HOÀN THÀNH góc dưới phải) → 12 mục; v0.1.6 12/12, v0.1.5 2/12 |
 | `node scripts/edge-upgrade-check.js <bản cũ> <bản mới>` | Nâng cấp giữ cùng extension ID (P2.4) trên Edge thật |
 | `python -I scripts/pack.py` | `src/` → `dist/*.zip` + SHA-256 (8 ký tự đầu = mã gói); tái lập được từ checkout sạch |
 
