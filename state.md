@@ -118,6 +118,31 @@ Cập nhật: **26/10/2026 (lần 27, PM audit source/gói UI v0.1.6)**. Giai đ
   - Chưa cài cho operator: chờ PM audit gói, sau đó lượt xem UI chỉ đọc theo `FIX-UI-v0.1.6.md` §6.
 
 - **Lần 27 (26/10, PM audit độc lập UI v0.1.6):** `docs/pm/AUDIT-UI-v0.1.6-SOURCE-PACK-20261026.md`. PM chạy 106/106 test, tự dựng ZIP từ `b4017d7` ra đúng SHA-256 `34b4ae1a1cd38f2c713eeed28aaf874e571a7b9ad6323a7a745e6fea42bf077c`, 18/18 file source = ZIP = bản giải nén. Edge trên bản giải nén 12/12 đạt; đối chứng v0.1.5 hỏng đúng 2/12 ca chồng nút; 5/5 đột biến mới bị bắt, không timeout. Số 65/65 toàn bộ là kết quả dev báo, PM chưa chạy lại 60 ca cũ. **Cho operator cài v0.1.6 để kiểm UI chỉ đọc trên staging thật; chưa cho dùng để nhận/điền, chưa merge UI.** Cần ảnh nút thao tác thực trên POS/Nextwaves trước gate tiếp theo.
+- **Lần 28 (26/10, operator yêu cầu mới → dev đề xuất kế hoạch v0.2):** `docs/dev/PLAN-v0.2-RFID-BUTTON-PROD.md`, **chờ PM duyệt spec**.
+  - Yêu cầu operator:
+    - nút "Nhận hàng bằng RFID" trên **danh sách** phiếu nhận POS (như "View on Nextwaves" của extension Nextwaves `circa-rfid`, dev chỉ đọc mã tham khảo);
+    - audit đủ cho E2E / production;
+    - sửa lỗi tồn;
+    - không làm chậm POS.
+  - Operator chốt:
+    - bấm trên danh sách thì bắt đầu ngay, tab POS ở lại danh sách; nhận xong tự về trang phiếu;
+    - **bỏ tự chạy khi mở phiếu, chỉ chạy khi bấm nút** (đảo quyết định 24/10);
+    - production đợt đầu **chỉ Florita**.
+  - Đợt 0 (không code):
+    - operator xem UI v0.1.6 chỉ đọc;
+    - operator gửi outerHTML dòng danh sách / vùng nút HOÀN THÀNH, capture đơn Nextwaves đã nhận (O1), tra QR `1791530171312AA1`, thông tin máy Florita.
+  - Đợt 1 (v0.2.0, staging):
+    - lối vào mới (danh sách + trang phiếu, click mới chạy);
+    - cache tra QR + lọc refresh;
+    - `scanAt` ISO;
+    - giữ `x-store-id`;
+    - Abort khi rời trang;
+    - đổi URL theo sự kiện;
+    - panel nhẹ hơn;
+    - ngân sách hiệu năng đo trên Edge.
+  - Đợt 2:
+    - O1 (giữ phiên `received` / `applying`, khôi phục theo capture);
+    - PRD Florita (allowlist, `writeEnabled` false) → T1-PRD chỉ đọc → gate W1-PRD.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
