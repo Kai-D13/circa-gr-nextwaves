@@ -61,7 +61,7 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 | v0.1.2 | 525BCE84 | 6eeb3c0 (đầu `5d117d2`) | PM đạt P1.6 / P1.7; thêm P2.4 |
 | v0.1.3 | DF493307 | 761d734 | chỉ dựng nội bộ, không giao |
 | v0.1.4 | 10A29BC4 | 91e3bd1 (đầu `49bf0a4`) | PM đạt P2.4; **T1 lần 1 lỗi `envFromConfig`** (mọi bản ≤ 0.1.4 dính) |
-| **v0.1.5** | **CDD02C3D** | **456205a** (đầu nhánh `afd98d5`) | Sửa nạp `env.js`; **PM đạt** (`docs/pm/AUDIT-T1-FIX-v0.1.5-STG-20261025.md`); **T1 lần 2 trên phiên thật**: PM đóng gate. `0b9aeb3` mẫu T1, `afd98d5` mẫu T3 + test (không đổi `src/`) |
+| **v0.1.5** | **CDD02C3D** | **456205a** (đầu nhánh `7eadfe3`) | Sửa nạp `env.js`; **PM đạt** (`docs/pm/AUDIT-T1-FIX-v0.1.5-STG-20261025.md`); **T1 lần 2 trên phiên thật**: PM đóng gate. `0b9aeb3` mẫu T1, `afd98d5` mẫu T3 + test, `25082b2` mẫu chạy trọn luồng GR03880 + test, `7eadfe3` sửa test chạy đua (không đổi `src/`) |
 
 - Bản giải nén để cài: `C:\circa-gr-nextwaves-v0.1.x` (đối chiếu từng file với `src/` của commit).
 - ZIP: `dist/` (không vào git).
@@ -85,6 +85,8 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
   - `T1-KET-QUA-v0.1.5-20261025.md` (T1 lần 2, PM đóng gate)
   - `K1-LOI-STG-HUONG-DAN.md` (hướng dẫn thử nhánh lỗi K1 — một lượt ghi Nextwaves, operator tự quyết). Thực tế 25/10 23:46: nhận 200 (K1 đã sửa), xem `state.md` lần 21
   - `FULL-STG-HUONG-DAN.md` (chạy trọn luồng T1 → T3 → W1 → HOÀN THÀNH trên SO mới, Net Capture tab POS từ đầu đến cuối)
+  - `FULL-KET-QUA-GR03880-20261026.md` (lần 1: W1 5 PUT khớp kế hoạch #E33C777A; POS thêm mã QR khi HOÀN THÀNH)
+  - Công cụ đọc Net Capture (không đọc header / token): mẫu script `cap-list.py`, `w1-check.py`, `full-samples.py` nằm ở scratchpad session dev; dựng lại nếu cần. Nguyên tắc: chỉ đọc `meta.json` (url / method / status / startedAt) + body; không mở `tokens.json` / `cookies.json` / `storage.json` / HAR
   - `T3-KET-QUA-PO28237814-20261025.md` (T3 thật: mẫu, P2.1 trên dữ liệu thật, kế hoạch #60070071 khớp khung thật, O1–O3 cho PM)
 - **Logic gốc:** `docs/dev/LOGIC-v0.3.md`.
 
@@ -92,7 +94,7 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 
 | Lệnh | Nội dung |
 |---|---|
-| `npm test` | **93 test** (`node --test --test-timeout=60000`): env-keys 7, hooks 5, manifest 3, models 15, plan-apply 19, resolve 8, runtime 29, t1-real 2 (response T1 thật), t3-real 5 (lượt nhận thật 25/10). Chạy ~7 s. Phía Nextwaves "sau khi nhận" trong `tests/helpers.js` là mẫu thật; còn dựng lại: 10/12 kết quả tra QR POS |
+| `npm test` | **99 test** (`node --test --test-timeout=60000`): env-keys 7, hooks 5, manifest 3, models 15, plan-apply 19, resolve 8, runtime 29, t1-real 2 (response T1 thật), t3-real 5 (lượt nhận thật 25/10), full-real 6 (lượt trọn luồng GR03880 26/10: tra QR, 5 PUT, HOÀN THÀNH, storage — toàn bộ phía POS là dữ liệu thật). Chạy ~10 s. Cặp GR03878 còn dựng lại 10/12 kết quả tra QR POS |
 | `python -I scripts/mutate-v0.1.5.py [từ_ca]` | 60 đột biến, chép sang thư mục tạm, ~45 phút. **Chạy một mình**: không chạy stress / test khác đè lên. Ca "bị bắt vì hết giờ 240 s" **không phải bằng chứng**, phải tìm nguyên nhân treo |
 | `node scripts/edge-check.js <thư mục cài>` | Edge / Chrome **thật** (hồ sơ tạm, không đăng nhập). Kiểm 2 world trên Nextwaves; đường POS GR03878 với CDP Fetch trả `samples/`; phiên; tab Nextwaves; không token. v0.1.5: 9/9 |
 | `node scripts/edge-upgrade-check.js <bản cũ> <bản mới>` | Nâng cấp giữ cùng extension ID (P2.4) trên Edge thật |
