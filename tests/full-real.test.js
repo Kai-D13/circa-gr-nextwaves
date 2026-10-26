@@ -132,3 +132,19 @@ test("FULL thật — nhật ký extension: GR03880 nhận 200 (11 EPC) → #E33
   const [search] = H.sample("nw-stg-receiving-search-q-SOBD1593849-sau-20261026.json");
   assert.deepEqual(search.response, { items: [], total: 0 });
 });
+
+test("FULL thật — HAR tab Nextwaves (chỉ request, không body): receive-scan 200 gửi đúng 11 EPC dự kiến = 11 EPC đã nhận; sau đó extension chỉ GET PO + phiếu gửi", () => {
+  const har = H.sample("nw-stg-receive-scan-req-PO76458756-20261026.json");
+  const [scan] = har;
+  assert.deepEqual([scan.method, scan.status, scan.request.onMissing], ["POST", 200, "keep_open"]);
+  assert.ok(scan.url.endsWith("/inter-tenant-shipments/efa14567-2b36-4dae-9148-6ba00d4d741d/receive-scan"));
+  const s = storage().sessions[KEY];
+  const up = (l) => l.map((x) => x.toUpperCase()).sort();
+  const expected = up(s.expected.shipments.flatMap((sh) => sh.lines.flatMap((l) => l.units.map((u) => u.epc))));
+  assert.equal(expected.length, 11);
+  assert.deepEqual(up(scan.request.epcs), expected, "không tem lạ / thiếu");
+  assert.deepEqual(up(s.nwResult.units.map((u) => u.epc)), expected);
+  const ext = har.filter((x) => /\/purchase-orders\/900e9a9d[^/]*$|\/inter-tenant-shipments\/efa14567[^/]*$/.test(x.url));
+  assert.deepEqual(ext.map((x) => [x.method, x.status]), [["GET", 200], ["GET", 200]]);
+  assert.ok(har.every((x) => x.method === "GET" || /receive-scan$/.test(x.url)), "ngoài lượt bấm của dược sĩ không có request ghi");
+});

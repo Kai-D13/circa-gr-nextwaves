@@ -54,5 +54,6 @@ Chỉ lấy body, kèm url / status / giờ. Tên nhân viên đã thay. Hash = 
 | `pos-stg-gr-GR03880-completed-20261026.json` | STG | `GET …/goods-receipt/<id>` | Sau HOÀN THÀNH: COMPLETED. **Mỗi chi tiết thêm đúng `received_quantity` mã QR mới** (không phải UID Nextwaves, không trùng). `788928be` |
 | `nw-stg-receiving-search-q-SOBD1593849-sau-20261026.json` | STG | `GET /api/v1/inter-tenant-orders/receiving?…q=SOBD1593849` | Sau khi nhận: total 0. `020c5dee` |
 | `ext-stg-storage-GR03878-GR03880-20261026.json` | STG | `chrome.storage.local` (operator export) | Phiên GR03878 (25/10, kế hoạch #60070071, 6 apply_done) + GR03880 (#E33C777A, 5 apply_done, gr_completed); có `units` extension đã dùng. Không có token. `1518fc53` |
+| `nw-stg-receive-scan-req-PO76458756-20261026.json` | STG | `POST …/inter-tenant-shipments/<id>/receive-scan` + 4 GET ngay sau | Từ "Copy all as HAR (sanitized)" tab màn quét (DevTools, Preserve log). **Lệnh copy này không kèm body response**, nên chỉ có request body (`keep_open`, 11 EPC), status, kích thước response (`responseSize`). 12:10:00.943 receive-scan 200 (2188 B) → tìm theo SO 22 B (= total 0) → `/receiving` → extension GET PO + phiếu gửi. `58a4feac` |
 
 PO staging PO00006745 (của GR03877) chỉ ghi tóm tắt trong `state.md` §2.1, không có file.

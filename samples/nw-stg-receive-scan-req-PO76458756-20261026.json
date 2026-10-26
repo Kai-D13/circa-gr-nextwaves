@@ -1,0 +1,62 @@
+[
+  {
+    "capturedAt": "2026-10-26T05:10:00.943Z",
+    "method": "POST",
+    "url": "https://api-circa-stg.nextwaves.app/api/v1/inter-tenant-shipments/efa14567-2b36-4dae-9148-6ba00d4d741d/receive-scan",
+    "status": 200,
+    "request": {
+      "onMissing": "keep_open",
+      "epcs": [
+        "E280F302000000017432E729",
+        "E280F302000000017432A729",
+        "E280F3020000000170338729",
+        "E280F302000000017033872A",
+        "E280F302000000017033A729",
+        "E280F302000000017033A728",
+        "E280F302000000017432C72B",
+        "E280F302000000017033A72A",
+        "E280F302000000017432E728",
+        "E280F302000000017432A72A",
+        "E280F302000000017432A72B"
+      ]
+    },
+    "responseSize": 2188,
+    "response": null
+  },
+  {
+    "capturedAt": "2026-10-26T05:10:01.149Z",
+    "method": "GET",
+    "url": "https://api-circa-stg.nextwaves.app/api/v1/inter-tenant-orders/receiving?pageSize=50&q=SOBD1593849",
+    "status": 200,
+    "request": null,
+    "responseSize": 22,
+    "response": null
+  },
+  {
+    "capturedAt": "2026-10-26T05:10:01.150Z",
+    "method": "GET",
+    "url": "https://api-circa-stg.nextwaves.app/api/v1/inter-tenant-orders/purchase-orders/900e9a9d-1daa-41f7-aaaf-f43eac2b18a0/receiving",
+    "status": 200,
+    "request": null,
+    "responseSize": 3092,
+    "response": null
+  },
+  {
+    "capturedAt": "2026-10-26T05:10:01.475Z",
+    "method": "GET",
+    "url": "https://api-circa-stg.nextwaves.app/api/v1/purchase-orders/900e9a9d-1daa-41f7-aaaf-f43eac2b18a0",
+    "status": 200,
+    "request": null,
+    "responseSize": 10614,
+    "response": null
+  },
+  {
+    "capturedAt": "2026-10-26T05:10:01.602Z",
+    "method": "GET",
+    "url": "https://api-circa-stg.nextwaves.app/api/v1/inter-tenant-shipments/efa14567-2b36-4dae-9148-6ba00d4d741d",
+    "status": 200,
+    "request": null,
+    "responseSize": 6981,
+    "response": null
+  }
+]
