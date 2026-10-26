@@ -19,7 +19,8 @@
   const T = Object.assign({ pollMs: 700, collectTries: 6, collectDelayMs: 1500, httpTimeoutMs: 30000 }, C.tuning || {});
   const HOOK = "cgn/nw-hook";
   const ME = "cgn/nw-content";
-  const panel = C.ui.createPanel("GR ← Nextwaves");
+  // Khung không được che nút nhận hàng của màn quét.
+  const panel = C.ui.createPanel("GR ← Nextwaves", { avoidButtons: /^xác nhận nhận hàng$/iu });
   const OPEN = new Set(["waiting_nw", "nw_ready"]);
 
   // Mã lỗi nhận hàng của Nextwaves (từ bundle web) → câu cho dược sĩ. Extension không tự xử lý, chỉ báo.

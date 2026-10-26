@@ -22,7 +22,8 @@
   const T = Object.assign({ pollMs: 700, qrConcurrency: 4, reloadDelayMs: 800, httpTimeoutMs: 30000, leaseRenewMs: 15000, restartGuardMs: 10000 }, C.tuning || {});
   const HOOK = "cgn/pos-hook";
   const ME = "cgn/pos-content";
-  const panel = C.ui.createPanel("GR ← Nextwaves");
+  // Khung không được che nút thao tác của phiếu (operator 26/10: che HOÀN THÀNH).
+  const panel = C.ui.createPanel("GR ← Nextwaves", { avoidButtons: /^(hoàn thành|hủy|huỷ|hủy phiếu|huỷ phiếu)$/iu });
   const tabToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
   const lower = (s) => String(s || "").toLowerCase();
 

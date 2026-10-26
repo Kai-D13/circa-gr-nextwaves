@@ -9,6 +9,8 @@
 //  3. Trang POS staging GR03878 do CDP Fetch trả dữ liệu mẫu (samples/): ISOLATED world có env; sau tin "auth" như hook gửi,
 //     extension đọc GR / PO / tìm GR theo SO (kèm header), hiện khung, tạo phiên waiting_nw, mở tab Nextwaves ?po=SOBD1593858;
 //     storage không chứa token.
+//  4. (v0.1.6) Trang POS giả có nút HOÀN THÀNH cố định góc dưới phải như POS thật: khung extension không chồng nút
+//     (cả khi mở rộng lẫn thu nhỏ; khung thu nhỏ ≤ 330px); bỏ nút thì khung về lại mép dưới 16px.
 // In "ĐẠT" / "HỎNG" từng mục; mã thoát 0 nếu tất cả đạt.
 "use strict";
 const { spawn } = require("node:child_process");
@@ -29,6 +31,10 @@ const BROWSERS = [
   "C:/Program Files/Google/Chrome/Application/chrome.exe",
 ];
 const sample = (n) => fs.readFileSync(path.join(ROOT, "samples", n), "utf8");
+// Trang POS giả: nút HOÀN THÀNH cố định góc dưới phải (vị trí như POS thật, operator 26/10).
+const POS_HTML =
+  '<!doctype html><html><head><meta charset="utf-8"><title>POS giả</title></head><body>POS staging (trang giả để kiểm extension)' +
+  '<div style="position:fixed;right:24px;bottom:12px"><button id="cgn-test-done" style="width:180px;height:44px">HOÀN THÀNH</button></div></body></html>';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 const check = (name, ok, detail) => {
@@ -116,6 +122,38 @@ async function panelText(page) {
   return html.replace(/<style>[\s\S]*?<\/style>/, "").replace(/<[^>]+>/g, " | ").replace(/(\s*\|\s*)+/g, " | ").trim();
 }
 
+// Rect (viewport) của khung và nút thu nhỏ trong shadow root đóng — CDP DOM xuyên shadow.
+async function panelRects(page) {
+  const doc = await page.send("DOM.getDocument", { depth: -1, pierce: true });
+  let host = null;
+  const walk = (n) => {
+    if (!n || host) return;
+    if (n.attributes && n.attributes.includes("data-cgn-panel")) host = n;
+    (n.children || []).forEach(walk);
+    (n.shadowRoots || []).forEach(walk);
+  };
+  walk(doc.result.root);
+  const sr = host && host.shadowRoots && host.shadowRoots[0];
+  if (!sr) return null;
+  const find = (n, cls) => {
+    if (!n) return null;
+    const ci = n.attributes ? n.attributes.indexOf("class") : -1;
+    if (ci >= 0 && n.attributes[ci + 1].split(" ").includes(cls)) return n;
+    for (const c of n.children || []) {
+      const x = find(c, cls);
+      if (x) return x;
+    }
+    return null;
+  };
+  const rectOf = async (n) => {
+    if (!n) return null;
+    const q = (await page.send("DOM.getBoxModel", { nodeId: n.nodeId })).result.model.border;
+    return { left: q[0], top: q[1], right: q[2], bottom: q[5], width: q[2] - q[0], height: q[5] - q[1] };
+  };
+  return { box: await rectOf(find(sr, "box")), min: await rectOf(find(sr, "x")) };
+}
+const overlap = (a, b) => !!a && !!b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+
 (async () => {
   const browser = BROWSERS.find((b) => fs.existsSync(b));
   if (!browser) {
@@ -151,7 +189,7 @@ async function panelText(page) {
     const pos = await openPage(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`, `${POS}/*`, (r) => {
       const u = new URL(r.url);
       reqs.push({ method: r.method, path: u.pathname, auth: !!(r.headers.authorization || r.headers.Authorization), store: r.headers["x-store-id"] || "" });
-      if (/^\/danh-sach-phieu-nhan-hang\//.test(u.pathname)) return { status: 200, type: "text/html", body: "<!doctype html><html><head><title>POS giả</title></head><body>POS staging (trang giả để kiểm extension)</body></html>" };
+      if (/^\/danh-sach-phieu-nhan-hang\//.test(u.pathname)) return { status: 200, type: "text/html; charset=utf-8", body: POS_HTML };
       if (u.pathname === `/backend/v1/order/goods-receipt/${GR_ID}`) return { status: 200, type: "application/json", body: sample("gr-stg-GR03878-20261024.json") };
       if (/^\/backend\/v1\/pos\/.+\/po\//.test(u.pathname)) return { status: 200, type: "application/json", body: sample("po-stg-PO00006750-SOBD1593858.json") };
       if (u.pathname === "/backend/v1/order/goods-receipt/search") return { status: 200, type: "application/json", body: sample("pos-stg-gr-search-so-1593858.json") };
@@ -169,6 +207,24 @@ async function panelText(page) {
     check("POS · đọc GR, PO, tìm GR theo SO kèm header + cửa hàng", ["/order/goods-receipt/" + GR_ID, "/po/", "/goods-receipt/search"].every((p) => api.some((r) => r.path.includes(p))) && api.every((r) => r.auth && r.store === STORE), `${api.length} lời gọi API`);
     const text = await panelText(pos.page);
     check("POS · khung hiện 'Chờ nhận hàng trên Nextwaves' + mã giao", /Chờ nhận hàng trên Nextwaves/.test(text) && /SOBD1593858-F/.test(text), text.slice(0, 160));
+    // 4) Khung không che nút HOÀN THÀNH của trang.
+    const btnRect = async () => JSON.parse((await evalIn(pos.page, "JSON.stringify(document.getElementById('cgn-test-done').getBoundingClientRect())", posMain && posMain.id)) || "null");
+    const vh = await evalIn(pos.page, "innerHeight", posMain && posMain.id);
+    const btn = await btnRect();
+    let pr = await panelRects(pos.page);
+    check("POS · khung (mở rộng) không chồng nút HOÀN THÀNH góc dưới phải", !!pr && !!pr.box && !overlap(pr.box, btn) && pr.box.top >= 0, pr && pr.box ? `khung ${JSON.stringify(pr.box)} · nút ${JSON.stringify(btn)} · vh ${vh}` : "không đọc được khung");
+    if (pr && pr.min) {
+      const cx = pr.min.left + pr.min.width / 2;
+      const cy = pr.min.top + pr.min.height / 2;
+      for (const type of ["mousePressed", "mouseReleased"]) await pos.page.send("Input.dispatchMouseEvent", { type, x: cx, y: cy, button: "left", clickCount: 1 });
+      await sleep(600);
+      pr = await panelRects(pos.page);
+    }
+    check("POS · khung thu nhỏ gọn (≤ 330px) và vẫn không chồng nút", !!pr && !!pr.box && pr.box.width <= 330 && !overlap(pr.box, btn), pr && pr.box ? JSON.stringify(pr.box) : "không đọc được khung");
+    await evalIn(pos.page, "document.getElementById('cgn-test-done').remove(), true", posMain && posMain.id);
+    await sleep(1600);
+    pr = await panelRects(pos.page);
+    check("POS · bỏ nút → khung về mép dưới 16px", !!pr && !!pr.box && Math.abs(vh - pr.box.bottom - 16) <= 1, pr && pr.box ? `mép dưới cách đáy ${Math.round(vh - pr.box.bottom)}px` : "không đọc được khung");
     const sessions = JSON.parse((await evalIn(sw, "chrome.storage.local.get('sessions').then(x=>JSON.stringify(Object.values(x.sessions||{})))")) || "[]");
     const s = sessions.find((x) => x.grId === GR_ID);
     check("Phiên STG GR03878 tạo ra (waiting_nw, schema, không khoá)", !!s && s.state === "waiting_nw" && s.schema === 1 && Array.isArray(s.writeLocks) && s.writeLocks.length === 0, s ? JSON.stringify({ state: s.state, schema: s.schema, writeLocks: s.writeLocks, createdBy: s.createdBy }) : "không có phiên");
