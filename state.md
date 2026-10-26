@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **26/10/2026 (lần 29, PM review kế hoạch v0.2)**. Giai đoạn: **`main` tại `650c24a` có v0.1.5 và kế hoạch v0.2 của dev, chưa có code/build v0.2. Hướng nút RFID trên danh sách và chỉ tạo phiên khi bấm đã được PM duyệt; Đợt 1 chờ gate UI v0.1.6 trên staging thật cùng mẫu response/DOM danh sách đã làm sạch. Nhánh UI v0.1.6 ở `b4017d7` mới đạt gate source/gói/Edge mô phỏng, chưa merge. T3/W1 staging đã đạt; production chỉ đọc, O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **26/10/2026 (lần 31, PM kiểm Spec Đợt 1 rev 1)**. Giai đoạn: **`main` tại `1b03c5c` có v0.1.5 và plan v0.2 rev 1, chưa có code/build v0.2. PM chấp nhận rev 1 làm nền; cần chốt thứ tự response danh sách và vô hiệu click khi dòng/filter đổi. G0 chưa đạt: chờ ảnh UI v0.1.6 thật cùng response/DOM danh sách đã làm sạch. Nhánh UI v0.1.6 ở `b4017d7` chưa merge. T3/W1 staging đã đạt; production chỉ đọc, O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -155,6 +155,8 @@ Cập nhật: **26/10/2026 (lần 29, PM review kế hoạch v0.2)**. Giai đo�
   - S7: giữ panel v0.1.6 tới khi có DOM thật; đo hiệu năng so baseline.
   - S8: hướng dẫn nâng cấp.
   - Kèm danh sách test G1. **Chưa code, chờ G0.**
+
+- **Lần 31 (26/10, PM kiểm plan rev 1):** `docs/pm/REVIEW-PLAN-v0.2-REV1-20261026.md`. Dev đã commit nguyên trạng tài liệu PM ở `f12934a`; `1b03c5c` chỉ sửa plan/state, chưa có runtime/test/ZIP v0.2. Rev 1 xử lý phần lớn finding P1/P2, được chấp nhận làm nền. Cần chỉnh lý P1: cấp `seq` khi request danh sách bắt đầu và đối chiếu query/filter/page để response cũ không đè mới; vô hiệu cú bấm nếu dòng hoặc bộ lọc đổi giữa các GET dù URL không đổi. G0 vẫn chờ ảnh UI v0.1.6 thật, response danh sách và outerHTML đã làm sạch; chưa cho code Đợt 1.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -530,7 +532,12 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-29. **Hiện hành (sau PM review kế hoạch v0.2, 26/10):**
+31. **Hiện hành (sau PM kiểm plan rev 1, 26/10):**
+    - **Operator:** gửi G0 chỉ đọc: 3 ảnh POS + 2 ảnh Nextwaves v0.1.6, `Copy response` danh sách GR và outerHTML dòng/vùng nút đã làm sạch. Chưa nhận/điền/HOÀN THÀNH để lấy G0.
+    - **Dev:** bổ sung thứ tự request/query và vô hiệu click khi dòng/filter đổi theo `docs/pm/REVIEW-PLAN-v0.2-REV1-20261026.md`; chờ PM chốt G0 trước khi code Đợt 1.
+    - **PM:** kiểm ảnh/response/DOM thật, chốt gate UI v0.1.6 và G0; sau đó audit build v0.2.0 theo G1/G2. O1/PRD Florita có spec/gate riêng.
+30. (cũ, thay bằng mục 31) Dev thêm Spec Đợt 1 rev 1 theo P1/P2 PM; G0 chưa đạt.
+29. (cũ, thay bằng mục 30) **Sau PM review kế hoạch v0.2, 26/10:**
     - **Operator:** gửi ảnh UI v0.1.6 chỉ đọc trên POS/Nextwaves staging; response danh sách GR và outerHTML dòng/vùng nút đã làm sạch. Lượt nhận/ghi staging mới chỉ tiến hành khi operator cho phép riêng đúng GR/PO.
     - **PM:** chốt gate UI v0.1.6 trên trang thật; sau đó audit Đợt 1 v0.2.0 theo `docs/pm/REVIEW-PLAN-v0.2-RFID-BUTTON-PROD-20261026.md` và bằng chứng dev. Chưa duyệt merge v0.1.6 hoặc build/ghi v0.2.0.
     - **Dev:** cập nhật plan theo P1/P2 PM; chỉ code Đợt 1 khi G0 đạt, bàn giao nhánh/DIFF/test/gói/Edge/hiệu năng. Đợt 2 O1/PRD Florita phải có spec riêng.
