@@ -1,16 +1,22 @@
 // Kiểm extension trên TRÌNH DUYỆT THẬT (Edge / Chrome headless, hồ sơ tạm, không đăng nhập, không gọi server POS thật).
 // Sinh ra sau lỗi T1 25/10 (env.js nạp trùng → ISOLATED world thiếu env) mà trình duyệt giả trong tests/ không thấy.
 //
-//   node scripts/edge-check.js <thư mục extension>        vd. node scripts/edge-check.js C:\circa-gr-nextwaves-v0.1.5
+//   node scripts/edge-check.js <thư mục extension>        vd. node scripts/edge-check.js C:\circa-gr-nextwaves-v0.2.0
 //
-// Các phép kiểm:
+// Các phép kiểm (CDP Fetch trả trang POS giả + dữ liệu mẫu samples/; request của chính trang giả mang header x-cgn-test-page,
+// request không có header đó là của extension):
 //  1. Service worker nạp được, đúng version.
 //  2. Trang Nextwaves staging thật (trang đăng nhập): MAIN world có env + hook; ISOLATED world có env + thư viện + content script.
-//  3. Trang POS staging GR03878 do CDP Fetch trả dữ liệu mẫu (samples/): ISOLATED world có env; sau tin "auth" như hook gửi,
-//     extension đọc GR / PO / tìm GR theo SO (kèm header), hiện khung, tạo phiên waiting_nw, mở tab Nextwaves ?po=SOBD1593858;
-//     storage không chứa token.
-//  4. (v0.1.6) Trang POS giả có nút HOÀN THÀNH cố định góc dưới phải như POS thật: khung extension không chồng nút
-//     (cả khi mở rộng lẫn thu nhỏ; khung thu nhỏ ≤ 330px); bỏ nút thì khung về lại mép dưới 16px.
+//  3. Trang phiếu GR03878 (v0.2: CHỈ TẠO PHIÊN KHI BẤM): mở phiếu → khung có nút "Nhận hàng bằng RFID", chỉ đọc GR + PO, KHÔNG tự
+//     mở Nextwaves / tạo phiên; bấm nút → tìm GR theo SO, phiên waiting_nw, mở Nextwaves ?po=SOBD1593858; storage không token.
+//  4. (v0.1.6) Khung không chồng nút HOÀN THÀNH góc dưới phải (mở rộng / thu nhỏ ≤ 330px); bỏ nút → khung về mép dưới 16px.
+//  5. (v0.2) Trang danh sách giả (bảng 20 dòng, script của trang gọi API danh sách): nút chỉ ở dòng chờ / đang nhận đúng cửa hàng,
+//     nằm cạnh nút .circa-rfid-po-link của extension Nextwaves (không đè); chỉ xem → 0 request của extension; bấm nút không mở dòng;
+//     bấm → một phiên, mở Nextwaves, tab POS ở lại danh sách.
+//  6. (v0.2) Hiệu năng: bơm 300 thay đổi DOM trên danh sách và trên trang bán hàng giả. CPU quy cho script extension đo bằng
+//     CDP Profiler (lọc chrome-extension://), thời gian từng lượt quét nút đo trong gr-list; 0 request của extension.
+//     Ngân sách: mỗi lượt quét < 2 ms; tổng CPU extension trong cả đợt < 50 ms (⇒ không có task > 50 ms do extension).
+//  7. (v0.2) Trang bán hàng giả: không khung, không nút, không request của extension.
 // In "ĐẠT" / "HỎNG" từng mục; mã thoát 0 nếu tất cả đạt.
 "use strict";
 const { spawn } = require("node:child_process");
@@ -25,22 +31,65 @@ const POS = "https://pos.stg.circa-v2.buymed.tech";
 const NW_PAGE = "https://circa-stg.nextwaves.app/vi/purchases/receive?po=SOBD1593858";
 const GR_ID = "2de6c0ec-2ea8-4038-8616-659fa3f5820a";
 const STORE = "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d";
+const OTHER_STORE = "00000000-0000-0000-0000-00000000abcd";
 const BROWSERS = [
   "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
   "C:/Program Files/Google/Chrome/Application/chrome.exe",
 ];
 const sample = (n) => fs.readFileSync(path.join(ROOT, "samples", n), "utf8");
-// Trang POS giả: nút HOÀN THÀNH cố định góc dưới phải (vị trí như POS thật, operator 26/10).
-const POS_HTML =
-  '<!doctype html><html><head><meta charset="utf-8"><title>POS giả</title></head><body>POS staging (trang giả để kiểm extension)' +
-  '<div style="position:fixed;right:24px;bottom:12px"><button id="cgn-test-done" style="width:180px;height:44px">HOÀN THÀNH</button></div></body></html>';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
 const check = (name, ok, detail) => {
   results.push(ok);
   console.log(`${ok ? "ĐẠT " : "HỎNG"}  ${name}${detail ? "  — " + detail : ""}`);
 };
+
+// ---------- trang POS giả ----------
+const AUTH_JS = `{"authorization":"Bearer kiem-thu","x-client-id":"1","x-store-id":"${STORE}","grpc-timeout":"30S","x-cgn-test-page":"1"}`;
+// Trang phiếu: nút HOÀN THÀNH cố định góc dưới phải (vị trí như POS thật, operator 26/10).
+const GR_HTML =
+  '<!doctype html><html><head><meta charset="utf-8"><title>POS giả — phiếu</title></head><body>POS staging (trang giả để kiểm extension)' +
+  '<div style="position:fixed;right:24px;bottom:12px"><button id="cgn-test-done" style="width:180px;height:44px">HOÀN THÀNH</button></div></body></html>';
+// 20 dòng: GR03878 thật + 9 chờ nhận + 3 đang nhận (cửa hàng 2222), 5 đã nhận, 1 huỷ, 1 chờ nhận cửa hàng khác. Nút kỳ vọng: 13.
+const ROWS = (() => {
+  const out = [{ id: GR_ID, code: "GR03878", status: "WAITING_TO_RECEIVE", store: STORE }];
+  const add = (n, status, store) => {
+    for (let i = 0; i < n; i++) {
+      const k = out.length;
+      out.push({ id: `11111111-2222-4333-8444-${String(k).padStart(12, "0")}`, code: `GR0390${String(k).padStart(2, "0")}`, status, store: store || STORE });
+    }
+  };
+  add(9, "WAITING_TO_RECEIVE");
+  add(3, "RECEIVING");
+  add(5, "COMPLETED");
+  add(1, "CANCELED");
+  add(1, "WAITING_TO_RECEIVE", OTHER_STORE);
+  return out;
+})();
+const EXPECTED_BUTTONS = ROWS.filter((r) => r.store === STORE && (r.status === "WAITING_TO_RECEIVE" || r.status === "RECEIVING")).map((r) => r.code).sort();
+const LIST_API = `${POS}/backend/v1/order/goods-receipt/search?query=pos_id=${STORE},,with_items=true,with_details=true,is_count_all_status=true&limit=20&page=1&order_by=created_at=desc`;
+function listBody() {
+  const gr = JSON.parse(sample("gr-stg-GR03878-20261024.json")).data;
+  const rows = ROWS.map((r) => Object.assign({}, gr, { id: r.id, code: r.code, status: r.status, pos_info: Object.assign({}, gr.pos_info, { id: r.store }) }));
+  return JSON.stringify({ success: true, data: { goods_receipts: rows, total: rows.length, page: 1, limit: 20, status_count: {} } });
+}
+// Bảng giống dạng bảng POS (ô cuối div.flex chứa icon); vài dòng có sẵn nút .circa-rfid-po-link như extension Nextwaves.
+// Bấm vào dòng → đếm window.__rowClicks (POS thật mở phiếu khi bấm dòng). Script của trang gọi API danh sách + một API khác.
+function tableHtml(title, withListCall) {
+  const trs = ROWS.map(
+    (r, i) =>
+      `<tr onclick="window.__rowClicks=(window.__rowClicks||0)+1"><td><span>${r.code}</span></td><td><span>PO0000${6700 + i}</span></td>` +
+      `<td><span class="st">${r.status}</span></td><td><div class="flex items-center justify-center"><button class="ic">→</button>` +
+      (i % 3 === 0 ? '<button type="button" class="circa-rfid-po-link">View on Nextwaves</button>' : "") +
+      "</div></td></tr>"
+  ).join("");
+  const call = (url) => `(function(){var x=new XMLHttpRequest();x.open("GET",${JSON.stringify(url)});var h=${AUTH_JS};for(var k in h)x.setRequestHeader(k,h[k]);x.send();})();`;
+  return (
+    `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body><div id="app"><table><thead><tr><th>Mã</th><th>PO</th><th>Trạng thái</th><th></th></tr></thead>` +
+    `<tbody id="rows">${trs}</tbody></table></div><script>${call(`${POS}/backend/v1/entity`)}${withListCall ? call(LIST_API) : ""}</script></body></html>`
+  );
+}
 
 let seq = 0;
 function cdp(wsUrl, onEvent) {
@@ -106,24 +155,8 @@ async function openPage(url, fetchPattern, fetchHandler) {
 const isolatedCtx = (ctxs) => ctxs.filter((c) => c.auxData && c.auxData.type === "isolated" && /Circa GR/.test(c.name)).pop();
 const mainCtx = (ctxs) => ctxs.filter((c) => c.auxData && c.auxData.isDefault).pop();
 
-async function panelText(page) {
-  const doc = await page.send("DOM.getDocument", { depth: -1, pierce: true });
-  const hosts = [];
-  const walk = (n) => {
-    if (!n) return;
-    if (n.attributes && n.attributes.includes("data-cgn-panel")) hosts.push(n);
-    (n.children || []).forEach(walk);
-    (n.shadowRoots || []).forEach(walk);
-  };
-  walk(doc.result.root);
-  const sr = hosts[0] && hosts[0].shadowRoots && hosts[0].shadowRoots[0];
-  if (!sr) return "";
-  const html = (await page.send("DOM.getOuterHTML", { nodeId: sr.nodeId })).result.outerHTML;
-  return html.replace(/<style>[\s\S]*?<\/style>/, "").replace(/<[^>]+>/g, " | ").replace(/(\s*\|\s*)+/g, " | ").trim();
-}
-
-// Rect (viewport) của khung và nút thu nhỏ trong shadow root đóng — CDP DOM xuyên shadow.
-async function panelRects(page) {
+// Shadow root (đóng) của khung extension — CDP DOM xuyên shadow.
+async function panelShadow(page) {
   const doc = await page.send("DOM.getDocument", { depth: -1, pierce: true });
   let host = null;
   const walk = (n) => {
@@ -133,26 +166,83 @@ async function panelRects(page) {
     (n.shadowRoots || []).forEach(walk);
   };
   walk(doc.result.root);
-  const sr = host && host.shadowRoots && host.shadowRoots[0];
+  return host && host.shadowRoots && host.shadowRoots[0] ? host.shadowRoots[0] : null;
+}
+
+async function panelText(page) {
+  const sr = await panelShadow(page);
+  if (!sr) return "";
+  const html = (await page.send("DOM.getOuterHTML", { nodeId: sr.nodeId })).result.outerHTML;
+  return html.replace(/<style>[\s\S]*?<\/style>/, "").replace(/<[^>]+>/g, " | ").replace(/(\s*\|\s*)+/g, " | ").trim();
+}
+
+const findNode = (n, pred) => {
+  if (!n) return null;
+  if (pred(n)) return n;
+  for (const c of n.children || []) {
+    const x = findNode(c, pred);
+    if (x) return x;
+  }
+  return null;
+};
+const hasClass = (n, cls) => {
+  const ci = n.attributes ? n.attributes.indexOf("class") : -1;
+  return ci >= 0 && n.attributes[ci + 1].split(" ").includes(cls);
+};
+async function rectOf(page, n) {
+  if (!n) return null;
+  const q = (await page.send("DOM.getBoxModel", { nodeId: n.nodeId })).result.model.border;
+  return { left: q[0], top: q[1], right: q[2], bottom: q[5], width: q[2] - q[0], height: q[5] - q[1] };
+}
+async function clickAt(page, r) {
+  const x = r.left + r.width / 2;
+  const y = r.top + r.height / 2;
+  for (const type of ["mousePressed", "mouseReleased"]) await page.send("Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1 });
+}
+
+// Rect của khung, nút thu nhỏ và nút có nhãn `label` (nếu có) trong khung.
+async function panelRects(page, label) {
+  const sr = await panelShadow(page);
   if (!sr) return null;
-  const find = (n, cls) => {
-    if (!n) return null;
-    const ci = n.attributes ? n.attributes.indexOf("class") : -1;
-    if (ci >= 0 && n.attributes[ci + 1].split(" ").includes(cls)) return n;
-    for (const c of n.children || []) {
-      const x = find(c, cls);
-      if (x) return x;
-    }
-    return null;
-  };
-  const rectOf = async (n) => {
-    if (!n) return null;
-    const q = (await page.send("DOM.getBoxModel", { nodeId: n.nodeId })).result.model.border;
-    return { left: q[0], top: q[1], right: q[2], bottom: q[5], width: q[2] - q[0], height: q[5] - q[1] };
-  };
-  return { box: await rectOf(find(sr, "box")), min: await rectOf(find(sr, "x")) };
+  const btn = label
+    ? findNode(sr, (n) => n.nodeName === "BUTTON" && n.children && n.children.some((c) => c.nodeType === 3 && c.nodeValue === label))
+    : null;
+  return { box: await rectOf(page, findNode(sr, (n) => hasClass(n, "box"))), min: await rectOf(page, findNode(sr, (n) => hasClass(n, "x"))), btn: await rectOf(page, btn) };
 }
 const overlap = (a, b) => !!a && !!b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+
+// CPU (ms) quy cho script extension trong một hồ sơ CDP Profiler: tổng self-time của nút có callFrame.url chrome-extension://…
+function extensionCpuMs(profile) {
+  const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+  let ext = 0;
+  let total = 0;
+  for (let i = 0; i < profile.samples.length; i++) {
+    const dt = (profile.timeDeltas[i] || 0) / 1000;
+    const n = byId.get(profile.samples[i]);
+    if (!n) continue;
+    if (n.callFrame.functionName !== "(idle)" && n.callFrame.functionName !== "(program)") total += dt;
+    if (String(n.callFrame.url || "").startsWith("chrome-extension://")) ext += dt;
+  }
+  return { ext, total };
+}
+
+// 300 thay đổi DOM trên bảng (đổi chữ, thêm / gỡ phần tử) theo 30 lượt, mỗi lượt cách nhau 50 ms (~1,5 s liên tục).
+const STORM_JS = `(async () => {
+  const tb = document.getElementById("rows");
+  for (let b = 0; b < 30; b++) {
+    for (let i = 0; i < 10; i++) {
+      const tr = tb.children[(b * 10 + i) % tb.children.length];
+      const st = tr.querySelector(".st");
+      st.textContent = st.textContent.endsWith(".") ? st.textContent.slice(0, -1) : st.textContent + ".";
+      const s = document.createElement("span");
+      s.className = "tmp";
+      tr.firstElementChild.appendChild(s);
+      s.remove();
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return true;
+})()`;
 
 (async () => {
   const browser = BROWSERS.find((b) => fs.existsSync(b));
@@ -182,31 +272,57 @@ const overlap = (a, b) => !!a && !!b && a.left < b.right && a.right > b.left && 
     nw.page.close();
     await closeTarget(nw.targetId);
     await sleep(500);
-    const pagesBefore = new Set((await listTargets()).filter((t) => t.type === "page").map((t) => t.id));
 
-    // 3) POS staging GR03878 với dữ liệu mẫu (CDP Fetch thay server; API staging cùng origin).
+    // Server POS giả (CDP Fetch). Request của trang giả mang x-cgn-test-page; còn lại là của extension.
     const reqs = [];
-    const pos = await openPage(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`, `${POS}/*`, (r) => {
+    const handler = (r) => {
       const u = new URL(r.url);
-      reqs.push({ method: r.method, path: u.pathname, auth: !!(r.headers.authorization || r.headers.Authorization), store: r.headers["x-store-id"] || "" });
-      if (/^\/danh-sach-phieu-nhan-hang\//.test(u.pathname)) return { status: 200, type: "text/html; charset=utf-8", body: POS_HTML };
+      const page = !!(r.headers["x-cgn-test-page"] || r.headers["X-Cgn-Test-Page"]);
+      if (u.pathname.startsWith("/backend/")) reqs.push({ method: r.method, path: u.pathname, search: u.search, page, auth: !!(r.headers.authorization || r.headers.Authorization), store: r.headers["x-store-id"] || "" });
+      if (/^\/danh-sach-phieu-nhan-hang\/[0-9a-f-]{36}\/?$/.test(u.pathname)) return { status: 200, type: "text/html; charset=utf-8", body: GR_HTML };
+      if (/^\/danh-sach-phieu-nhan-hang\/?$/.test(u.pathname)) return { status: 200, type: "text/html; charset=utf-8", body: tableHtml("POS giả — danh sách", true) };
+      if (/^\/ban-hang\/?$/.test(u.pathname)) return { status: 200, type: "text/html; charset=utf-8", body: tableHtml("POS giả — bán hàng", false) };
       if (u.pathname === `/backend/v1/order/goods-receipt/${GR_ID}`) return { status: 200, type: "application/json", body: sample("gr-stg-GR03878-20261024.json") };
       if (/^\/backend\/v1\/pos\/.+\/po\//.test(u.pathname)) return { status: 200, type: "application/json", body: sample("po-stg-PO00006750-SOBD1593858.json") };
-      if (u.pathname === "/backend/v1/order/goods-receipt/search") return { status: 200, type: "application/json", body: sample("pos-stg-gr-search-so-1593858.json") };
+      if (u.pathname === "/backend/v1/order/goods-receipt/search") {
+        if (/so_thuocsi=/.test(decodeURIComponent(u.search))) return { status: 200, type: "application/json", body: sample("pos-stg-gr-search-so-1593858.json") };
+        return { status: 200, type: "application/json", body: listBody() };
+      }
+      if (u.pathname === "/backend/v1/entity") return { status: 200, type: "application/json", body: "{}" };
       return { status: 404, type: "application/json", body: "{}" };
-    });
+    };
+    const extReqs = () => reqs.filter((r) => !r.page);
+    const nwTabIds = async () => (await listTargets()).filter((t) => t.type === "page" && t.url.startsWith("https://circa-stg.nextwaves.app/")).map((t) => t.id);
+    const sessions = async () => JSON.parse((await evalIn(sw, "chrome.storage.local.get('sessions').then(x=>JSON.stringify(Object.values(x.sessions||{})))")) || "[]");
+
+    // 3) Trang phiếu GR03878: không tự chạy; bấm mới tạo phiên.
+    const nwBefore = new Set(await nwTabIds());
+    const pos = await openPage(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`, `${POS}/*`, handler);
     await sleep(3000);
     const posIso = isolatedCtx(pos.ctxs);
     const posMain = mainCtx(pos.ctxs);
     const posIsoKeys = posIso ? JSON.parse((await evalIn(pos.page, "JSON.stringify(Object.keys(globalThis.__CGN__||{}))", posIso.id)) || "[]") : [];
-    check("POS · ISOLATED world có env, pos, plan, apply, ui", ["env", "keys", "pos", "plan", "apply", "ui"].every((k) => posIsoKeys.includes(k)), JSON.stringify(posIsoKeys));
-    // Tin "auth" như pos-hook gửi khi app POS gọi API (trang giả không gọi API).
+    check("POS · ISOLATED world có env, pos, plan, apply, ui, grList", ["env", "keys", "pos", "plan", "apply", "ui", "grList"].every((k) => posIsoKeys.includes(k)), JSON.stringify(posIsoKeys));
+    // Tin "auth" như pos-hook gửi khi app POS gọi API (trang phiếu giả không gọi API).
     await evalIn(pos.page, `window.postMessage({mark:"cgn/pos-hook", type:"auth", payload:{envId:"STG", headers:{authorization:"Bearer kiem-thu", "x-client-id":"1", "x-store-id":"${STORE}", "grpc-timeout":"30S"}}}, location.origin), true`, posMain && posMain.id);
-    await sleep(5000);
-    const api = reqs.filter((r) => r.path.startsWith("/backend/v1/"));
-    check("POS · đọc GR, PO, tìm GR theo SO kèm header + cửa hàng", ["/order/goods-receipt/" + GR_ID, "/po/", "/goods-receipt/search"].every((p) => api.some((r) => r.path.includes(p))) && api.every((r) => r.auth && r.store === STORE), `${api.length} lời gọi API`);
+    await sleep(4000);
+    const viewReqs = extReqs().map((r) => r.path);
     const text = await panelText(pos.page);
-    check("POS · khung hiện 'Chờ nhận hàng trên Nextwaves' + mã giao", /Chờ nhận hàng trên Nextwaves/.test(text) && /SOBD1593858-F/.test(text), text.slice(0, 160));
+    const opened0 = (await nwTabIds()).filter((id) => !nwBefore.has(id));
+    check(
+      "POS · mở phiếu: khung có nút 'Nhận hàng bằng RFID', chỉ đọc GR + PO, KHÔNG tự mở Nextwaves / tạo phiên",
+      /Nhận hàng bằng RFID/.test(text) && /SOBD1593858-F/.test(text) && opened0.length === 0 && (await sessions()).length === 0 && viewReqs.some((p) => p.endsWith(GR_ID)) && viewReqs.some((p) => p.includes("/po/")) && !viewReqs.some((p) => p.includes("/search")),
+      `khung: ${text.slice(0, 120)} · tab Nextwaves mới ${opened0.length} · API ${JSON.stringify(viewReqs)}`
+    );
+    const pr0 = await panelRects(pos.page, "Nhận hàng bằng RFID");
+    if (pr0 && pr0.btn) await clickAt(pos.page, pr0.btn);
+    await sleep(4000);
+    const api = extReqs();
+    const s = (await sessions()).find((x) => x.grId === GR_ID);
+    const opened1 = (await nwTabIds()).filter((id) => !nwBefore.has(id));
+    check("POS · bấm nút → tìm GR theo SO kèm header + cửa hàng, phiên waiting_nw (schema, không khoá), mở MỘT tab Nextwaves", !!s && s.state === "waiting_nw" && s.schema === 1 && s.writeLocks.length === 0 && opened1.length === 1 && api.some((r) => r.path.endsWith("/search")) && api.every((r) => r.auth && r.store === STORE), s ? JSON.stringify({ state: s.state, returnUrl: s.returnUrl, createdBy: s.createdBy, tabs: opened1.length }) : "không có phiên");
+    check("Storage không chứa token", (await evalIn(sw, "chrome.storage.local.get(null).then(x=>!JSON.stringify(x).includes('Bearer'))")) === true);
+
     // 4) Khung không che nút HOÀN THÀNH của trang.
     const btnRect = async () => JSON.parse((await evalIn(pos.page, "JSON.stringify(document.getElementById('cgn-test-done').getBoundingClientRect())", posMain && posMain.id)) || "null");
     const vh = await evalIn(pos.page, "innerHeight", posMain && posMain.id);
@@ -214,9 +330,7 @@ const overlap = (a, b) => !!a && !!b && a.left < b.right && a.right > b.left && 
     let pr = await panelRects(pos.page);
     check("POS · khung (mở rộng) không chồng nút HOÀN THÀNH góc dưới phải", !!pr && !!pr.box && !overlap(pr.box, btn) && pr.box.top >= 0, pr && pr.box ? `khung ${JSON.stringify(pr.box)} · nút ${JSON.stringify(btn)} · vh ${vh}` : "không đọc được khung");
     if (pr && pr.min) {
-      const cx = pr.min.left + pr.min.width / 2;
-      const cy = pr.min.top + pr.min.height / 2;
-      for (const type of ["mousePressed", "mouseReleased"]) await pos.page.send("Input.dispatchMouseEvent", { type, x: cx, y: cy, button: "left", clickCount: 1 });
+      await clickAt(pos.page, pr.min);
       await sleep(600);
       pr = await panelRects(pos.page);
     }
@@ -225,18 +339,79 @@ const overlap = (a, b) => !!a && !!b && a.left < b.right && a.right > b.left && 
     await sleep(1600);
     pr = await panelRects(pos.page);
     check("POS · bỏ nút → khung về mép dưới 16px", !!pr && !!pr.box && Math.abs(vh - pr.box.bottom - 16) <= 1, pr && pr.box ? `mép dưới cách đáy ${Math.round(vh - pr.box.bottom)}px` : "không đọc được khung");
-    const sessions = JSON.parse((await evalIn(sw, "chrome.storage.local.get('sessions').then(x=>JSON.stringify(Object.values(x.sessions||{})))")) || "[]");
-    const s = sessions.find((x) => x.grId === GR_ID);
-    check("Phiên STG GR03878 tạo ra (waiting_nw, schema, không khoá)", !!s && s.state === "waiting_nw" && s.schema === 1 && Array.isArray(s.writeLocks) && s.writeLocks.length === 0, s ? JSON.stringify({ state: s.state, schema: s.schema, writeLocks: s.writeLocks, createdBy: s.createdBy }) : "không có phiên");
-    // Chỉ tính tab MỚI mở sau bước POS (chưa đăng nhập thì Nextwaves chuyển sang /vi/login?next=<đích>).
-    const opened = (await listTargets()).filter((t) => t.type === "page" && !pagesBefore.has(t.id) && t.id !== pos.targetId).map((t) => t.url);
-    const target = (u) => u.startsWith(NW_PAGE) || (u.startsWith("https://circa-stg.nextwaves.app/") && decodeURIComponent(u).includes("/vi/purchases/receive?po=SOBD1593858"));
-    check("Extension mở tab Nextwaves /vi/purchases/receive?po=SOBD1593858", opened.some(target), JSON.stringify(opened));
-    check("Storage không chứa token", (await evalIn(sw, "chrome.storage.local.get(null).then(x=>!JSON.stringify(x).includes('Bearer'))")) === true);
     pos.page.close();
+    await closeTarget(pos.targetId);
+
+    // 5) Danh sách: dọn phiên để GR03878 lại có nút "Nhận hàng bằng RFID".
+    await evalIn(sw, "chrome.storage.local.set({sessions:{}}).then(()=>true)");
+    for (const id of await nwTabIds()) await closeTarget(id);
+    await sleep(500);
+    reqs.length = 0;
+    const lst = await openPage(`${POS}/danh-sach-phieu-nhan-hang`, `${POS}/*`, handler);
+    await sleep(4000);
+    const lMain = mainCtx(lst.ctxs);
+    const lIso = isolatedCtx(lst.ctxs);
+    const btns = JSON.parse((await evalIn(lst.page, `JSON.stringify([...document.querySelectorAll("button.cgn-rfid-btn")].map(b=>({code:b.getAttribute("data-cgn-code"), text:b.textContent, type:b.type, sameCell: !!b.parentElement.querySelector(".circa-rfid-po-link"), inLastCell: b.closest("td")===b.closest("tr").lastElementChild})))`, lMain && lMain.id)) || "[]");
+    const codes = btns.map((b) => b.code).sort();
+    check("Danh sách · nút chỉ ở dòng chờ / đang nhận đúng cửa hàng (13/20), type=button, ở ô cuối", JSON.stringify(codes) === JSON.stringify(EXPECTED_BUTTONS) && btns.every((b) => b.type === "button" && b.text === "Nhận hàng bằng RFID" && b.inLastCell), `${codes.length} nút: ${codes.join(",")}`);
+    const theirs = await evalIn(lst.page, 'document.querySelectorAll(".circa-rfid-po-link").length', lMain && lMain.id);
+    check("Danh sách · sống chung nút .circa-rfid-po-link (không gỡ / không đè)", theirs === 7 && btns.filter((b) => b.sameCell).length >= 4, `circa-rfid-po-link ${theirs}/7, cùng ô ${btns.filter((b) => b.sameCell).length}`);
+    check("Danh sách · chỉ xem: 0 request API của extension, không khung", extReqs().length === 0 && !(await panelShadow(lst.page)), JSON.stringify(extReqs().map((r) => r.path)));
+
+    // 6) Hiệu năng: bão DOM trên danh sách (extension đang chạy observer) — CPU quy cho extension + số đo từng lượt quét.
+    await lst.page.send("Profiler.enable", {});
+    await lst.page.send("Profiler.setSamplingInterval", { interval: 100 });
+    // Lượt quét lúc tải trang (tạo 13 nút) đo riêng rồi đặt lại số đo, để đợt bão chỉ tính lượt do thay đổi DOM.
+    const stats0 = JSON.parse((await evalIn(lst.page, "JSON.stringify(globalThis.__CGN__.grList.stats(true))", lIso && lIso.id)) || "{}");
+    await lst.page.send("Profiler.start", {});
+    await evalIn(lst.page, STORM_JS, lMain && lMain.id);
+    await sleep(800);
+    const prof1 = (await lst.page.send("Profiler.stop", {})).result.profile;
+    const stats1 = JSON.parse((await evalIn(lst.page, "JSON.stringify(globalThis.__CGN__.grList.stats())", lIso && lIso.id)) || "{}");
+    const cpuList = extensionCpuMs(prof1);
+    check(
+      "Hiệu năng · danh sách + 300 thay đổi DOM (~1,5 s liên tục): quét lại ≥ 2 lượt (chờ tối đa 1 s), mỗi lượt < 2 ms, CPU extension < 50 ms, 0 request",
+      stats1.applies >= 2 && stats1.maxMs < 2 && stats0.maxMs < 16 && cpuList.ext < 50 && extReqs().length === 0,
+      `tải trang: ${stats0.applies} lượt, tối đa ${Number(stats0.maxMs).toFixed(3)} ms · bão: ${stats1.applies} lượt (gom từ ${stats1.mutationBatches} đợt thay đổi), tối đa ${Number(stats1.maxMs).toFixed(3)} ms, tổng ${Number(stats1.totalMs).toFixed(2)} ms · CPU extension ${cpuList.ext.toFixed(1)} ms / trang ${cpuList.total.toFixed(1)} ms`
+    );
+
+    // Bấm nút của ta: không mở dòng; tạo một phiên, mở Nextwaves, tab POS ở lại danh sách.
+    await evalIn(lst.page, 'document.querySelector("button.cgn-rfid-btn[data-cgn-code=\\"GR03878\\"]").click(), true', lMain && lMain.id);
+    await sleep(4000);
+    const rowClicks = await evalIn(lst.page, "window.__rowClicks||0", lMain && lMain.id);
+    const s2 = (await sessions()).filter((x) => x.grId === GR_ID);
+    const listUrl = await evalIn(lst.page, "location.href", lMain && lMain.id);
+    const nwTabs2 = await nwTabIds();
+    const label = await evalIn(lst.page, 'document.querySelector("button.cgn-rfid-btn[data-cgn-code=\\"GR03878\\"]").textContent', lMain && lMain.id);
+    check(
+      "Danh sách · bấm nút: không mở dòng, MỘT phiên (returnUrl = trang phiếu), MỘT tab Nextwaves, POS ở lại danh sách",
+      rowClicks === 0 && s2.length === 1 && s2[0].returnUrl === `${POS}/danh-sach-phieu-nhan-hang/${GR_ID}` && nwTabs2.length === 1 && /\/danh-sach-phieu-nhan-hang$/.test(listUrl),
+      `bấm dòng ${rowClicks} · phiên ${s2.length} · tab Nextwaves ${nwTabs2.length} · nút giờ: "${label}" · URL ${listUrl}`
+    );
+    lst.page.close();
+    await closeTarget(lst.targetId);
+
+    // 7) Trang bán hàng giả: extension không làm gì; bão DOM để so CPU.
+    reqs.length = 0;
+    const sale = await openPage(`${POS}/ban-hang`, `${POS}/*`, handler);
+    await sleep(3000);
+    const sMain = mainCtx(sale.ctxs);
+    await sale.page.send("Profiler.enable", {});
+    await sale.page.send("Profiler.setSamplingInterval", { interval: 100 });
+    await sale.page.send("Profiler.start", {});
+    await evalIn(sale.page, STORM_JS, sMain && sMain.id);
+    await sleep(800);
+    const cpuSale = extensionCpuMs((await sale.page.send("Profiler.stop", {})).result.profile);
+    const ours = await evalIn(sale.page, 'document.querySelectorAll("button.cgn-rfid-btn").length', sMain && sMain.id);
+    check(
+      "Trang bán hàng · không khung, không nút, 0 request của extension; CPU extension trong bão DOM ≈ 0",
+      !(await panelShadow(sale.page)) && ours === 0 && extReqs().length === 0 && cpuSale.ext < 5,
+      `CPU extension ${cpuSale.ext.toFixed(1)} ms / trang ${cpuSale.total.toFixed(1)} ms · request extension ${extReqs().length}`
+    );
+    sale.page.close();
     sw.close();
   } catch (e) {
-    if (e.message !== "dừng") check("chạy kiểm tra", false, e.message);
+    if (e.message !== "dừng") check("chạy kiểm tra", false, e.stack || e.message);
   } finally {
     proc.kill();
     await sleep(800);

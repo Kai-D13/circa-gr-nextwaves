@@ -154,10 +154,19 @@ test("R1 thứ tự lượt: A gửi → B gửi → B về → A về → giữ
     await until(() => model(pos, "GR03003"));
     await settle(60);
     assert.deepEqual([...pos.grListModel.byCode.keys()], ["GR03003"], "lượt A (2) về muộn bị bỏ");
-    pos.post(listReq(4, "Q-loc-khac"));
-    pos.post(listRes(4, 4, null, { ok: false, queryKey: "Q-loc-khac" }));
+    // A về TRƯỚC B nhưng sau khi B đã gửi → bỏ A (B mới là lượt đang chờ); giữ bảng cũ tới khi B về.
+    pos.post(listReq(4));
+    pos.post(listReq(5));
+    pos.post(listRes(4, 5, [row("GR03004", uuid(4))]));
+    await settle(80);
+    assert.equal(model(pos, "GR03004"), null, "lượt A (4) không phải lượt mới nhất đã gửi");
+    assert.ok(model(pos, "GR03003"), "giữ bảng đang hiện");
+    pos.post(listRes(5, 5, [row("GR03005", uuid(5))]));
+    await until(() => model(pos, "GR03005"));
+    pos.post(listReq(6, "Q-loc-khac"));
+    pos.post(listRes(6, 6, null, { ok: false, queryKey: "Q-loc-khac" }));
     await until(() => pos.grListModel === null);
-    pos.post(listRes(3, 4, [row("GR03003", uuid(3))]));
+    pos.post(listRes(5, 6, [row("GR03005", uuid(5))]));
     await settle(60);
     assert.equal(pos.grListModel, null, "không hiện lại dữ liệu cũ");
   } finally {
@@ -165,26 +174,31 @@ test("R1 thứ tự lượt: A gửi → B gửi → B về → A về → giữ
   }
 });
 
-// R2: thay đổi xảy ra trong lúc đang đọc GR (GET GR treo) → cú bấm bị huỷ, không tạo phiên, không mở Nextwaves.
+// R2: thay đổi xảy ra trong lúc đang đọc GR (GET GR treo) → cú bấm bị huỷ NGAY (không chờ GET trả về), không tạo phiên,
+// không mở Nextwaves. Cột 3: tiêu đề khung kỳ vọng ngay khi huỷ (null = trang đã rời danh sách, không còn khung danh sách).
 const R2_CASES = [
-  ["có request danh sách mới (đổi trang / bộ lọc) giữa chừng", (pos) => pos.post(listReq(2, "Q2"))],
+  ["có request danh sách mới (đổi trang / bộ lọc) giữa chừng", (pos) => pos.post(listReq(2, "Q2")), "Danh sách đã đổi — bấm lại"],
   ["dòng bị gỡ khỏi DOM", (pos, r) => {
     r.connected = false;
     pos.grListCtrl.onDomChanged();
-  }],
+  }, "Danh sách đã đổi — bấm lại"],
   ["thẻ <tr> bị tái dùng cho mã khác", (pos, r) => {
     r.code = "GR03999";
     pos.grListCtrl.onDomChanged();
-  }],
-  ["route đổi mà không tải lại trang", (pos) => {
+  }, "Danh sách đã đổi — bấm lại"],
+  ["route đổi sang trang khác mà không tải lại trang", (pos) => {
     pos.url = `${POS}/ban-hang`;
     pos.post({ mark: HOOK, type: "route", payload: { href: `${POS}/ban-hang` } });
-  }],
-  ["phiên đăng nhập POS đổi (token khác, không có cửa hàng)", (pos) => pos.post(auth({ authorization: "Bearer khac", "x-client-id": "1" }))],
+  }, null],
+  ["route đổi trong chính danh sách (query đổi, chưa có request mới)", (pos) => {
+    pos.url = `${LIST_URL}?page=2`;
+    pos.post({ mark: HOOK, type: "route", payload: { href: `${LIST_URL}?page=2` } });
+  }, "Đã rời trang — huỷ lượt chuẩn bị"],
+  ["phiên đăng nhập POS đổi (token khác, không có cửa hàng)", (pos) => pos.post(auth({ authorization: "Bearer khac", "x-client-id": "1" })), "Phiên đăng nhập / cửa hàng POS vừa đổi — bấm lại"],
 ];
 
-for (const [name, change] of R2_CASES) {
-  test(`R2: ${name} trong lúc đọc GR → huỷ cú bấm, không tạo phiên`, async () => {
+for (const [name, change, title] of R2_CASES) {
+  test(`R2: ${name} trong lúc đọc GR → huỷ cú bấm ngay, không tạo phiên`, async () => {
     const { b, srv, pos } = await openList();
     try {
       const release = hold(srv.st, "gr");
@@ -192,7 +206,8 @@ for (const [name, change] of R2_CASES) {
       pos.grListCtrl.onSelect(r, GR_ID, "GR03878", "start");
       await until(() => calls(srv, /goods-receipt\/2de6c0ec/) === 1);
       change(pos, r);
-      await settle(30);
+      if (title) await until(() => pos.view && pos.view.title === title); // huỷ ngay, GET GR vẫn đang treo
+      else await settle(30);
       release();
       await settle(120);
       assert.equal(b.session(KEY), null, name);

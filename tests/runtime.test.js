@@ -248,8 +248,12 @@ test("v0.2 S6: tra QR một lần mỗi phiên + lượt nhận — 12 UID = 12 
     assert.equal(qrGets(srv), 12);
     await grant(b); // cấp phép của đúng phiếu → lập lại kế hoạch, QR lấy từ cache
     await until(() => fillButton(pos));
-    await grant(b, "GR09999"); // cấp phép phiếu khác → không lập lại
+    await settle(100);
+    const grGets = () => srv.st.log.filter((r) => r.method === "GET" && new URL(r.url).pathname === `/backend/v1/order/goods-receipt/${GR_ID}`).length;
+    const g0 = grGets();
+    await grant(b, "GR09999"); // cấp phép phiếu khác → không đánh giá lại (không đọc lại GR)
     await settle(150);
+    assert.equal(grGets(), g0, "cấp phép phiếu khác không làm đọc lại phiếu");
     assert.equal(qrGets(srv), 12, "không tra lại khi cấp phép / phiên đổi");
   } finally {
     b.close();

@@ -253,9 +253,8 @@
       }
       // Khoá ghi phía POS (PM P3 / P1.6): SO phải có đúng một phiếu nhận (chưa huỷ) ở cửa hàng này, đọc đủ, và đó là phiếu này.
       const found = await searchGrsOfSo(env, storeId, link.soBase, signal);
-      guard();
       const lock = P.soWriteLock(found, gr.id);
-      guard(); // ngay trước khi tạo phiên
+      guard(); // sau lần đọc cuối và ngay trước khi tạo phiên (giữa hai chỗ này không có await)
       const s = await bg("session:start", {
         envId: env.id,
         grId: gr.id,
@@ -447,10 +446,12 @@
     if (L) L.deactivate();
   }
 
+  // Danh sách chưa được dùng (cửa hàng chưa xác nhận / không thuộc danh sách chạy thử): gỡ nút; còn lý do huỷ cú bấm thì vẫn báo.
   function clearListButtons() {
     listCtx = null;
     if (onList && L) L.show(null);
-    panel.hide();
+    if (onList && listNote) panel.show(listNote);
+    else panel.hide();
   }
 
   async function loadListSessions(env) {
