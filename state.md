@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **26/10/2026 (lần 31, PM kiểm Spec Đợt 1 rev 1)**. Giai đoạn: **`main` tại `1b03c5c` có v0.1.5 và plan v0.2 rev 1, chưa có code/build v0.2. PM chấp nhận rev 1 làm nền; cần chốt thứ tự response danh sách và vô hiệu click khi dòng/filter đổi. G0 chưa đạt: chờ ảnh UI v0.1.6 thật cùng response/DOM danh sách đã làm sạch. Nhánh UI v0.1.6 ở `b4017d7` chưa merge. T3/W1 staging đã đạt; production chỉ đọc, O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **26/10/2026 (lần 33, PM đính chính G0 v0.2)**. Giai đoạn: **`main` tại `728dc2b` có v0.1.5 và plan v0.2 rev 2, chưa có code/build v0.2. Dev được bắt đầu code Đợt 1 trên nhánh riêng từ UI v0.1.6 `b4017d7`; G0 ảnh/response/DOM thật là gate chốt tích hợp và nghiệm thu, không chặn khởi công. Chưa merge v0.1.6/v0.2 hay cho dùng v0.2 trên staging thật; mọi lượt nhận/ghi cần phép riêng. Production chỉ đọc; O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -162,6 +162,8 @@ Cập nhật: **26/10/2026 (lần 31, PM kiểm Spec Đợt 1 rev 1)**. Giai đo
   - R2: `clickToken` gắn dòng `<tr>` + lượt danh sách + `queryKey` + route. `stillValid` kiểm sau mỗi `await` và ngay trước `session:start`; huỷ chủ động khi có request danh sách mới hoặc dòng đổi.
   - Ghi chú P2: long task đo bằng trace CDP, thiếu attribution không tính đạt. Đợt 1 bản đầu đánh dấu đã thay; sẽ hợp nhất spec khi giao code.
   - **Chưa code, chờ G0.**
+
+- **Lần 33 (26/10, PM sửa điều kiện khởi công):** `docs/pm/CORRECTION-G0-v0.2-20261026.md` thay quy tắc “không code đến G0” ở các review trước. Dev được code/test v0.2 ngay trên nhánh riêng từ `b4017d7`. UI/response/DOM thật dùng để chốt selector/hợp đồng, Edge và gate merge/cài, không phải đầu vào bắt buộc cho mọi code. Dev/PM tự lấy bằng chứng chỉ đọc trên máy staging nếu có phiên đăng nhập; operator chỉ hỗ trợ nếu cần. Lượt nhận/ghi staging vẫn cần operator cho phép riêng, production chỉ đọc.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -537,7 +539,12 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-31. **Hiện hành (sau PM kiểm plan rev 1, 26/10):**
+33. **Hiện hành (sau PM đính chính G0, 26/10):**
+    - **Dev:** bắt đầu code/test Đợt 1 v0.2 trên nhánh riêng từ `b4017d7`; dùng mẫu giả cho phần chưa có DOM thật. Song song thu response/DOM staging chỉ đọc khi truy cập được; bàn giao G1/G2 theo spec rev 2 và đính chính PM.
+    - **PM:** cùng dev kiểm giao diện v0.1.6 và dữ liệu danh sách thật; dùng bằng chứng để chốt selector/hợp đồng và gate merge/cài v0.2. Không yêu cầu operator tự làm đủ năm ảnh trước khi dev code.
+    - **Operator:** chỉ cần hỗ trợ mở phiên staging hoặc gửi bằng chứng còn thiếu nếu dev/PM không truy cập được. Mọi thao tác nhận hàng/PUT/HOÀN THÀNH trên staging vẫn cần phép riêng từng lượt; production chỉ đọc.
+32. (cũ, thay bằng mục 33) Dev hoàn thiện spec rev 2; quy tắc chờ G0 trước khi code đã được PM sửa ở lần 33.
+31. (cũ, thay bằng mục 32) **Sau PM kiểm plan rev 1, 26/10:**
     - **Operator:** gửi G0 chỉ đọc: 3 ảnh POS + 2 ảnh Nextwaves v0.1.6, `Copy response` danh sách GR và outerHTML dòng/vùng nút đã làm sạch. Chưa nhận/điền/HOÀN THÀNH để lấy G0.
     - **Dev:** bổ sung thứ tự request/query và vô hiệu click khi dòng/filter đổi theo `docs/pm/REVIEW-PLAN-v0.2-REV1-20261026.md`; chờ PM chốt G0 trước khi code Đợt 1.
     - **PM:** kiểm ảnh/response/DOM thật, chốt gate UI v0.1.6 và G0; sau đó audit build v0.2.0 theo G1/G2. O1/PRD Florita có spec/gate riêng.
