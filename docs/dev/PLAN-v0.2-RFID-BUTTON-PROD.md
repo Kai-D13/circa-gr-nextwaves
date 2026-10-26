@@ -69,6 +69,8 @@ Căn cứ:
 
 ### Đợt 1 — v0.2.0 (staging): lối vào mới + sửa lỗi + hiệu năng
 
+> **Bản đầu, ĐÃ THAY.** Spec có hiệu lực là "Spec Đợt 1 — rev 1" + "rev 2" ở cuối file. Khi giao code, dev hợp nhất thành một spec duy nhất (PM rev 1, P2).
+
 Nhánh `batch/v0.2-rfid` tách từ `main` sau khi v0.1.6 merge (hoặc gộp v0.1.6 nếu gate UI thật xong cùng lúc).
 
 **1a. Bắt đầu chỉ khi bấm nút** (`src/pos/pos-content.js`)
@@ -184,9 +186,10 @@ Trả lời từng finding P1 / P2 của PM. **Chưa code. Bắt đầu khi G0 �
 ### S1. Dòng danh sách chỉ là gợi ý hiển thị (P1.1)
 
 **Dữ liệu dòng**
-- Bảng `rowsBySeq`, nhận từ hook, mỗi response danh sách là một lượt `seq` tăng dần.
-- Lượt mới (trang / bộ lọc / trang số khác) **thay toàn bộ** bảng cũ.
-- Response đến muộn (`seq` cũ hơn lượt đang hiện) bị bỏ.
+- Bảng dòng nhận từ hook. Thứ tự lượt theo **`reqSeq` cấp lúc GỬI request** (rev 2, R1), không theo lúc response về.
+- Chỉ response của **request mới nhất** mới thay bảng.
+- Response cũ về muộn bị bỏ.
+- Request mới nhất lỗi thì xoá nút cũ.
 
 **Ghép nút vào dòng**
 - Dòng trong DOM có ô lá chữ `/^GR\d{5,}$/` **và** mã đó có trong lượt hiện tại.
@@ -266,7 +269,7 @@ Mỗi request quan sát được trong `pos-content.js` xử lý theo bảng:
   - fetch: `res.clone()`.
 - Giới hạn: body ≤ 2 MB, ≤ 200 dòng. Vượt giới hạn hoặc sai dạng thì gửi `{seq, ok:false}`, và **không có nút** (fail closed).
 - Gửi qua `postMessage` (cùng origin, mark `cgn/pos-hook`, type `gr-list`) gói sau:
-  - `{seq, envId, page, limit, total, rows:[{id, code, status, poId, posId}]}`;
+  - `{reqSeq, latestReqSeq, queryKey, envId, page, limit, total, rows:[{id, code, status, poId, posId}]}` (rev 2, R1);
   - không body thô, không header, không tên người.
 
 **Nút**
@@ -305,7 +308,9 @@ Mỗi request quan sát được trong `pos-content.js` xử lý theo bảng:
 **Đo trên Edge với DOM thật làm mẫu**, so **cùng trang không cài extension**:
 1. Trang bán hàng giả: 0 GET, 0 observer, 0 panel của extension.
 2. Danh sách 20 dòng + bơm 300 thay đổi DOM: 0 GET mới khi chỉ xem; thời gian handler của ta (đo bằng `performance.now()` quanh handler, ghi vào biến chỉ đọc qua CDP).
-3. `PerformanceObserver('longtask')` có quy thuộc `attribution` cho script extension.
+3. Long task quy cho extension đo bằng **trace CDP** (`Tracing` hoặc `Profiler`, lọc theo script URL `chrome-extension://…`) cùng thời gian handler tự đo đã kiểm chứng.
+   - `PerformanceObserver('longtask')` chỉ để tham khảo.
+   - **Thiếu attribution không được tính là đạt** (PM rev 1, P2).
 
 Ngân sách: < 2 ms mỗi lượt handler, 0 long task > 50 ms quy cho extension. Vượt thì báo số đo + nguyên nhân + sửa trước G2.
 
@@ -322,7 +327,11 @@ O1 **không** coi là đã giải bằng việc giữ đường dẫn. O1 nằm 
 ### Test G1 (bổ sung theo PM)
 
 - **Môi trường / cửa hàng:** STG / PRD / host lạ / cửa hàng khác.
-- **Response danh sách:** đến muộn; trang đổi dòng; thiếu trường; vượt giới hạn.
+- **Response danh sách:** đến muộn; trang đổi dòng; thiếu trường; vượt giới hạn. Theo rev 2:
+  - A gửi → B gửi → B về → A về: giữ B;
+  - B lỗi: xoá nút;
+  - đổi bộ lọc / trang: chỉ nhận lượt mới nhất cùng `queryKey`.
+- **Click bị huỷ khi danh sách đổi mà URL giữ nguyên** (rev 2, R2): đổi bộ lọc / trang / dòng `<tr>` bị tái dùng ở giữa từng GET, và ngay trước `session:start`.
 - **Thao tác:** click / phím / double click / hai tab.
 - **Dữ liệu đổi:** GR / PO đổi sau khi đã hiện danh sách (`code`, trạng thái, cửa hàng, PO không SO).
 - **Không tự tạo phiên khi mở GR / SO; phiên cũ tiếp tục.**
@@ -332,3 +341,53 @@ O1 **không** coi là đã giải bằng việc giữ đường dẫn. O1 nằm 
 - **Nhật ký:** `scanAt` ISO, `at` log luôn ISO.
 - **Ghi:** một chặn → không PUT.
 - **Đột biến** cho từng rào mới. Chạy một mình, không tính ca hết giờ / neo lệch.
+
+---
+
+## Spec Đợt 1 — rev 2 (PM rev 1: `docs/pm/REVIEW-PLAN-v0.2-REV1-20261026.md`)
+
+### R1. Thứ tự lượt danh sách cấp lúc gửi request
+
+**Trong hook (`pos-hook.js`, MAIN)**
+- Khi một request **khớp hợp đồng S5** (GET danh sách đúng môi trường) **bắt đầu gửi** (XHR `send`, hoặc lúc gọi `fetch`):
+  - tăng `reqSeq` toàn cục của trang;
+  - ghi `reqSeq` + `queryKey` vào request đó.
+- `queryKey` là URL chuẩn hoá: path + mọi tham số query, đã sắp xếp theo tên. Gồm `query` (cửa hàng, bộ lọc trạng thái, từ khoá…), `limit`, `page`, `order_by`, không bỏ tham số nào. Khoá này không chứa token.
+- Ngay lúc gửi, hook phát `{type:"gr-list-request", reqSeq, queryKey, envId}`. Content biết **đang có lượt mới**, nên vô hiệu ngay mọi cú bấm đang chuẩn bị (R2), kể cả trước khi response về.
+- Khi response về, hook phát `{type:"gr-list", reqSeq, latestReqSeq, queryKey, …dòng}`.
+  - `latestReqSeq` = `reqSeq` lớn nhất đã **gửi**, tính tại thời điểm response này về.
+  - Response lỗi / hỏng / vượt giới hạn: `{type:"gr-list", reqSeq, latestReqSeq, queryKey, ok:false}`.
+
+**Trong content (`pos-content.js` / `gr-list.js`)**
+- Chỉ nhận response khi `reqSeq === latestReqSeq`, tức đúng request mới nhất đã gửi, **và** `reqSeq > shownSeq`. Khi đó cập nhật `shownSeq = reqSeq`, `shownQueryKey = queryKey`.
+- Ca A gửi → B gửi → B về → A về: lúc A về, `latestReqSeq` = B, nên A bị bỏ. Bảng giữ B.
+- Ca B lỗi (`ok:false` của request mới nhất): **xoá toàn bộ nút**, `shownSeq = reqSeq`. Không giữ dữ liệu A cũ.
+- `queryKey` kèm theo bảng để R2 so.
+
+### R2. Cú bấm gắn với dòng + lượt danh sách đang hiện, kiểm tới sát `session:start`
+
+**Lúc bấm**, tạo `clickToken = { grId, code, rowEl (tham chiếu tới thẻ <tr>), reqSeq: shownSeq, queryKey: shownQueryKey, route: location.href, nonce }`. Token chỉ hợp lệ khi `grId` + `code` có trong bảng của `shownSeq`.
+
+**`stillValid(token)`** đúng khi **mọi** điều sau còn đúng:
+1. `token.nonce` vẫn là cú bấm đang hoạt động (không bị cú bấm khác / huỷ thay thế).
+2. Không có `gr-list-request` nào mới hơn `token.reqSeq` (`latestReqSeq === token.reqSeq`).
+3. `shownSeq === token.reqSeq` và `shownQueryKey === token.queryKey`, tức bộ lọc / trang chưa đổi.
+4. `rowEl.isConnected`; ô mã của `rowEl` vẫn có chữ đúng `token.code`; nút `.cgn-rfid-btn` trong `rowEl` vẫn mang `data-cgn-gr === token.grId`. Phát hiện `<tr>` bị tái dùng cho dòng khác.
+5. Bảng của `shownSeq` vẫn ánh xạ `token.code → token.grId`.
+6. `location.href === token.route`, môi trường và cửa hàng đã xác nhận (S3) không đổi.
+
+**Kiểm ở đâu**
+- Sau **mỗi** `await` trong `startFromGr`: GET GR, GET PO, tìm GR theo SO.
+- **Ngay trước** `session:start`.
+- Sai một điều kiện thì `AbortController.abort()` các GET còn chạy, dừng, báo "Danh sách đã đổi — bấm lại". Không tạo phiên.
+
+**Sự kiện huỷ chủ động** (không chờ tới `await` kế): `gr-list-request` mới, MutationObserver thấy `rowEl` bị gỡ / đổi chữ mã, đổi URL theo sự kiện.
+
+Trang phiếu GR (không có danh sách) dùng token rút gọn: `{grId, route, nonce}` + điều kiện 1 và 6.
+
+**Test G1 thêm**
+- Đổi bộ lọc / trang / tái dùng `<tr>` ở giữa từng GET khi URL giữ nguyên → không `session:start`, có thông báo.
+- `gr-list-request` mới đến giữa lúc GET PO → huỷ ngay.
+- Bấm lại sau khi danh sách ổn định → chạy bình thường.
+
+Chưa code. Chờ PM chốt G0 (ảnh UI v0.1.6 thật + response danh sách + outerHTML đã làm sạch), rồi đối chiếu selector / hợp đồng R1–R2 với dữ liệu thật trước khi viết lối vào danh sách.

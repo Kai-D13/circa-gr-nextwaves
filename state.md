@@ -157,6 +157,11 @@ Cập nhật: **26/10/2026 (lần 31, PM kiểm Spec Đợt 1 rev 1)**. Giai đo
   - Kèm danh sách test G1. **Chưa code, chờ G0.**
 
 - **Lần 31 (26/10, PM kiểm plan rev 1):** `docs/pm/REVIEW-PLAN-v0.2-REV1-20261026.md`. Dev đã commit nguyên trạng tài liệu PM ở `f12934a`; `1b03c5c` chỉ sửa plan/state, chưa có runtime/test/ZIP v0.2. Rev 1 xử lý phần lớn finding P1/P2, được chấp nhận làm nền. Cần chỉnh lý P1: cấp `seq` khi request danh sách bắt đầu và đối chiếu query/filter/page để response cũ không đè mới; vô hiệu cú bấm nếu dòng hoặc bộ lọc đổi giữa các GET dù URL không đổi. G0 vẫn chờ ảnh UI v0.1.6 thật, response danh sách và outerHTML đã làm sạch; chưa cho code Đợt 1.
+- **Lần 32 (26/10, dev bổ sung Spec rev 2 theo PM):** `docs/dev/PLAN-v0.2-RFID-BUTTON-PROD.md`.
+  - R1: `reqSeq` cấp lúc **gửi** request danh sách + `queryKey`; chỉ nhận response của request mới nhất; request mới nhất lỗi thì xoá nút.
+  - R2: `clickToken` gắn dòng `<tr>` + lượt danh sách + `queryKey` + route. `stillValid` kiểm sau mỗi `await` và ngay trước `session:start`; huỷ chủ động khi có request danh sách mới hoặc dòng đổi.
+  - Ghi chú P2: long task đo bằng trace CDP, thiếu attribution không tính đạt. Đợt 1 bản đầu đánh dấu đã thay; sẽ hợp nhất spec khi giao code.
+  - **Chưa code, chờ G0.**
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
