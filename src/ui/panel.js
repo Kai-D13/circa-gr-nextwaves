@@ -4,7 +4,8 @@
  *
  * Không che nút thao tác của trang (operator 26/10: khung che nút HOÀN THÀNH của POS):
  *  - createPanel(brand, { avoidButtons: /…/i }) — nút / link nào của trang có chữ khớp (bỏ dấu cách thừa, không phân biệt hoa thường)
- *    mà nằm dưới khung thì khung tự nâng lên trên nút đó. Kiểm lại sau mỗi lần vẽ, khi đổi cỡ cửa sổ và mỗi giây khi khung đang hiện.
+ *    mà nằm dưới khung thì khung tự nâng lên trên nút đó. Kiểm lại sau mỗi lần vẽ, khi đổi cỡ cửa sổ, khi trang cuộn (cả khung cuộn
+ *    bên trong, mỗi khung hình tối đa một lần) và mỗi giây khi khung đang hiện.
  *  - Thu nhỏ: khung co thành một dải tiêu đề ngắn.
  */
 (function (root) {
@@ -76,6 +77,8 @@
     let minimized = false;
     let timer = null;
     let onResize = null;
+    let onScroll = null;
+    let scrollQueued = false;
 
     function avoidRects() {
       if (!avoidRe || typeof document.querySelectorAll !== "function") return [];
@@ -105,6 +108,8 @@
       timer = null;
       if (onResize) window.removeEventListener("resize", onResize);
       onResize = null;
+      if (onScroll) document.removeEventListener("scroll", onScroll, true);
+      onScroll = null;
     }
 
     function ensure() {
@@ -125,6 +130,17 @@
         }, 1000);
         onResize = () => place();
         window.addEventListener("resize", onResize);
+        // Cuộn — kể cả trong khung cuộn của trang (G0 27/10: chân modal màn quét Nextwaves nằm cuối thân cuộn) — đổi vị trí nút cần
+        // tránh: đặt lại ở khung hình kế tiếp, tối đa một lần mỗi khung hình, thay vì chờ lượt kiểm 1 s.
+        onScroll = () => {
+          if (scrollQueued) return;
+          scrollQueued = true;
+          requestAnimationFrame(() => {
+            scrollQueued = false;
+            if (host && host.isConnected) place();
+          });
+        };
+        document.addEventListener("scroll", onScroll, { capture: true, passive: true });
       }
     }
 

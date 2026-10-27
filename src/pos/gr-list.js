@@ -21,8 +21,9 @@
   const DEBOUNCE_MS = 250;
   const MAX_WAIT_MS = 1000; // DOM đổi liên tục (đồng hồ, spinner…) vẫn được quét lại tối đa mỗi 1 s
   const SLICE_MS = 1; // mỗi lượt quét dừng sau ~1 ms (cộng một dòng đang làm dở), phần còn lại sang task sau
+  // Cao 24px = icon thao tác của dòng POS thật (G0 27/10: nút 28px làm dòng 57px → 61px, 24px giữ nguyên 57px).
   const STYLE =
-    "display:inline-flex;align-items:center;margin-inline-start:8px;padding:0 10px;height:28px;border:1px solid #1f6feb;" +
+    "display:inline-flex;align-items:center;margin-inline-start:8px;padding:0 10px;height:24px;border:1px solid #1f6feb;" +
     "border-radius:8px;background:#fff;color:#1f6feb;font:600 12px/1 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;" +
     "white-space:nowrap;cursor:pointer;";
   const EVENTS = ["mousedown", "mouseup", "pointerdown", "pointerup", "touchstart", "touchend", "dblclick", "keydown", "keyup", "click"];

@@ -9,10 +9,15 @@
 //  2. Trang Nextwaves staging thật (trang đăng nhập): MAIN world có env + hook; ISOLATED world có env + thư viện + content script.
 //  3. Trang phiếu GR03878 (v0.2: CHỈ TẠO PHIÊN KHI BẤM): mở phiếu → khung có nút "Nhận hàng bằng RFID", chỉ đọc GR + PO, KHÔNG tự
 //     mở Nextwaves / tạo phiên; bấm nút → tìm GR theo SO, phiên waiting_nw, mở Nextwaves ?po=SOBD1593858; storage không token.
-//  4. (v0.1.6) Khung không chồng nút HOÀN THÀNH góc dưới phải (mở rộng / thu nhỏ ≤ 330px); bỏ nút → khung về mép dưới 16px.
-//  5. (v0.2) Trang danh sách giả (bảng 20 dòng, script của trang gọi API danh sách): nút chỉ ở dòng chờ / đang nhận đúng cửa hàng,
-//     nằm cạnh nút .circa-rfid-po-link của extension Nextwaves (không đè); chỉ xem → 0 request của extension; bấm nút không mở dòng;
-//     bấm → một phiên, mở Nextwaves, tab POS ở lại danh sách.
+//  Trang giả dựng theo DOM THẬT lấy chỉ đọc 27/10 (samples/*-20261027.*): dòng danh sách MUI, thanh thao tác HỦY / HOÀN THÀNH,
+//  chân modal màn quét Nextwaves, 20 dòng thật của response danh sách.
+//  4. (v0.1.6) Khung không chồng HỦY / HOÀN THÀNH của thanh thao tác thật (mở rộng ở cỡ mặc định, 1366×768, 1440×900; thu nhỏ
+//     ≤ 330px); bỏ thanh → khung về mép dưới 16px.
+//  4b. Màn quét Nextwaves cấu trúc thật (modal, thân cuộn, chân modal cuối thân cuộn): cuộn xuống cuối → khung không chồng
+//     "Xác nhận nhận hàng" ở 1366×768 / 1440×900; in thêm độ chồng ngay sau khi cuộn (trước lượt đặt lại ≤ 1 s).
+//  5. (v0.2) Trang danh sách (20 dòng thật, script của trang gọi API danh sách, body cỡ thật ~76 KB): nút chỉ ở dòng chờ / đang
+//     nhận đúng cửa hàng, nằm cạnh nút .circa-rfid-po-link của extension Nextwaves (không đè); chỉ xem → 0 request của extension;
+//     bấm nút không mở dòng; bấm → một phiên, mở Nextwaves, tab POS ở lại danh sách.
 //  6. (v0.2) Hiệu năng: bơm 300 thay đổi DOM trên danh sách và trên trang bán hàng giả. CPU quy cho script extension đo bằng
 //     CDP Profiler (lọc chrome-extension://), thời gian từng lượt quét nút đo trong gr-list; 0 request của extension.
 //     Ngân sách: mỗi lượt quét < 2 ms — cùng ngưỡng cho lượt lúc tải trang (kể cả lượt đầu "lạnh") và lượt trong bão DOM;
@@ -35,7 +40,6 @@ const POS = "https://pos.stg.circa-v2.buymed.tech";
 const NW_PAGE = "https://circa-stg.nextwaves.app/vi/purchases/receive?po=SOBD1593858";
 const GR_ID = "2de6c0ec-2ea8-4038-8616-659fa3f5820a";
 const STORE = "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d";
-const OTHER_STORE = "00000000-0000-0000-0000-00000000abcd";
 const BROWSERS = [
   "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
@@ -49,52 +53,73 @@ const check = (name, ok, detail) => {
   console.log(`${ok ? "ĐẠT " : "HỎNG"}  ${name}${detail ? "  — " + detail : ""}`);
 };
 
-// ---------- trang POS giả ----------
+// ---------- trang POS / Nextwaves dựng theo DOM THẬT (G0 27/10, samples/*-20261027.*) ----------
 const PASS_BUDGET_MS = 2; // ngân sách PM: mỗi lượt quét nút < 2 ms
 const AUTH_JS = `{"authorization":"Bearer kiem-thu","x-client-id":"1","x-store-id":"${STORE}","grpc-timeout":"30S","x-cgn-test-page":"1"}`;
-// Trang phiếu: nút HOÀN THÀNH cố định góc dưới phải (vị trí như POS thật, operator 26/10).
+const stripComment = (s) => s.replace(/^\s*<!--[\s\S]*?-->\s*/, "").trim();
+const REAL_ROW = stripComment(sample("pos-stg-gr-list-row-GR03887-20261027.html"));
+const REAL_BAR = stripComment(sample("pos-stg-gr-action-bar-GR03878-20261027.html"));
+const REAL_NW_FOOTER = stripComment(sample("nw-stg-receive-modal-footer-20261027.html"));
+const REAL_LIST = JSON.parse(sample("pos-stg-gr-list-page1-20261027.json")).data;
+// Lớp Tailwind / MUI mà mẫu thật dùng (CSS thật của POS không có ở đây): đủ để vị trí / kích thước khớp số đo trên trang thật
+// (thanh thao tác 246×75 sát góc dưới phải; HỦY 69×43; HOÀN THÀNH 126×43; dòng bảng 57px).
+const POS_CSS =
+  "<style>body{margin:0;font:14px system-ui}table{border-collapse:collapse;width:100%}td,th{padding:16px;border-bottom:1px solid #eee}" +
+  ".fixed{position:fixed}.bottom-0{bottom:0}.right-0{right:0}.z-50{z-index:50}.bg-white{background:#fff}.flex{display:flex}" +
+  ".items-center{align-items:center}.justify-center{justify-content:center}.gap-x-5{column-gap:20px}.px-4{padding-left:16px;padding-right:16px}" +
+  ".py-4{padding-top:16px;padding-bottom:16px}.absolute{position:absolute}.w-full{width:100%}.h-full{height:100%}.opacity-0{opacity:0}" +
+  "button{box-sizing:border-box}.css-wvgad3{width:69px;height:43px}.css-uhqrjh{width:126px;height:43px}" +
+  "svg{display:block;vertical-align:middle}</style>"; // preflight Tailwind: icon 24px không thừa dòng chữ → dòng 57px như trang thật
+// Trang phiếu: thanh thao tác THẬT (ô nhập ẩn của máy quét + HỦY + HOÀN THÀNH) cố định góc dưới phải.
 const GR_HTML =
-  '<!doctype html><html><head><meta charset="utf-8"><title>POS giả — phiếu</title></head><body>POS staging (trang giả để kiểm extension)' +
-  '<div style="position:fixed;right:24px;bottom:12px"><button id="cgn-test-done" style="width:180px;height:44px">HOÀN THÀNH</button></div></body></html>';
-// 20 dòng: GR03878 thật + 9 chờ nhận + 3 đang nhận (cửa hàng 2222), 5 đã nhận, 1 huỷ, 1 chờ nhận cửa hàng khác. Nút kỳ vọng: 13.
-const ROWS = (() => {
-  const out = [{ id: GR_ID, code: "GR03878", status: "WAITING_TO_RECEIVE", store: STORE }];
-  const add = (n, status, store) => {
-    for (let i = 0; i < n; i++) {
-      const k = out.length;
-      out.push({ id: `11111111-2222-4333-8444-${String(k).padStart(12, "0")}`, code: `GR0390${String(k).padStart(2, "0")}`, status, store: store || STORE });
-    }
-  };
-  add(9, "WAITING_TO_RECEIVE");
-  add(3, "RECEIVING");
-  add(5, "COMPLETED");
-  add(1, "CANCELED");
-  add(1, "WAITING_TO_RECEIVE", OTHER_STORE);
-  return out;
-})();
+  `<!doctype html><html><head><meta charset="utf-8"><title>POS giả — phiếu (thanh thao tác thật)</title>${POS_CSS}</head><body>` +
+  `POS staging (trang giả để kiểm extension)${REAL_BAR}</body></html>`;
+// 20 dòng THẬT của trang 1 danh sách cửa hàng 2222 (27/10): 5 chờ nhận + 2 đang nhận → 7 nút; còn lại đã nhận.
+const ROWS = REAL_LIST.goods_receipts.map((g) => ({ id: g.id, code: g.code, status: g.status, store: g.pos_info.id, po: g.purchase_order_code }));
 const EXPECTED_BUTTONS = ROWS.filter((r) => r.store === STORE && (r.status === "WAITING_TO_RECEIVE" || r.status === "RECEIVING")).map((r) => r.code).sort();
+const LINK_EVERY = 3; // dòng i % 3 === 0 có sẵn nút .circa-rfid-po-link (như extension Nextwaves)
+const EXPECTED_SAME_CELL = ROWS.filter((r, i) => i % LINK_EVERY === 0 && EXPECTED_BUTTONS.includes(r.code)).length;
+const LINKS = ROWS.filter((r, i) => i % LINK_EVERY === 0).length;
 const LIST_API = `${POS}/backend/v1/order/goods-receipt/search?query=pos_id=${STORE},,with_items=true,with_details=true,is_count_all_status=true&limit=20&page=1&order_by=created_at=desc`;
+// Body cỡ thật (~76 KB): dòng thật + items / details lấy từ dòng đầu nguyên vẹn của response thật.
 function listBody() {
-  const gr = JSON.parse(sample("gr-stg-GR03878-20261024.json")).data;
-  const rows = ROWS.map((r) => Object.assign({}, gr, { id: r.id, code: r.code, status: r.status, pos_info: Object.assign({}, gr.pos_info, { id: r.store }) }));
-  return JSON.stringify({ success: true, data: { goods_receipts: rows, total: rows.length, page: 1, limit: 20, status_count: {} } });
+  const items = REAL_LIST.goods_receipts_full_first.items;
+  const rows = REAL_LIST.goods_receipts.map((g) => Object.assign({}, REAL_LIST.goods_receipts_full_first, { id: g.id, code: g.code, status: g.status, purchase_order_id: g.purchase_order_id, purchase_order_code: g.purchase_order_code, created_at: g.created_at, items, pos_info: Object.assign({}, REAL_LIST.goods_receipts_full_first.pos_info, g.pos_info) }));
+  return JSON.stringify({ success: true, data: { goods_receipts: rows, total: REAL_LIST.total, page: 1, limit: 20, status_count: REAL_LIST.status_count } });
 }
-// Bảng giống dạng bảng POS (ô cuối div.flex chứa icon); vài dòng có sẵn nút .circa-rfid-po-link như extension Nextwaves.
-// Bấm vào dòng → đếm window.__rowClicks (POS thật mở phiếu khi bấm dòng). Script của trang gọi API danh sách + một API khác.
+const STATUS_VI = { WAITING_TO_RECEIVE: "Chờ nhận", RECEIVING: "Đang nhận", COMPLETED: "Đã nhận", CANCELED: "Đã hủy" };
+// Bảng từ outerHTML THẬT của một dòng (MUI, 7 cột, ô cuối div.flex chứa icon). Dòng thật mở phiếu bằng bộ nghe React; ở đây thay bằng
+// onclick đếm window.__rowClicks. Script của trang gọi API danh sách + một API khác.
 function tableHtml(title, withListCall) {
-  const trs = ROWS.map(
-    (r, i) =>
-      `<tr onclick="window.__rowClicks=(window.__rowClicks||0)+1"><td><span>${r.code}</span></td><td><span>PO0000${6700 + i}</span></td>` +
-      `<td><span class="st">${r.status}</span></td><td><div class="flex items-center justify-center"><button class="ic">→</button>` +
-      (i % 3 === 0 ? '<button type="button" class="circa-rfid-po-link">View on Nextwaves</button>' : "") +
-      "</div></td></tr>"
-  ).join("");
+  const trs = ROWS.map((r, i) => {
+    let tr = REAL_ROW.replace("<tr class=", `<tr onclick="window.__rowClicks=(window.__rowClicks||0)+1" class=`)
+      .replace(">GR03887<", `>${r.code}<`)
+      .replace(">PO00006767<", `>${r.po}<`)
+      .replace(">Chờ nhận<", `>${STATUS_VI[r.status] || r.status}<`);
+    if (i % LINK_EVERY === 0) tr = tr.replace(/<\/div><\/div><\/td><\/tr>$/, '</div><button type="button" class="circa-rfid-po-link">View on Nextwaves</button></div></td></tr>');
+    return tr;
+  }).join("");
+  const head = ["Mã phiếu kiểm", "Phiếu nhập hàng", "Mã phiếu PUT", "Trạng thái", "Thời gian tạo", "Thời gian hoàn thành", "Hành động"].map((h) => `<th>${h}</th>`).join("");
   const call = (url) => `(function(){var x=new XMLHttpRequest();x.open("GET",${JSON.stringify(url)});var h=${AUTH_JS};for(var k in h)x.setRequestHeader(k,h[k]);x.send();})();`;
   return (
-    `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title></head><body><div id="app"><table><thead><tr><th>Mã</th><th>PO</th><th>Trạng thái</th><th></th></tr></thead>` +
+    `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${POS_CSS}</head><body><div id="app"><table><thead><tr>${head}</tr></thead>` +
     `<tbody id="rows">${trs}</tbody></table></div><script>${call(`${POS}/backend/v1/entity`)}${withListCall ? call(LIST_API) : ""}</script></body></html>`
   );
 }
+// Màn quét Nextwaves dựng theo cấu trúc THẬT: modal phủ khung nhìn; modal 980 rộng, cách đỉnh 30, thân cuộn; chân modal (Hủy + Xác nhận
+// nhận hàng, outerHTML thật) nằm CUỐI thân cuộn — ở 1440×900 chưa cuộn thì nút ngoài khung nhìn, cuộn xuống cuối thì vào góc dưới phải.
+const NW_MODAL_HTML =
+  '<!doctype html><html><head><meta charset="utf-8"><title>Nextwaves giả — màn quét (cấu trúc thật)</title><style>' +
+  "body{margin:0;font:14px system-ui}.Nwc-Modal-Dialog__Container{position:fixed;inset:0;display:flex;justify-content:center;align-items:flex-start;background:rgba(0,0,0,.3)}" +
+  ".Nwc-Modal-Dialog__Modal{position:relative;width:980px;margin-top:30px;height:min(840px,calc(100vh - 60px));overflow:hidden;display:flex;flex-direction:column;background:#fff}" +
+  ".hdr{height:53px;flex:none;padding:16px;box-sizing:border-box}.Nwc-Modal__Body{position:relative;flex:1;overflow-y:auto;padding:16px 26px 16px 16px;box-sizing:border-box}" +
+  ".fill{height:816px}.Nwc-InlineStack{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between}.Nwc-Button{height:32px;padding:0 12px;box-sizing:border-box}" +
+  '</style></head><body><div class="Nwc-Modal-Dialog__Container"><div class="Nwc-Modal-Dialog__Modal Nwc-Modal-Dialog--sizeLarge"><div class="hdr">Nhận hàng bằng cách quét</div>' +
+  `<div class="Nwc-Modal__Body Nwc-Scrollable Nwc-Scrollable--vertical"><div class="fill">Danh sách sản phẩm / thẻ…</div>${REAL_NW_FOOTER}</div></div></div></body></html>`;
+const VIEWPORTS = [
+  [1366, 768],
+  [1440, 900],
+];
 
 let seq = 0;
 function cdp(wsUrl, onEvent) {
@@ -271,7 +296,7 @@ const STORM_JS = `(async () => {
   for (let b = 0; b < 30; b++) {
     for (let i = 0; i < 10; i++) {
       const tr = tb.children[(b * 10 + i) % tb.children.length];
-      const st = tr.querySelector(".st");
+      const st = tr.cells[3].querySelector("span"); // chữ trạng thái (ô thứ 4 của dòng thật)
       st.textContent = st.textContent.endsWith(".") ? st.textContent.slice(0, -1) : st.textContent + ".";
       const s = document.createElement("span");
       s.className = "tmp";
@@ -362,24 +387,71 @@ const STORM_JS = `(async () => {
     check("POS · bấm nút → tìm GR theo SO kèm header + cửa hàng, phiên waiting_nw (schema, không khoá), mở MỘT tab Nextwaves", !!s && s.state === "waiting_nw" && s.schema === 1 && s.writeLocks.length === 0 && opened1.length === 1 && api.some((r) => r.path.endsWith("/search")) && api.every((r) => r.auth && r.store === STORE), s ? JSON.stringify({ state: s.state, returnUrl: s.returnUrl, createdBy: s.createdBy, tabs: opened1.length }) : "không có phiên");
     check("Storage không chứa token", (await evalIn(sw, "chrome.storage.local.get(null).then(x=>!JSON.stringify(x).includes('Bearer'))")) === true);
 
-    // 4) Khung không che nút HOÀN THÀNH của trang.
-    const btnRect = async () => JSON.parse((await evalIn(pos.page, "JSON.stringify(document.getElementById('cgn-test-done').getBoundingClientRect())", posMain && posMain.id)) || "null");
+    // 4) Khung không che thanh thao tác THẬT của trang (HỦY + HOÀN THÀNH), ở cỡ cửa sổ mặc định và cỡ màn hình POS thường gặp.
+    const barRects = async () => JSON.parse((await evalIn(pos.page, 'JSON.stringify([...document.querySelectorAll("div.fixed button")].map((b) => Object.assign({ text: b.textContent.trim() }, b.getBoundingClientRect().toJSON())))', posMain && posMain.id)) || "[]");
     const vh = await evalIn(pos.page, "innerHeight", posMain && posMain.id);
-    const btn = await btnRect();
+    const fmtBtns = (bs) => bs.map((b) => `${b.text} ${Math.round(b.left)},${Math.round(b.top)} ${Math.round(b.width)}×${Math.round(b.height)}`).join("; ");
+    let bar = await barRects();
     let pr = await panelRects(pos.page);
-    check("POS · khung (mở rộng) không chồng nút HOÀN THÀNH góc dưới phải", !!pr && !!pr.box && !overlap(pr.box, btn) && pr.box.top >= 0, pr && pr.box ? `khung ${JSON.stringify(pr.box)} · nút ${JSON.stringify(btn)} · vh ${vh}` : "không đọc được khung");
+    check("POS · khung (mở rộng) không chồng HỦY / HOÀN THÀNH (thanh thao tác thật)", !!pr && !!pr.box && bar.length === 2 && !bar.some((b) => overlap(pr.box, b)) && pr.box.top >= 0, pr && pr.box ? `khung ${JSON.stringify(pr.box)} · nút ${fmtBtns(bar)} · vh ${vh}` : "không đọc được khung");
+    for (const [w, h] of VIEWPORTS) {
+      await pos.page.send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+      await sleep(1600); // khung đặt lại theo resize / mỗi 1 s
+      bar = await barRects();
+      const p = await panelRects(pos.page);
+      check(`POS · ${w}×${h}: khung (mở rộng) không chồng HỦY / HOÀN THÀNH`, !!p && !!p.box && bar.length === 2 && !bar.some((b) => overlap(p.box, b)) && p.box.top >= 0, p && p.box ? `khung ${Math.round(p.box.left)},${Math.round(p.box.top)} ${Math.round(p.box.width)}×${Math.round(p.box.height)} · nút ${fmtBtns(bar)}` : "không đọc được khung");
+    }
+    await pos.page.send("Emulation.clearDeviceMetricsOverride", {});
+    await sleep(1600);
+    bar = await barRects();
+    pr = await panelRects(pos.page);
     if (pr && pr.min) {
       await clickAt(pos.page, pr.min);
       await sleep(600);
       pr = await panelRects(pos.page);
     }
-    check("POS · khung thu nhỏ gọn (≤ 330px) và vẫn không chồng nút", !!pr && !!pr.box && pr.box.width <= 330 && !overlap(pr.box, btn), pr && pr.box ? JSON.stringify(pr.box) : "không đọc được khung");
-    await evalIn(pos.page, "document.getElementById('cgn-test-done').remove(), true", posMain && posMain.id);
+    check("POS · khung thu nhỏ gọn (≤ 330px) và vẫn không chồng HỦY / HOÀN THÀNH", !!pr && !!pr.box && pr.box.width <= 330 && !bar.some((b) => overlap(pr.box, b)), pr && pr.box ? JSON.stringify(pr.box) : "không đọc được khung");
+    await evalIn(pos.page, 'document.querySelector("div.fixed").remove(), true', posMain && posMain.id);
     await sleep(1600);
     pr = await panelRects(pos.page);
-    check("POS · bỏ nút → khung về mép dưới 16px", !!pr && !!pr.box && Math.abs(vh - pr.box.bottom - 16) <= 1, pr && pr.box ? `mép dưới cách đáy ${Math.round(vh - pr.box.bottom)}px` : "không đọc được khung");
+    const vh2 = await evalIn(pos.page, "innerHeight", posMain && posMain.id); // cỡ cửa sổ sau khi bỏ giả lập có thể khác lúc đầu
+    check("POS · bỏ thanh thao tác → khung về mép dưới 16px", !!pr && !!pr.box && Math.abs(vh2 - pr.box.bottom - 16) <= 1, pr && pr.box ? `mép dưới cách đáy ${Math.round(vh2 - pr.box.bottom)}px (vh ${vh2})` : "không đọc được khung");
     pos.page.close();
     await closeTarget(pos.targetId);
+
+    // 4b) Màn quét Nextwaves dựng theo cấu trúc THẬT (phiên waiting_nw của bước 3 tìm theo ?po=): sau khi cuộn thân modal xuống
+    //     cuối, khung không chồng "Xác nhận nhận hàng". Khung đặt lại theo resize và mỗi 1 s (không theo cuộn) → ghi cả độ chồng
+    //     ngay sau khi cuộn (trước lượt đặt lại) làm số đo.
+    for (const id of await nwTabIds()) await closeTarget(id); // tab Nextwaves thật (trang đăng nhập) do bấm nút mở
+    const nwm = await openPage(NW_PAGE, "https://circa-stg.nextwaves.app/*", () => ({ status: 200, type: "text/html; charset=utf-8", body: NW_MODAL_HTML }));
+    await sleep(3500);
+    const nwmMain = mainCtx(nwm.ctxs);
+    const confirmRect = async () => JSON.parse((await evalIn(nwm.page, 'JSON.stringify([...document.querySelectorAll("button")].find((b) => /Xác nhận nhận hàng/.test(b.textContent)).getBoundingClientRect())', nwmMain && nwmMain.id)) || "null");
+    const nwText = await panelText(nwm.page);
+    for (const [w, h] of VIEWPORTS) {
+      await nwm.page.send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+      await evalIn(nwm.page, 'document.querySelector(".Nwc-Modal__Body").scrollTop = 0, true', nwmMain && nwmMain.id);
+      await sleep(1600);
+      const before = await confirmRect();
+      await evalIn(nwm.page, 'document.querySelector(".Nwc-Modal__Body").scrollTop = 1e6, true', nwmMain && nwmMain.id);
+      await sleep(120); // vài khung hình — trước lượt kiểm 1 s
+      const justAfter = await panelRects(nwm.page);
+      const cr = await confirmRect();
+      check(
+        `Nextwaves · ${w}×${h}: ngay sau khi cuộn thân modal (120 ms, trước lượt kiểm 1 s) khung đã tránh "Xác nhận nhận hàng"`,
+        !!justAfter && !!justAfter.box && !!cr && !overlap(justAfter.box, cr),
+        justAfter && justAfter.box && cr ? `khung ${Math.round(justAfter.box.left)},${Math.round(justAfter.box.top)} ${Math.round(justAfter.box.width)}×${Math.round(justAfter.box.height)} · nút ${Math.round(cr.left)},${Math.round(cr.top)}` : "không đọc được"
+      );
+      await sleep(1300);
+      const p = await panelRects(nwm.page);
+      check(
+        `Nextwaves · ${w}×${h}: màn quét cấu trúc thật — cuộn xuống cuối, khung không chồng "Xác nhận nhận hàng"`,
+        !!p && !!p.box && !!cr && !overlap(p.box, cr) && p.box.top >= 0,
+        p && p.box && cr ? `nút trước cuộn y ${Math.round(before.top)} (vh ${h}) → sau cuộn ${Math.round(cr.left)},${Math.round(cr.top)} ${Math.round(cr.width)}×${Math.round(cr.height)} · khung ${Math.round(p.box.left)},${Math.round(p.box.top)} ${Math.round(p.box.width)}×${Math.round(p.box.height)} · khung: ${nwText.slice(0, 60)}` : `không đọc được (khung: ${nwText.slice(0, 60)})`
+      );
+    }
+    nwm.page.close();
+    await closeTarget(nwm.targetId);
 
     // 5) Danh sách: dọn phiên để GR03878 lại có nút "Nhận hàng bằng RFID".
     await evalIn(sw, "chrome.storage.local.set({sessions:{}}).then(()=>true)");
@@ -392,10 +464,20 @@ const STORM_JS = `(async () => {
     const lIso = isolatedCtx(lst.ctxs);
     const btns = JSON.parse((await evalIn(lst.page, `JSON.stringify([...document.querySelectorAll("button.cgn-rfid-btn")].map(b=>({code:b.getAttribute("data-cgn-code"), text:b.textContent, type:b.type, sameCell: !!b.parentElement.querySelector(".circa-rfid-po-link"), inLastCell: b.closest("td")===b.closest("tr").lastElementChild})))`, lMain && lMain.id)) || "[]");
     const codes = btns.map((b) => b.code).sort();
-    check("Danh sách · nút chỉ ở dòng chờ / đang nhận đúng cửa hàng (13/20), type=button, ở ô cuối", JSON.stringify(codes) === JSON.stringify(EXPECTED_BUTTONS) && btns.every((b) => b.type === "button" && b.text === "Nhận hàng bằng RFID" && b.inLastCell), `${codes.length} nút: ${codes.join(",")}`);
+    check(`Danh sách (20 dòng thật) · nút chỉ ở dòng chờ / đang nhận đúng cửa hàng (${EXPECTED_BUTTONS.length}/${ROWS.length}), type=button, ở ô cuối`, JSON.stringify(codes) === JSON.stringify(EXPECTED_BUTTONS) && btns.every((b) => b.type === "button" && b.text === "Nhận hàng bằng RFID" && b.inLastCell), `${codes.length} nút: ${codes.join(",")}`);
     const theirs = await evalIn(lst.page, 'document.querySelectorAll(".circa-rfid-po-link").length', lMain && lMain.id);
-    check("Danh sách · sống chung nút .circa-rfid-po-link (không gỡ / không đè)", theirs === 7 && btns.filter((b) => b.sameCell).length >= 4, `circa-rfid-po-link ${theirs}/7, cùng ô ${btns.filter((b) => b.sameCell).length}`);
+    const sameCell = btns.filter((b) => b.sameCell).length;
+    check("Danh sách · sống chung nút .circa-rfid-po-link (không gỡ / không đè)", theirs === LINKS && sameCell === EXPECTED_SAME_CELL, `circa-rfid-po-link ${theirs}/${LINKS}, cùng ô ${sameCell}/${EXPECTED_SAME_CELL}`);
     check("Danh sách · chỉ xem: 0 request API của extension, không khung", extReqs().length === 0 && !(await panelShadow(lst.page)), JSON.stringify(extReqs().map((r) => r.path)));
+    // G0 27/10: trên POS thật (1440×900) nút cao 28px làm dòng 57px → 61px (lệch bố cục); nút phải không làm dòng cao thêm.
+    await lst.page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
+    await sleep(300);
+    const rowH = JSON.parse((await evalIn(lst.page, 'JSON.stringify([...document.querySelectorAll("#rows tr")].map((tr) => [!!tr.querySelector("button.cgn-rfid-btn"), Math.round(tr.getBoundingClientRect().height)]))', lMain && lMain.id)) || "[]");
+    const hWith = [...new Set(rowH.filter((x) => x[0]).map((x) => x[1]))];
+    const hWithout = [...new Set(rowH.filter((x) => !x[0]).map((x) => x[1]))];
+    check("Danh sách · 1440×900: nút không làm dòng cao thêm (dòng có nút = dòng không nút)", hWith.length > 0 && hWithout.length > 0 && Math.max(...hWith) <= Math.max(...hWithout), `dòng có nút ${hWith.join("/")}px · không nút ${hWithout.join("/")}px`);
+    await lst.page.send("Emulation.clearDeviceMetricsOverride", {});
+    await sleep(300);
 
     // 6) Hiệu năng: bão DOM trên danh sách (extension đang chạy observer) — CPU quy cho extension + số đo từng lượt quét.
     await lst.page.send("Profiler.enable", {});
