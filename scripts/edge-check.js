@@ -7,12 +7,15 @@
 // request không có header đó là của extension):
 //  1. Service worker nạp được, đúng version.
 //  2. Trang Nextwaves staging thật (trang đăng nhập): MAIN world có env + hook; ISOLATED world có env + thư viện + content script.
-//  3. Trang phiếu GR03878 (v0.2: CHỈ TẠO PHIÊN KHI BẤM): mở phiếu → khung có nút "Nhận hàng bằng RFID", chỉ đọc GR + PO, KHÔNG tự
-//     mở Nextwaves / tạo phiên; bấm nút → tìm GR theo SO, phiên waiting_nw, mở Nextwaves ?po=SOBD1593858; storage không token.
+//  3. Trang phiếu GR03878 (v0.2: CHỈ TẠO PHIÊN KHI BẤM) — từ v0.2.4 là DOM + CSS THẬT trang phiếu (samples/pos-stg-gr-page-*), khung
+//     trong luồng trước #all-receipt: mở phiếu → khung có nút "Nhận hàng bằng RFID", chỉ đọc GR + PO, KHÔNG tự mở Nextwaves / tạo
+//     phiên; bấm nút → tìm GR theo SO, phiên waiting_nw, mở Nextwaves ?po=SOBD1593858; storage không token.
+//     (Khung trang phiếu ở mọi trạng thái / 3 cỡ / vẽ lại / W1: scripts/edge-gr-page.js.)
 //  Trang giả dựng theo DOM THẬT lấy chỉ đọc 27/10 (samples/*-20261027.*): dòng danh sách MUI, thanh thao tác HỦY / HOÀN THÀNH,
-//  chân modal màn quét Nextwaves, 20 dòng thật của response danh sách.
-//  4. (v0.1.6) Khung không chồng HỦY / HOÀN THÀNH của thanh thao tác thật (mở rộng ở cỡ mặc định, 1366×768, 1440×900; thu nhỏ
-//     ≤ 330px); bỏ thanh → khung về mép dưới 16px.
+//  trang phiếu, chân modal màn quét Nextwaves, 20 dòng thật của response danh sách.
+//  4. (v0.1.6, từ v0.2.4 là khung báo lỗi giao diện) Trang phiếu KHÔNG có #all-receipt → sau 10 s khung nổi báo lỗi, không nút
+//     Nhận hàng / Điền; khung nổi không chồng HỦY / HOÀN THÀNH của thanh thao tác thật (mở rộng ở cỡ mặc định, 1366×768, 1440×900;
+//     thu nhỏ ≤ 330px); bỏ thanh → khung về mép dưới 16px.
 //  4b. Màn quét Nextwaves cấu trúc thật (modal, thân cuộn, chân modal cuối thân cuộn): cuộn xuống cuối → khung không chồng
 //     "Xác nhận nhận hàng" ở 1366×768 / 1440×900; in thêm độ chồng ngay sau khi cuộn (trước lượt đặt lại ≤ 1 s).
 //  5. (v0.2) Trang danh sách (20 dòng thật, script của trang gọi API danh sách, body cỡ thật ~76 KB): nút chỉ ở dòng chờ / đang
@@ -70,10 +73,17 @@ const POS_CSS =
   ".py-4{padding-top:16px;padding-bottom:16px}.absolute{position:absolute}.w-full{width:100%}.h-full{height:100%}.opacity-0{opacity:0}" +
   "button{box-sizing:border-box}.css-wvgad3{width:69px;height:43px}.css-uhqrjh{width:126px;height:43px}" +
   "svg{display:block;vertical-align:middle}</style>"; // preflight Tailwind: icon 24px không thừa dòng chữ → dòng 57px như trang thật
-// Trang phiếu: thanh thao tác THẬT (ô nhập ẩn của máy quét + HỦY + HOÀN THÀNH) cố định góc dưới phải.
+// Trang phiếu KHÔNG có #all-receipt (mục 4: POS đổi giao diện): chỉ thanh thao tác THẬT (ô nhập ẩn của máy quét + HỦY + HOÀN THÀNH)
+// cố định góc dưới phải.
 const GR_HTML =
   `<!doctype html><html><head><meta charset="utf-8"><title>POS giả — phiếu (thanh thao tác thật)</title>${POS_CSS}</head><body>` +
   `POS staging (trang giả để kiểm extension)${REAL_BAR}</body></html>`;
+// Trang phiếu DOM + CSS THẬT (GR03887, lấy chỉ đọc 27/10) đổi mã sang GR03878 / PO00006750; toast tự đóng của POS ẩn đi.
+const GR_REAL_HTML =
+  `<!doctype html><html><head><meta charset="utf-8"><title>POS giả — trang phiếu (DOM thật)</title><style>${sample("pos-stg-gr-page-GR03887-20261027.css")}\n.Toastify{display:none}</style></head><body>` +
+  stripComment(sample("pos-stg-gr-page-GR03887-20261027.html")).replaceAll("GR03887", "GR03878").replaceAll("PO00006767", "PO00006750") +
+  "</body></html>";
+let grNoAnchor = false;
 // 20 dòng THẬT của trang 1 danh sách cửa hàng 2222 (27/10): 5 chờ nhận + 2 đang nhận → 7 nút; còn lại đã nhận.
 const ROWS = REAL_LIST.goods_receipts.map((g) => ({ id: g.id, code: g.code, status: g.status, store: g.pos_info.id, po: g.purchase_order_code }));
 const EXPECTED_BUTTONS = ROWS.filter((r) => r.store === STORE && (r.status === "WAITING_TO_RECEIVE" || r.status === "RECEIVING")).map((r) => r.code).sort();
@@ -387,7 +397,7 @@ const STORM_JS = `(async () => {
       const u = new URL(r.url);
       const page = !!(r.headers["x-cgn-test-page"] || r.headers["X-Cgn-Test-Page"]);
       if (u.pathname.startsWith("/backend/")) reqs.push({ method: r.method, path: u.pathname, search: u.search, page, auth: !!(r.headers.authorization || r.headers.Authorization), store: r.headers["x-store-id"] || "" });
-      if (/^\/danh-sach-phieu-nhan-hang\/[0-9a-f-]{36}\/?$/.test(u.pathname)) return { status: 200, type: "text/html; charset=utf-8", body: GR_HTML };
+      if (/^\/danh-sach-phieu-nhan-hang\/[0-9a-f-]{36}\/?$/.test(u.pathname)) return { status: 200, type: "text/html; charset=utf-8", body: grNoAnchor ? GR_HTML : GR_REAL_HTML };
       if (/^\/danh-sach-phieu-nhan-hang\/?$/.test(u.pathname)) return { status: 200, type: "text/html; charset=utf-8", body: tableHtml("POS giả — danh sách", true) };
       if (/^\/ban-hang\/?$/.test(u.pathname)) return { status: 200, type: "text/html; charset=utf-8", body: tableHtml("POS giả — bán hàng", false) };
       if (u.pathname === `/backend/v1/order/goods-receipt/${GR_ID}`) return { status: 200, type: "application/json", body: sample("gr-stg-GR03878-20261024.json") };
@@ -431,37 +441,50 @@ const STORM_JS = `(async () => {
     check("POS · bấm nút → tìm GR theo SO kèm header + cửa hàng, phiên waiting_nw (schema, không khoá), mở MỘT tab Nextwaves", !!s && s.state === "waiting_nw" && s.schema === 1 && s.writeLocks.length === 0 && opened1.length === 1 && api.some((r) => r.path.endsWith("/search")) && api.every((r) => r.auth && r.store === STORE), s ? JSON.stringify({ state: s.state, returnUrl: s.returnUrl, createdBy: s.createdBy, tabs: opened1.length }) : "không có phiên");
     check("Storage không chứa token", (await evalIn(sw, "chrome.storage.local.get(null).then(x=>!JSON.stringify(x).includes('Bearer'))")) === true);
 
-    // 4) Khung không che thanh thao tác THẬT của trang (HỦY + HOÀN THÀNH), ở cỡ cửa sổ mặc định và cỡ màn hình POS thường gặp.
-    const barRects = async () => JSON.parse((await evalIn(pos.page, 'JSON.stringify([...document.querySelectorAll("div.fixed button")].map((b) => Object.assign({ text: b.textContent.trim() }, b.getBoundingClientRect().toJSON())))', posMain && posMain.id)) || "[]");
-    const vh = await evalIn(pos.page, "innerHeight", posMain && posMain.id);
-    const fmtBtns = (bs) => bs.map((b) => `${b.text} ${Math.round(b.left)},${Math.round(b.top)} ${Math.round(b.width)}×${Math.round(b.height)}`).join("; ");
-    let bar = await barRects();
-    let pr = await panelRects(pos.page);
-    check("POS · khung (mở rộng) không chồng HỦY / HOÀN THÀNH (thanh thao tác thật)", !!pr && !!pr.box && bar.length === 2 && !bar.some((b) => overlap(pr.box, b)) && pr.box.top >= 0, pr && pr.box ? `khung ${JSON.stringify(pr.box)} · nút ${fmtBtns(bar)} · vh ${vh}` : "không đọc được khung");
-    for (const [w, h] of VIEWPORTS) {
-      await pos.page.send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
-      await sleep(1600); // khung đặt lại theo resize / mỗi 1 s
-      bar = await barRects();
-      const p = await panelRects(pos.page);
-      check(`POS · ${w}×${h}: khung (mở rộng) không chồng HỦY / HOÀN THÀNH`, !!p && !!p.box && bar.length === 2 && !bar.some((b) => overlap(p.box, b)) && p.box.top >= 0, p && p.box ? `khung ${Math.round(p.box.left)},${Math.round(p.box.top)} ${Math.round(p.box.width)}×${Math.round(p.box.height)} · nút ${fmtBtns(bar)}` : "không đọc được khung");
-    }
-    await pos.page.send("Emulation.clearDeviceMetricsOverride", {});
-    await sleep(1600);
-    bar = await barRects();
-    pr = await panelRects(pos.page);
-    if (pr && pr.min) {
-      await clickAt(pos.page, pr.min);
-      await sleep(600);
-      pr = await panelRects(pos.page);
-    }
-    check("POS · khung thu nhỏ gọn (≤ 330px) và vẫn không chồng HỦY / HOÀN THÀNH", !!pr && !!pr.box && pr.box.width <= 330 && !bar.some((b) => overlap(pr.box, b)), pr && pr.box ? JSON.stringify(pr.box) : "không đọc được khung");
-    await evalIn(pos.page, 'document.querySelector("div.fixed").remove(), true', posMain && posMain.id);
-    await sleep(1600);
-    pr = await panelRects(pos.page);
-    const vh2 = await evalIn(pos.page, "innerHeight", posMain && posMain.id); // cỡ cửa sổ sau khi bỏ giả lập có thể khác lúc đầu
-    check("POS · bỏ thanh thao tác → khung về mép dưới 16px", !!pr && !!pr.box && Math.abs(vh2 - pr.box.bottom - 16) <= 1, pr && pr.box ? `mép dưới cách đáy ${Math.round(vh2 - pr.box.bottom)}px (vh ${vh2})` : "không đọc được khung");
     pos.page.close();
     await closeTarget(pos.targetId);
+
+    // 4) v0.2.4: trang phiếu KHÔNG có #all-receipt (POS đổi giao diện) → khung trong luồng không gắn được → sau 10 s khung NỔI báo
+    //    lỗi giao diện, không nút Nhận hàng / Điền (W1 đóng). Khung nổi đó không che thanh thao tác THẬT (HỦY + HOÀN THÀNH).
+    grNoAnchor = true;
+    const pos4 = await openPage(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`, `${POS}/*`, handler);
+    await sleep(3000);
+    const pos4Main = mainCtx(pos4.ctxs);
+    await evalIn(pos4.page, `window.postMessage({mark:"cgn/pos-hook", type:"auth", payload:{envId:"STG", headers:{authorization:"Bearer kiem-thu", "x-client-id":"1", "x-store-id":"${STORE}", "grpc-timeout":"30S"}}}, location.origin), true`, pos4Main && pos4Main.id);
+    await sleep(11500);
+    const errText = await panelText(pos4.page);
+    check("POS · trang phiếu không có #all-receipt → sau 10 s khung NỔI báo lỗi giao diện, chỉ 'Kiểm tra lại' (không Nhận hàng / Điền / Mở tab Nextwaves)", /Giao diện phiếu nhận đã đổi/.test(errText) && /Kiểm tra lại/.test(errText) && !/Nhận hàng bằng RFID|Điền vào phiếu|Mở tab Nextwaves/.test(errText), errText.slice(0, 140));
+    const barRects = async () => JSON.parse((await evalIn(pos4.page, 'JSON.stringify([...document.querySelectorAll("div.fixed button")].map((b) => Object.assign({ text: b.textContent.trim() }, b.getBoundingClientRect().toJSON())))', pos4Main && pos4Main.id)) || "[]");
+    const vh = await evalIn(pos4.page, "innerHeight", pos4Main && pos4Main.id);
+    const fmtBtns = (bs) => bs.map((b) => `${b.text} ${Math.round(b.left)},${Math.round(b.top)} ${Math.round(b.width)}×${Math.round(b.height)}`).join("; ");
+    let bar = await barRects();
+    let pr = await panelRects(pos4.page);
+    check("POS · khung (mở rộng) không chồng HỦY / HOÀN THÀNH (thanh thao tác thật)", !!pr && !!pr.box && bar.length === 2 && !bar.some((b) => overlap(pr.box, b)) && pr.box.top >= 0, pr && pr.box ? `khung ${JSON.stringify(pr.box)} · nút ${fmtBtns(bar)} · vh ${vh}` : "không đọc được khung");
+    for (const [w, h] of VIEWPORTS) {
+      await pos4.page.send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+      await sleep(1600); // khung đặt lại theo resize / mỗi 1 s
+      bar = await barRects();
+      const p = await panelRects(pos4.page);
+      check(`POS · ${w}×${h}: khung (mở rộng) không chồng HỦY / HOÀN THÀNH`, !!p && !!p.box && bar.length === 2 && !bar.some((b) => overlap(p.box, b)) && p.box.top >= 0, p && p.box ? `khung ${Math.round(p.box.left)},${Math.round(p.box.top)} ${Math.round(p.box.width)}×${Math.round(p.box.height)} · nút ${fmtBtns(bar)}` : "không đọc được khung");
+    }
+    await pos4.page.send("Emulation.clearDeviceMetricsOverride", {});
+    await sleep(1600);
+    bar = await barRects();
+    pr = await panelRects(pos4.page);
+    if (pr && pr.min) {
+      await clickAt(pos4.page, pr.min);
+      await sleep(600);
+      pr = await panelRects(pos4.page);
+    }
+    check("POS · khung thu nhỏ gọn (≤ 330px) và vẫn không chồng HỦY / HOÀN THÀNH", !!pr && !!pr.box && pr.box.width <= 330 && !bar.some((b) => overlap(pr.box, b)), pr && pr.box ? JSON.stringify(pr.box) : "không đọc được khung");
+    await evalIn(pos4.page, 'document.querySelector("div.fixed").remove(), true', pos4Main && pos4Main.id);
+    await sleep(1600);
+    pr = await panelRects(pos4.page);
+    const vh2 = await evalIn(pos4.page, "innerHeight", pos4Main && pos4Main.id); // cỡ cửa sổ sau khi bỏ giả lập có thể khác lúc đầu
+    check("POS · bỏ thanh thao tác → khung về mép dưới 16px", !!pr && !!pr.box && Math.abs(vh2 - pr.box.bottom - 16) <= 1, pr && pr.box ? `mép dưới cách đáy ${Math.round(vh2 - pr.box.bottom)}px (vh ${vh2})` : "không đọc được khung");
+    pos4.page.close();
+    await closeTarget(pos4.targetId);
+    grNoAnchor = false;
 
     // 4b) Màn quét Nextwaves dựng theo cấu trúc THẬT (phiên waiting_nw của bước 3 tìm theo ?po=): sau khi cuộn thân modal xuống
     //     cuối, khung không chồng "Xác nhận nhận hàng". Khung đặt lại theo resize và mỗi 1 s (không theo cuộn) → ghi cả độ chồng
@@ -599,8 +622,12 @@ const STORM_JS = `(async () => {
     const i2 = await btnInfo("GR03878");
     await geoCheck("phiên received (Mở phiếu)");
     await setState("applied");
-    await sleep(1200);
-    const i3 = await btnInfo("GR03878");
+    // Chờ tối đa 5 s cho nút đổi theo phiên (một lượt 27/10 trên máy bận: 1,2 s cố định chưa đủ).
+    let i3 = null;
+    for (let k = 0; k < 25 && !(i3 && /[(]applied[)]/.test(i3.aria || "")); k++) {
+      await sleep(200);
+      i3 = await btnInfo("GR03878");
+    }
     check('Danh sách · received → applied: cùng nhãn "Mở phiếu" nhưng aria-label / title đổi theo trạng thái phiên', !!i2 && !!i3 && i2.text === "Mở phiếu" && i3.text === "Mở phiếu" && i2.kind === "open_gr" && /\(received\)/.test(i2.aria) && /\(applied\)/.test(i3.aria) && i3.title === i3.aria, `${i2 && i2.aria} → ${i3 && i3.aria}`);
 
     // v0.2.3 PM F4: lỗi (GR03887: GET phiếu 404 trên trang giả) → thông báo TRONG LUỒNG TRANG ngay trên bảng; không phủ nút / icon / mã /

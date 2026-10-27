@@ -27,8 +27,12 @@
   const T = Object.assign({ pollMs: 3000, qrConcurrency: 4, reloadDelayMs: 800, httpTimeoutMs: 30000, leaseRenewMs: 15000, qrTtlMs: 10 * 60 * 1000, listSessionsDebounceMs: 300 }, C.tuning || {});
   const HOOK = "cgn/pos-hook";
   const ME = "cgn/pos-content";
-  // Khung không được che nút thao tác của phiếu (operator 26/10: che HOÀN THÀNH).
-  const panel = C.ui.createPanel("GR ← Nextwaves", { avoidButtons: /^(hoàn thành|hủy|huỷ|hủy phiếu|huỷ phiếu)$/iu });
+  // Khung nổi: trang /chi-tiet-so và báo lỗi giao diện khi trang phiếu không có chỗ gắn khung. Không che nút thao tác của phiếu
+  // (operator 26/10: che HOÀN THÀNH).
+  const floatPanel = C.ui.createPanel("GR ← Nextwaves", { avoidButtons: /^(hoàn thành|hủy|huỷ|hủy phiếu|huỷ phiếu)$/iu });
+  // v0.2.4 (PM P2): trên trang phiếu, khung nằm TRONG LUỒNG trang ngay trước "Danh sách sản phẩm nhập kho" (#all-receipt) của đúng
+  // phiếu đang xem — không nổi, không che cột "SL nhận" / HỦY / HOÀN THÀNH. Không có chỗ gắn → báo lỗi giao diện, W1 đóng.
+  const grPanel = C.ui.createInlinePanel("GR ← Nextwaves", { find: grAnchor, onMissing: onGrUiMissing, onFound: onGrUiFound });
   const tabToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
   const lower = (s) => String(s || "").toLowerCase();
   const ACTIVE = new Set(["waiting_nw", "nw_ready", "received", "applying", "applied", "apply_stopped"]);
@@ -110,6 +114,9 @@
   const notLinkable = new Set(); // grId đã biết không đi từ SO thuocsi (nhớ trong tab)
   let listSessionsTimer = null;
 
+  // ---- khung trang phiếu (v0.2.4) ----
+  let uiMissing = null; // "missing" | "unstable": trang phiếu không gắn được khung → lỗi giao diện ở khung nổi, W1 đóng
+
   // ---- tra QR: một lần mỗi phiên + lượt nhận (S6) ----
   const qrCache = new Map(); // `${scope}|${uid}` → {at, r}
   let qrForce = false;
@@ -161,8 +168,77 @@
     return `${what}: HTTP ${r ? r.status : "?"}${msg}.${hint}`;
   }
 
-  function showError(title, lines, buttons) {
-    panel.show({ tone: "err", title, lines: [].concat(lines || []), buttons: buttons || [] });
+  function pageNow() {
+    const env = E.envFromConfig(config);
+    return env ? E.classifyPosPage(location.href, env) : null;
+  }
+
+  // Chỗ gắn khung trang phiếu: #all-receipt (bảng đầu tiên của trang là bảng THÔNG TIN phiếu, không dùng). Có `code` thì một khối
+  // đứng trước anchor (breadcrumb / thẻ thông tin) phải mang đúng mã phiếu — view của phiếu khác không gắn vào trang này.
+  function grAnchor(code) {
+    const a = document.getElementById("all-receipt");
+    if (!a || !a.parentElement) return null;
+    if (!code) return a;
+    for (let n = a.previousElementSibling; n; n = n.previousElementSibling) {
+      if (n.hasAttribute("data-cgn-panel")) continue;
+      if ((n.textContent || "").includes(code)) return a;
+    }
+    return null;
+  }
+
+  function retryUi() {
+    uiMissing = null;
+    floatPanel.hide();
+    grPanel.hide();
+    refresh();
+  }
+
+  function onGrUiMissing(reason) {
+    uiMissing = reason;
+    if (watched.key) logTo(watched.key, { type: "ui_anchor_missing", reason });
+    if (applying) {
+      floatPanel.show({ tone: "busy", title: "Đang điền phiếu — không gắn được khung vào trang", lines: ["Không tải lại / rời trang tới khi điền xong."] });
+      return;
+    }
+    floatPanel.show({
+      tone: "err",
+      title: "Giao diện phiếu nhận đã đổi — extension không điền phiếu này",
+      lines: [
+        reason === "unstable" ? "Trang liên tục vẽ lại vùng “Danh sách sản phẩm nhập kho”, không gắn được khung." : "Không thấy vùng “Danh sách sản phẩm nhập kho” của đúng phiếu này.",
+        "Extension đã dừng, không ghi gì vào phiếu. Bấm “Kiểm tra lại” hoặc tải lại trang; vẫn lỗi thì báo dev.",
+      ],
+      buttons: [{ label: "Kiểm tra lại", onClick: retryUi }],
+    });
+  }
+
+  function onGrUiFound() {
+    uiMissing = null;
+    floatPanel.hide();
+    refresh();
+  }
+
+  // Một chỗ vẽ: trang phiếu → khung trong luồng (view mang grCode thì chỉ gắn cạnh bảng của đúng phiếu đó); trang khác → khung nổi.
+  const panel = {
+    show(view) {
+      const page = pageNow();
+      if (!page || page.kind !== "gr") {
+        grPanel.hide();
+        return floatPanel.show(view);
+      }
+      if (!uiMissing) floatPanel.hide();
+      grPanel.show(view, view.grCode || null);
+    },
+    hide() {
+      uiMissing = null;
+      floatPanel.hide();
+      grPanel.hide();
+    },
+  };
+  const showGr = (gr, view) => panel.show(Object.assign({}, view, { grCode: gr.code }));
+
+  function showError(title, lines, buttons, gr) {
+    const v = { tone: "err", title, lines: [].concat(lines || []), buttons: buttons || [] };
+    return gr ? showGr(gr, v) : panel.show(v);
   }
 
   const sessionSig = (s) => JSON.stringify([s.state, (s.nwResult && s.nwResult.at) || null, s.applyError || null, !!s.scanOk, s.retryNotBefore || null]);
@@ -411,7 +487,7 @@
         return showError(`${gr.code}: không nối được tới SO thuocsi`, link.errors.map((c) => LINK_MSG[c] || c));
       }
       const codes = gr.items.reduce((n, it) => n + it.details.reduce((m, d) => m + d.qrCodes.length, 0), 0);
-      return panel.show({
+      return showGr(gr, {
         tone: codes > 0 ? "warn" : "info",
         title: `${gr.code} · ${link.deliveryCode}`,
         lines: [
@@ -429,13 +505,13 @@
   async function startOnGrPage(env, storeId, gr) {
     if (click) return;
     const tok = newClick({ kind: "gr", grId: gr.id, code: gr.code, envId: env.id, storeId });
-    panel.show({ tone: "busy", title: `Đang kiểm ${gr.code}…`, lines: ["Đọc lại phiếu, PO và SO trước khi mở Nextwaves."] });
+    showGr(gr, { tone: "busy", title: `Đang kiểm ${gr.code}…`, lines: ["Đọc lại phiếu, PO và SO trước khi mở Nextwaves."] });
     const res = await startFromGr(env, storeId, gr.id, gr.code, tok);
     if (click === tok) click = null;
     if (res.status === "started" || res.status === "existing") return refresh();
     if (res.status === "cancelled") return refresh();
     if (res.status === "not_linkable") return refresh();
-    showError(`${gr.code}: chưa mở được Nextwaves`, res.message, [{ label: "Thử lại", onClick: refresh }]);
+    showError(`${gr.code}: chưa mở được Nextwaves`, res.message, [{ label: "Thử lại", onClick: refresh }], gr);
   }
 
   // ---------- trang danh sách ----------
@@ -643,7 +719,7 @@
     switch (s.state) {
       case "waiting_nw":
       case "nw_ready":
-        return panel.show({
+        return showGr(gr, {
           tone: "busy",
           title: STATE_LABEL[s.state],
           lines: sessionLines(s).concat(["Trên tab Nextwaves: đặt hàng lên reader rồi bấm “Xác nhận nhận hàng”. Nhận đủ xong extension đưa về đây và lập kế hoạch điền phiếu."]),
@@ -655,19 +731,19 @@
       case "applying": {
         const expired = !(s.lease && s.lease.expiresAt > Date.now());
         if (expired) return planAndOffer(env, gr, s);
-        return panel.show({ tone: "busy", title: "Đang điền phiếu ở tab khác", lines: sessionLines(s) });
+        return showGr(gr, { tone: "busy", title: "Đang điền phiếu ở tab khác", lines: sessionLines(s) });
       }
       case "applied":
         return renderApplied(env, gr, s);
       case "done":
-        return panel.show({
+        return showGr(gr, {
           tone: "ok",
           title: `${s.grCode}: đã HOÀN THÀNH`,
           lines: sessionLines(s),
           buttons: [{ label: "Đóng", secondary: true, onClick: () => panel.hide() }],
         });
       default:
-        return panel.show({ tone: "warn", title: `Trạng thái phiên lạ: ${s.state}`, lines: sessionLines(s), buttons: [cancelButton(env, s)] });
+        return showGr(gr, { tone: "warn", title: `Trạng thái phiên lạ: ${s.state}`, lines: sessionLines(s), buttons: [cancelButton(env, s)] });
     }
   }
 
@@ -676,13 +752,13 @@
     const codes = new Set(gr.items.flatMap((it) => it.details.flatMap((d) => d.qrCodes)));
     const missing = uids.filter((u) => !codes.has(u));
     if (missing.length) {
-      return panel.show({
+      return showGr(gr, {
         tone: "warn",
         title: `${gr.code}: phiếu thiếu ${missing.length}/${uids.length} UID đã điền`,
         lines: sessionLines(s).concat([`Thiếu: ${missing.slice(0, 20).join(", ")}${missing.length > 20 ? "…" : ""}`, "Kiểm tra phiếu trước khi bấm HOÀN THÀNH."]),
       });
     }
-    return panel.show({
+    return showGr(gr, {
       tone: "ok",
       title: `${gr.code}: đã điền ${uids.length} UID từ Nextwaves`,
       lines: sessionLines(s).concat(["Kiểm tra số lượng từng lô trên phiếu rồi bấm HOÀN THÀNH."]),
@@ -733,7 +809,7 @@
 
   async function planAndOffer(env, gr, s) {
     const units = (s.nwResult && s.nwResult.units) || [];
-    panel.show({ tone: "busy", title: `Đang tra ${units.length} UID trên POS…`, lines: sessionLines(s) });
+    showGr(gr, { tone: "busy", title: `Đang tra ${units.length} UID trên POS…`, lines: sessionLines(s) });
     // Tra QR MỌI UID (kể cả UID đã nằm trên phiếu — PM P1.2 / P2.2).
     const scope = `${s.key}|${(s.nwResult && s.nwResult.at) || ""}`;
     const qrByUid = await lookupQr(env, [...new Set(units.map((u) => u.uid).filter(Boolean))], scope);
@@ -746,7 +822,7 @@
       return renderApplied(env, gr, s2 || s);
     }
     if (!plan.ok) {
-      return panel.show({
+      return showGr(gr, {
         tone: "err",
         title: `${gr.code}: không điền được — ${plan.blocked.length} điểm chặn`,
         lines: sessionLines(s).concat(["Không ghi gì vào phiếu (chặn cả gói).", ...blockedLines(plan)]),
@@ -770,7 +846,7 @@
     );
     const blockers = await bg("session:writeBlockers", { key: s.key });
     if (blockers.length) {
-      return panel.show({
+      return showGr(gr, {
         tone: "warn",
         title: "Chỉ xem kế hoạch — chưa được điền phiếu",
         lines: head.concat(blockers.map((b) => `• ${CLAIM_MSG[b] || b}`)),
@@ -780,7 +856,7 @@
     }
     const grant = await bg("grant:get", { envId: env.id, grCode: gr.code });
     if (!grant) {
-      return panel.show({
+      return showGr(gr, {
         tone: "info",
         title: "Chỉ xem kế hoạch — chưa có cấp phép điền",
         lines: head.concat([`Muốn điền: operator mở popup extension → “Cho phép điền 1 lần” cho ${gr.code}.`]),
@@ -788,17 +864,38 @@
         buttons: [cancelButton(env, s)],
       });
     }
-    return panel.show({
+    const expires = `Cấp phép hết hạn lúc ${new Date(grant.expiresAt).toLocaleTimeString("vi-VN")}.`;
+    if (!onGrPageOf(gr)) {
+      // v0.2.4 (PM P2): nút điền chỉ nằm trong khung trong luồng của trang phiếu; trang khác (vd. /chi-tiet-so) chỉ mở phiếu.
+      return showGr(gr, {
+        tone: stopped ? "warn" : "info",
+        title: `Đã có cấp phép điền ${gr.code} (1 lần)`,
+        lines: head.concat([`${expires} Mở trang phiếu ${gr.code} để điền đúng kế hoạch #${plan.hash}.`]),
+        table: planTable(plan),
+        buttons: [{ label: `Mở phiếu ${gr.code}`, onClick: () => location.assign(E.api.posGrPage(env, gr.id)) }, cancelButton(env, s)],
+      });
+    }
+    return showGr(gr, {
       tone: stopped ? "warn" : "info",
       title: `Đã có cấp phép điền ${gr.code} (1 lần)`,
-      lines: head.concat([`Cấp phép hết hạn lúc ${new Date(grant.expiresAt).toLocaleTimeString("vi-VN")}. Bấm nút dưới để điền đúng kế hoạch #${plan.hash}.`]),
+      lines: head.concat([`${expires} Bấm nút dưới để điền đúng kế hoạch #${plan.hash}.`]),
       table: planTable(plan),
       buttons: [{ label: `Điền vào phiếu ${gr.code} · kế hoạch #${plan.hash} (${plan.summary.toWrite} UID)`, onClick: () => runApply(env, gr, s, plan) }, cancelButton(env, s)],
     });
   }
 
+  function onGrPageOf(gr) {
+    const page = pageNow();
+    return !!page && page.kind === "gr" && page.grId === String(gr.id).toLowerCase();
+  }
+
   async function runApply(env, gr, s, plan) {
     if (applying) return;
+    // v0.2.4 (PM P2): chỉ ghi khi nút nằm trong khung đang gắn đúng chỗ trên trang của đúng phiếu (fail closed, chưa dùng cấp phép).
+    if (!onGrPageOf(gr) || !grPanel.anchoredFor(gr.code)) {
+      showError("Không điền được", [`Khung extension chưa gắn đúng trang phiếu ${gr.code} — không ghi gì, cấp phép vẫn giữ.`], [{ label: "Kiểm tra lại", onClick: retryUi }], gr);
+      return;
+    }
     applying = true; // chặn vòng đánh giá vẽ lại panel trong lúc giành quyền / ghi
     let claim = null;
     try {
@@ -808,7 +905,7 @@
     }
     if (!claim || !claim.ok) {
       applying = false;
-      showError("Không điền được", [CLAIM_MSG[claim && claim.reason] || (claim && claim.reason) || "?"], [{ label: "Kiểm tra lại", onClick: refresh }]);
+      showError("Không điền được", [CLAIM_MSG[claim && claim.reason] || (claim && claim.reason) || "?"], [{ label: "Kiểm tra lại", onClick: refresh }], gr);
       return;
     }
     let leaseLost = false;
@@ -842,7 +939,7 @@
       };
       res = await A.runPlan(plan, api, (e) => {
         if (e.type === "done" || e.type === "already") i += 1;
-        if (e.type === "sending") panel.show({ tone: "busy", title: `Đang điền ${i + 1}/${n} · kế hoạch #${plan.hash}`, lines: [`${e.step.productName || e.step.productId} · lô ${e.step.lotDate}: ${e.step.before} → ${e.step.target}`] });
+        if (e.type === "sending") showGr(gr, { tone: "busy", title: `Đang điền ${i + 1}/${n} · kế hoạch #${plan.hash}`, lines: [`${e.step.productName || e.step.productId} · lô ${e.step.lotDate}: ${e.step.before} → ${e.step.target}`] });
         logTo(s.key, { type: `apply_${e.type}`, detailId: e.step && e.step.detailId, reason: e.reason, status: e.status });
       });
     } catch (err) {
@@ -868,12 +965,12 @@
     if (res.ok && finished) {
       // Tải lại để màn POS hiện số lượng / mã vừa điền.
       reloading = true;
-      panel.show({ tone: "ok", title: `Đã điền ${plan.summary.toWrite} UID — đang tải lại phiếu…`, lines: [] });
+      showGr(gr, { tone: "ok", title: `Đã điền ${plan.summary.toWrite} UID — đang tải lại phiếu…`, lines: [] });
       setTimeout(() => location.reload(), T.reloadDelayMs);
       return;
     }
     if (!finished) {
-      showError("Mất quyền điền phiếu", ["Tab khác đã tiếp quản hoặc quyền hết hạn. Tab này đã dừng; kiểm tra lại phiếu."], [{ label: "Kiểm tra lại", onClick: refresh }]);
+      showError("Mất quyền điền phiếu", ["Tab khác đã tiếp quản hoặc quyền hết hạn. Tab này đã dừng; kiểm tra lại phiếu."], [{ label: "Kiểm tra lại", onClick: refresh }], gr);
       return;
     }
     refresh();
@@ -885,6 +982,7 @@
     lastHref = href;
     chosenGrId = null;
     cancelClick("Đã rời trang — huỷ lượt chuẩn bị");
+    if (!applying) panel.hide(); // v0.2.4: gỡ khung của trang cũ ngay, không để view phiếu cũ nằm trên trang mới
     refresh();
   }
 

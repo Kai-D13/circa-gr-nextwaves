@@ -143,6 +143,7 @@ function createBrowser(server, opts = {}) {
   function load(t) {
     kill(t.ctx);
     t.view = null;
+    t.viewKind = null;
     if (closed) return;
     const files = isolatedScriptsFor(t.url);
     if (!files) return;
@@ -211,6 +212,10 @@ function createBrowser(server, opts = {}) {
         },
       },
     };
+    // Khung trong luồng trang phiếu (v0.2.4): anchor có / không do test đặt bằng t.setAnchor(bool) (mặc định có).
+    // Không có anchor → view giữ chờ, gọi onMissing("missing") một lần (đến khi hide); anchor xuất hiện lại → onFound().
+    const inline = { opts: null, view: null, code: null, missing: false };
+    c.inline = inline;
     win.__CGN__ = {
       tuning,
       ui: {
@@ -219,12 +224,41 @@ function createBrowser(server, opts = {}) {
           show: (v) => {
             if (c.dead) return;
             t.view = v;
+            t.viewKind = "float";
             t.views.push(v);
+            t.floatViews.push(v);
           },
           hide: () => {
-            if (!c.dead) t.view = null;
+            if (!c.dead && t.viewKind === "float") t.view = null;
           },
         }),
+        createInlinePanel: (brand, o) => {
+          inline.opts = o;
+          return {
+            show: (v, code) => {
+              if (c.dead) return;
+              inline.view = v;
+              inline.code = code || null;
+              if (!t.anchor) {
+                if (!inline.missing) {
+                  inline.missing = true;
+                  setImmediate(() => !c.dead && o.onMissing("missing"));
+                }
+                return;
+              }
+              t.view = v;
+              t.viewKind = "inline";
+              t.views.push(v);
+              t.inlineViews.push(v);
+            },
+            hide: () => {
+              inline.view = inline.code = null;
+              inline.missing = false;
+              if (!c.dead && t.viewKind === "inline") t.view = null;
+            },
+            anchoredFor: (code) => !c.dead && t.anchor && !!inline.view && inline.code === (code || null) && t.viewKind === "inline",
+          };
+        },
       },
       // pos/gr-list.js (DOM) thay bằng bộ giả: ghi lại model nút theo mã GR; "dòng" là object {code, connected}
       // test tự tạo / đổi để mô phỏng DOM danh sách đổi (rev 2 R2).
@@ -276,7 +310,27 @@ function createBrowser(server, opts = {}) {
   }
 
   function openTab(url) {
-    const t = { id: nextTabId++, url, closed: false, ctx: null, view: null, views: [], loads: 0, reloads: 0, focusCount: 0, ss: new Map(), post: () => {}, grListCtrl: null, grListActive: false, grListModel: null, grListModels: [], grListNotice: null, grListNotices: [] };
+    const t = { id: nextTabId++, url, closed: false, ctx: null, view: null, viewKind: null, views: [], loads: 0, reloads: 0, focusCount: 0, ss: new Map(), post: () => {}, grListCtrl: null, grListActive: false, grListModel: null, grListModels: [], grListNotice: null, grListNotices: [], anchor: true, floatViews: [], inlineViews: [] };
+    // Trang phiếu có / mất chỗ gắn khung (#all-receipt của đúng phiếu). Có lại khi khung đang chờ → onFound như trình duyệt thật.
+    t.setAnchor = (on) => {
+      t.anchor = !!on;
+      const inl = t.ctx && !t.ctx.dead ? t.ctx.inline : null;
+      if (!inl || !inl.opts) return;
+      if (!on && t.viewKind === "inline") {
+        t.view = null;
+        if (inl.view && !inl.missing) {
+          inl.missing = true;
+          setImmediate(() => !t.ctx.dead && inl.opts.onMissing("missing"));
+        }
+      } else if (on && inl.missing && inl.view) {
+        inl.missing = false;
+        t.view = inl.view;
+        t.viewKind = "inline";
+        t.views.push(inl.view);
+        t.inlineViews.push(inl.view);
+        setImmediate(() => !t.ctx.dead && inl.opts.onFound());
+      }
+    };
     tabs.set(t.id, t);
     load(t);
     return t;

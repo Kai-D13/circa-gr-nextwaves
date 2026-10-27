@@ -59,3 +59,35 @@ test("content script khai đúng nút cần tránh: POS 'HOÀN THÀNH' / 'Hủy'
   assert.ok(nw.test(norm("XÁC NHẬN NHẬN HÀNG")));
   assert.ok(!nw.test(norm("Kết nối đầu đọc")));
 });
+
+// v0.2.4 (PM P2): khung trang phiếu trong luồng — tự mở lại khi đang thu nhỏ mà view mới cần thao tác. DOM / bố cục kiểm trên Edge
+// (scripts/edge-gr-page.js).
+test("needsAttention: cảnh báo / lỗi / có nút hành động chính → cần chú ý; busy / info / ok chỉ có nút phụ hoặc nút tắt → không", () => {
+  const { needsAttention } = require("../src/ui/panel.js");
+  assert.equal(needsAttention({ tone: "warn", title: "x" }), true);
+  assert.equal(needsAttention({ tone: "err", title: "x" }), true);
+  assert.equal(needsAttention({ tone: "info", buttons: [{ label: "Điền vào phiếu GR03878 · kế hoạch #ABCDEF12 (12 UID)" }, { label: "Huỷ phiên", secondary: true }] }), true);
+  assert.equal(needsAttention({ tone: "info", buttons: [{ label: "Huỷ phiên", secondary: true }] }), false);
+  assert.equal(needsAttention({ tone: "busy", buttons: [{ label: "Điền", disabled: true }] }), false);
+  assert.equal(needsAttention({ tone: "ok", title: "đã điền", buttons: [] }), false);
+  assert.equal(needsAttention({ tone: "busy" }), false);
+});
+
+test("viewSig: đổi tone / tiêu đề / nhãn nút → khác; đổi dòng chữ / bảng → giống (không mở lại vì số liệu nhỏ đổi)", () => {
+  const { viewSig } = require("../src/ui/panel.js");
+  const v = { tone: "info", title: "Chỉ xem kế hoạch", lines: ["a"], table: { rows: [["1"]] }, buttons: [{ label: "Huỷ phiên", secondary: true }] };
+  assert.equal(viewSig(v), viewSig(Object.assign({}, v, { lines: ["b"], table: { rows: [["2"]] } })));
+  assert.notEqual(viewSig(v), viewSig(Object.assign({}, v, { tone: "warn" })));
+  assert.notEqual(viewSig(v), viewSig(Object.assign({}, v, { title: "Đã có cấp phép điền GR03878 (1 lần)" })));
+  assert.notEqual(viewSig(v), viewSig(Object.assign({}, v, { buttons: [{ label: "Điền" }, { label: "Huỷ phiên", secondary: true }] })));
+});
+
+test("content script trang POS: khung trang phiếu gắn trước #all-receipt (không dùng bảng đầu tiên), không chèn vào body", () => {
+  const src = fs.readFileSync(path.join(__dirname, "..", "src", "pos", "pos-content.js"), "utf8");
+  assert.match(src, /document\.getElementById\("all-receipt"\)/);
+  assert.ok(!/querySelector\("table"\)/.test(src), "không lấy bảng đầu tiên của trang");
+  const panel = fs.readFileSync(path.join(__dirname, "..", "src", "ui", "panel.js"), "utf8");
+  const inline = panel.slice(panel.indexOf("function createInlinePanel"));
+  assert.ok(!/document\.body/.test(inline), "khung trong luồng không bao giờ chèn vào body");
+  assert.match(inline, /a\.parentNode\.insertBefore\(host, a\)/);
+});
