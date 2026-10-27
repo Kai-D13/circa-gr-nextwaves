@@ -30,9 +30,19 @@
 | 3 — popup extension | Tiêu đề **"GR ← Nextwaves v0.2.3"**; Môi trường Staging; ô cấp phép điền **trống**; "Phiên gần đây": **đúng một phiên** STG · GR03887 "Đã khớp đơn Nextwaves" (`nw_ready`), SOBD1594095-F → PO13806459, 20:24:25 27/10/2026 | **Đạt:** đang chạy **0.2.3**, không cấp phép, một phiên |
 | 4 — màn quét Nextwaves đã cuộn tới cuối | Thấy chân modal: "Còn thiếu 15…" (Giữ đơn mở / Đóng đơn dù còn thiếu), "Chưa khớp mã nào…", nút **Hủy** và **"Xác nhận nhận hàng"** | **Một phần:** nút hiện sau khi cuộn. Ảnh **cắt theo khung modal (961px)**, không có khung extension, nên chưa chứng minh "khung mở rộng và nút cùng hiện, không chồng". Ở bề rộng của ảnh 2 (~1917px) khung nằm ngoài modal, không thể chồng |
 
+## Ảnh 5 — danh sách POS sau khi bấm (phiên GR03887 `nw_ready`), vùng trang ~1230px
+
+- Dòng GR03887 hiện **"Mở Nextwaves"** (nhãn 0.2.3), hẹp hơn nút "Nhận hàng bằng RFID" của các dòng khác.
+- **Mọi dòng cao bằng nhau**; tiêu đề cột đều **một dòng**; bảng không dàn lại.
+- **Không khung nổi, không thông báo**; mũi tên phân trang và chọn số dòng góc dưới không bị che.
+- 6 dòng chờ / đang nhận khác vẫn "Nhận hàng bằng RFID".
+- **Đánh giá dev: F3 / F4 đạt trên trang thật** ở bề rộng này.
+  - Lượt 0.2.2 dàn lại ở 1095px; ảnh này ~1230px, gần mức đó, tiêu đề vẫn một dòng.
+  - Tooltip chưa chụp: `title` / `aria-label` đã kiểm trên Edge.
+
 ## Còn thiếu để PM quyết G3a
 
-1. **Danh sách sau khi bấm** (dòng GR03887), vùng trang ~1095px (side panel Claude mở):
+1. ~~**Danh sách sau khi bấm**~~ — **đã có (ảnh 5), đạt.** Yêu cầu ban đầu: dòng GR03887, vùng trang ~1095px (side panel Claude mở):
    - nút **"Mở Nextwaves"**;
    - dòng vẫn 57px, tiêu đề không xuống dòng;
    - không khung nổi che phân trang;
