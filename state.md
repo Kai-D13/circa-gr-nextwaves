@@ -559,7 +559,11 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-36. **Hiện hành (sau dev giao v0.2.1, 27/10):**
+37. **Hiện hành (sau PM audit v0.2.1, 27/10):**
+    - PM đã kiểm độc lập `cbac491` / gói `E34FF7C5`: 133/133 test; dựng lại SHA và so 19/19 file source/ZIP/bản giải nén; Edge trên gói 17/17 hai lượt (lượt tải tối đa 1,2 và 1,0 ms); benchmark bảng giả 200 dòng tạo đủ 130 nút. P2.1 đóng ở source/test, P2.2 đóng trên Edge trang giả. Xem `docs/pm/AUDIT-v0.2.1-SOURCE-PACK-20261027.md`.
+    - **G1 source/gói và G2 Edge trang giả đạt; G0 trang thật còn chờ.** Dev đã được operator cho phép dùng Claude in Chrome chỉ đọc nhưng bàn giao cho biết Chrome chưa kết nối. Dev lấy response/DOM/UI và đo toàn bộ tác vụ trên trang danh sách staging thật, đối chiếu selector/parser; khác giả định thì sửa, phát hành gói mới và PM audit lại.
+    - Chưa Go merge/cài v0.2.1 để vận hành, chưa Go nhận/ghi staging. Mỗi lượt có tác động cần operator cho phép riêng. Production chỉ đọc; Đợt 2 có gate riêng.
+36. (cũ, thay bằng mục 37) **Sau dev giao v0.2.1, 27/10:**
     - **PM:** audit lại P2.1 / P2.2 trên nhánh `batch/v0.2-rfid` `cbac491` và gói `E34FF7C5` theo `docs/dev/BATCH-v0.2.1.md`.
     - **Dev:** lấy G0 chỉ đọc bằng Claude in Chrome (operator cho phép 27/10):
       - Copy response danh sách GR (chỉ body);
