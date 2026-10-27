@@ -126,19 +126,19 @@
 
 | Mức | Kết quả |
 |---|---|
-| `npm test` | **159/159 × 3** trên `28d1f9c` (154/154 × 3 trên `a8d49a1`; 145/145 × 6 trên `b227585`). +24 test so với v0.2.3 (xem dưới) |
-| Đột biến Node `python -I scripts/mutate-v0.2.4.py` (130 = 102 cũ + 12 P2 + 8 audit sơ bộ + 8 audit rev 1) | **128/130** trên `28d1f9c` (0 ANCHOR, 0 hết giờ). **2 ca sống đều là lỗ test, không phải lỗi mã** — xử lý ở commit chỉ-test (§2a); **chạy lại 2 ca: ĐANG CHỜ** (sau khi bộ Edge xong, để không làm nhiễu thời gian đo) |
-| Đột biến DOM trên Edge `node scripts/mutate-edge-v0.2.4.js` (25 = 9 cũ trên `edge-check.js` + 12 P2 + 2 audit sơ bộ + 2 audit rev 1 trên `edge-gr-page.js`) | **ĐANG CHẠY** lúc viết (28/10 01:15): 15/15 ca đầu bị bắt (9 ca cũ + 6 ca P2, trong đó ca "bỏ giới hạn gắn lại" bị bắt vì trang treo → watchdog 360 s), còn 10 ca. Dev bổ sung số cuối vào đây |
-| Edge `node scripts/edge-gr-page.js` (**mới**, 94 mục) | `src/` 94/94. **Gói giải nén `0BB73E2D`:** **94/94**; lượt 2 ĐANG CHỜ (cuối chuỗi chạy nền). Gói bị chặn `95BECDEA`: **hỏng 7/91** (P1 rev 1: 5 PUT server giả, các mục sau đó hỏng theo). Gói bị chặn `E8531EB4`: hỏng 7/90 (audit sơ bộ). Đối chứng gói v0.2.3 trên bản 94 mục: ĐANG CHỜ (bản 83 mục trước đó: v0.2.3 hỏng 42/83 — khung nổi phủ −/ô số/+/icon dòng sản phẩm ở cả 3 cỡ khi mở rộng) |
-| Edge `node scripts/edge-check.js` (42 mục) | `src/` 42/42; **gói giải nén `0BB73E2D`:** **42/42**; lượt 2 ĐANG CHỜ |
+| `npm test` | **160/160 × 3** trên `c08f709` (thêm 1 test, §2a). **159/159 × 3** trên `28d1f9c` (154/154 × 3 trên `a8d49a1`; 145/145 × 6 trên `b227585`). +25 test so với v0.2.3 (xem dưới) |
+| Đột biến Node `python -I scripts/mutate-v0.2.4.py` (130 = 102 cũ + 12 P2 + 8 audit sơ bộ + 8 audit rev 1) | Lượt đủ trên `28d1f9c`: **128/130** (0 ANCHOR, 0 hết giờ). **2 ca sống là thiếu test, mã không lỗi**, đóng ở `c08f709` (§2a). **Chạy lại 2 ca trên `c08f709`: 2/2 bị bắt** ⇒ 130/130 trên mã cuối |
+| Đột biến DOM trên Edge `node scripts/mutate-edge-v0.2.4.js` (25 = 9 cũ trên `edge-check.js` + 12 P2 + 2 audit sơ bộ + 2 audit rev 1 trên `edge-gr-page.js`) | **25/25 bị bắt** trên `28d1f9c`. Ca "bỏ giới hạn gắn lại" bị bắt vì trang treo (vòng gắn khung vô hạn) → watchdog 360 s báo HỎNG, tắt Edge. Sau lượt: không còn tiến trình Edge / node sót |
+| Edge `node scripts/edge-gr-page.js` (**mới**, 94 mục) | `src/` 94/94. **Gói giải nén `0BB73E2D`: 94/94 × 2** (dài nhất 5,2 ms / tác vụ). Gói bị chặn `95BECDEA`: **hỏng 7/91** (P1 rev 1: 5 PUT server giả, các mục sau hỏng theo). Gói bị chặn `E8531EB4`: hỏng 7/90 (audit sơ bộ). **Đối chứng gói v0.2.3: hỏng 51/91** (kịch bản dừng sớm sau ca mã bất đồng vì bản cũ ghi). Gồm "điều khiển SL nhận / vùng sản phẩm bấm được": hỏng 8 mục, trong đó 1095×756 hỏng ở `nw_ready`, chỉ xem, lỗi đọc phiếu, đã điền (khung nổi phủ ô lô, −, ô số, +, icon) |
+| Edge `node scripts/edge-check.js` (42 mục) | `src/` 42/42; **gói giải nén `0BB73E2D`: 42/42 × 2** |
 
 **Race lộ ra khi chạy lặp:**
 - Trên `81790f7`, test "đổi route sang phiếu khác (GET phiếu mới còn chờ)" hỏng 2/9 lượt.
 - Nguyên nhân: lượt đánh giá cũ do cấp phép kích hoạt vẽ view GR03878 sau khi route đã sang phiếu khác.
 - Sửa `b227585` (§1, `showGr`). Thêm test giữ lượt tra QR để race chắc chắn xảy ra: bỏ dòng sửa thì test hỏng 3/3 lượt.
 
-**`npm test` — 24 ca mới:**
-- **`runtime.test.js` (14):**
+**`npm test` — 25 ca mới:**
+- **`runtime.test.js` (15):**
   - mọi trạng thái trang phiếu (nút bắt đầu → đang kiểm → đã khớp → tra UID → chỉ xem → có cấp phép → đang điền → đã điền → HOÀN THÀNH) vẽ vào khung **trong luồng** mang mã GR03878; 0 view ở khung nổi; 6 PUT;
   - thiếu chỗ gắn: khung nổi chỉ "Kiểm tra lại"; có cấp phép vẫn không nút Điền, 0 PUT, cấp phép còn, nhật ký phiên có `ui_anchor_missing`; chỗ gắn có lại → trong luồng, điền đủ;
   - bấm Điền khi khung vừa mất chỗ gắn / khi URL đã sang trang khác → không giành quyền, không tiêu cấp phép, 0 PUT;
@@ -151,7 +151,8 @@
   - *(PM audit)* đang điền (PUT treo) mà sang danh sách → không khung nổi, vẫn đủ 6 PUT;
   - *(PM rev 1)* đang điền (PUT treo) mà sang `/chi-tiet-so` SO khác → gỡ khung ngay, 0 view GR03878 trên SO B, 6 PUT, `applied`, lease trả;
   - *(PM rev 1)* đã xem SO A → điền → sang SO B: không dùng danh sách phiếu cũ của SO A;
-  - *(PM rev 1)* lượt `evaluateSo` SO A về muộn sau khi đổi sang SO B → không vẽ.
+  - *(PM rev 1)* lượt `evaluateSo` SO A về muộn sau khi đổi sang SO B → không vẽ;
+  - *(c08f709)* đang điền GR A (PUT treo) mà sang trang phiếu khác → 0 view của A trên trang đó, đủ 6 PUT.
 - **`panel.test.js` (3):**
   - `needsAttention`;
   - `viewSig` (gồm dòng chữ / bảng);
@@ -216,7 +217,7 @@
 
 ## 4. Đề xuất bước tiếp (dev đề xuất — PM quyết)
 
-1. **PM audit gói `0BB73E2D`** (source / gói / Edge), dùng số đột biến cuối khi dev bổ sung vào §2.
+1. **PM audit gói `0BB73E2D`** (source / gói / Edge). Số kiểm cuối ở §2: đột biến Node 130/130 trên mã cuối, Edge 25/25.
 2. **Thứ tự A1 và v0.2.4.** PM chọn một trong hai:
    - **(a) Giữ runbook như đã duyệt.**
      - A1 chạy trên v0.2.3 (`40236D67`).
