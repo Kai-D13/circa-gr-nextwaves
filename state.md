@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **27/10/2026 (lần 43, PM chốt G3a v0.2.3)**. Giai đoạn: **`main` có v0.1.5; v0.2.3 trên `batch/v0.2-rfid` (runtime `247386f`, đầu `f76cbcc`, gói `40236D67`) đã qua PM audit source/gói/Edge và G3a UI chỉ đọc trên Chrome staging được PM chốt đạt theo `docs/pm/DECISION-G3a-v0.2.3-20261027.md`. Không cần operator gửi thêm ảnh G3a. Chưa Go merge/vận hành; lượt nhận/ghi cần phép operator riêng. Production chỉ đọc; O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **27/10/2026 (lần 44, PM review plan staging → Florita)**. Giai đoạn: **`main` có v0.1.5; v0.2.3 trên `batch/v0.2-rfid` (runtime `247386f`, đầu `f76cbcc`, gói `40236D67`) đã qua PM audit và G3a UI chỉ đọc staging. PM duyệt hướng plan staging done → production Florita, nhưng yêu cầu sửa gate A1/P2/O1/QR và coi ngày 30/10, 4/11, 6/11 là mục tiêu có điều kiện theo `docs/pm/REVIEW-PLAN-STG-DONE-PRD-20261027.md`. Dev được chuẩn bị runbook A1, spec P2 và discovery Đợt 2; chưa có phép operator cho lượt nhận/ghi GR03887, chưa Go merge/vận hành. Production chỉ đọc.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -587,7 +587,12 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-43. **Hiện hành (sau PM chốt G3a v0.2.3, 27/10):**
+44. **Hiện hành (sau PM review plan staging done → Florita, 27/10):**
+    - PM duyệt hướng chia giai đoạn/đóng băng phạm vi của `docs/dev/PLAN-STG-DONE-PRD-20261027.md`, **không duyệt nguyên trạng lịch và không cấp phép A1**. Xem finding P1/P2, hợp đồng A1/P2 và mốc có điều kiện tại `docs/pm/REVIEW-PLAN-STG-DONE-PRD-20261027.md`.
+    - A1 v0.2.3 trên GR03887/PO13806459/SOBD1594095-F có thể chuẩn bị ngay; dev giao runbook một trang với preflight đúng 15 tem/EPC, trạng thái GR/PO/phiếu gửi, capture, điểm dừng nhận→điền→HOÀN THÀNH và đường xử lý khi mất phiên. Sau PM duyệt runbook, operator mới xác nhận tem và cho phép đúng một lượt. Không nâng cấp giữa receive và hoàn tất.
+    - P2 khung phiếu: PM duyệt khảo sát/spec hướng trong luồng trang, chưa duyệt layout/code cho tới khi có anchor DOM, hành vi qua React render và gate mọi trạng thái/nút. Một E2E staging **có giám sát** trên v0.2.3 được phép xét sau A0 dù P2 chưa sửa; P2 vẫn chặn staging done/dùng thường xuyên. v0.2.4 cần audit nguồn/gói/hồi quy W1 và kiểm UI thật trước merge.
+    - O1 khôi phục sau nhận cần hợp đồng dữ liệu thật; QR POS mới sau HOÀN THÀNH cần quyết định nghiệp vụ; máy/SO Florita và xử lý reader/rollback còn thiếu. Các mốc 30/10 staging done, 4/11 build/trial PRD, 6/11 Go là **mục tiêu phụ thuộc gate**, không cam kết ngày. Dev có thể làm discovery/spec chỉ đọc song song, production vẫn chỉ đọc.
+43. (cũ, thay bằng mục 44) **Sau PM chốt G3a v0.2.3, 27/10:**
     - PM chấp nhận G3a **đạt cho UI chỉ đọc** theo `docs/pm/DECISION-G3a-v0.2.3-20261027.md`: dev xem ảnh POS sau bấm GR03887 (nút `Mở Nextwaves`, bảng đều, không khung che phân trang) và popup v0.2.3 một phiên `nw_ready`; ảnh Nextwaves thật cho thấy khung ngoài modal và nút xác nhận hiện sau cuộn; PM đã kiểm source/gói/Edge. Lượt chạy nhầm bản cũ loại khỏi bằng chứng.
     - Giới hạn: ảnh POS sau bấm khoảng 1230px, không đúng 1095px; hai ảnh Nextwaves không cùng khung hình; số tab thật chưa đếm riêng. PM chấp nhận tổ hợp bằng chứng, **không yêu cầu ảnh hay lượt G3a bổ sung**. G3a không cho phép nhận/ghi/HOÀN THÀNH.
     - Chưa Go merge/vận hành v0.2.3. G3b nhận hàng và W1 điền POS cần plan/gate và phép operator riêng đúng GR/PO; P2 khung phiếu che `SL nhận` ở 1095px cần batch UI trước gate vận hành W1/production. Dev commit file PM nguyên trạng theo quy trình.
