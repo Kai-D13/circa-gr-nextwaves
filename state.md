@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **27/10/2026 (lần 46, PM audit sơ bộ v0.2.4)**. Giai đoạn: **`main` có v0.1.5; v0.2.3 trên `batch/v0.2-rfid` đã qua PM audit và G3a UI chỉ đọc staging. Runbook A1 đã sửa đúng hai điểm PM yêu cầu, sẵn sàng trình operator quyết lượt GR03887. P2 v0.2.4 ở `b227585`, gói `E8531EB4`, đã có source/gói/test dev báo nhưng PM phát hiện ba điểm cần sửa trong guard khung/route/cảnh báo; chưa cho cài hoặc merge gói này. Đột biến Node/Edge còn chạy, chưa có kiểm UI v0.2.4 trên trang thật. Chưa có phép operator cho lượt nhận/ghi GR03887. Ngày 30/10, 4/11, 6/11 chỉ là mục tiêu có điều kiện; production chỉ đọc.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **27/10/2026 (lần 47, PM audit rev 1 v0.2.4)**. Giai đoạn: **`main` có v0.1.5; v0.2.3 trên `batch/v0.2-rfid` đã qua PM audit và G3a UI chỉ đọc staging. Runbook A1 sẵn sàng trình operator quyết lượt GR03887. P2 v0.2.4 ở `a8d49a1`, gói `95BECDEA`: ba finding đầu đã có sửa/test, nhưng PM thấy hai ca biên còn hở ở kiểm mã phiếu và route sang SO khác trong lúc điền; chưa duyệt cài/merge. Đột biến đầy đủ còn chạy trên mã này; chưa kiểm UI v0.2.4 trên Chrome staging thật. Chưa có phép operator cho lượt nhận/ghi GR03887. Ngày 30/10, 4/11, 6/11 chỉ là mục tiêu có điều kiện; production chỉ đọc.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -587,7 +587,11 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-46. **Hiện hành (sau PM audit sơ bộ v0.2.4, 27/10):**
+47. **Hiện hành (sau PM audit rev 1 v0.2.4, 27/10):**
+    - Dev sửa theo ba finding đầu trên `a8d49a1`, gói `95BECDEA`. PM so SHA-256 và 19/19 file ZIP/source/bản giải nén khớp. Dev báo Node 154/154 × 3, Edge GR 90/90, Edge tổng 42/42, 8/8 đột biến mới; 122 Node + 23 Edge đầy đủ còn chạy. PM chưa chạy test nặng song song, chưa có kiểm UI gói mới trên Chrome staging thật.
+    - **Chưa duyệt cài/merge:** `grAnchor(code)` chấp nhận mã GR cũ nếu breadcrumb còn A dù thẻ thông tin sát bảng đã đổi B; cần test chỉ đổi thẻ thông tin và guard chính xác trước claim/PUT. Khi W1 đang điền, chuyển GR A → SO B khác có thể vẽ khung nổi A trên SO B do `evalHref` được gán B và router cho mọi SO; cần test và chặn view sai SO. Xem `docs/pm/AUDIT-REV1-v0.2.4-P2-20261027.md`.
+    - A1 trên v0.2.3 không đổi: operator xác nhận 15 tem vật lý và cho phép riêng một lượt GR03887 trước receive/PUT/HOÀN THÀNH; không nâng cấp giữa chặng. Production vẫn theo gate O1/QR/reader/T1-PRD/W1-PRD, ngày chỉ là mục tiêu có điều kiện.
+46. (cũ, thay bằng mục 47) **Sau PM audit sơ bộ v0.2.4, 27/10:**
     - Runbook A1 `b4cfc67` đã sửa kiểm capture hai tab bằng GET còn mới và đường nhập tay theo đơn vị/lô/số lượng. PM chấp nhận trình operator xác nhận đúng 15 tem vật lý và cho phép riêng một lượt GR03887/PO13806459/SOBD1594095-F; chưa có phép, chưa nhận/PUT/HOÀN THÀNH. Nếu chạy A1 trên v0.2.3 thì không nâng cấp giữa chặng nhận và hoàn tất.
     - P2 v0.2.4 source `b227585`, gói `E8531EB4`: PM đã so 19/19 ZIP/source/bản giải nén và SHA-256 `E8531EB48BE0AE975081691F768B8EB0707EE0CAD6565B142711612F361A9EA8`. Dev báo Node 145/145 × 6, Edge GR 88/88, Edge tổng 42/42; PM chưa chạy test nặng vì đột biến dev đang chạy. Chưa cài lên Chrome staging thật.
     - **Chưa duyệt cài/merge:** (P1) guard `anchoredFor()` không đọc lại mã GR hiển thị khi React giữ nguyên node `#all-receipt`; (P2) kết quả đánh giá GR cũ về muộn có thể vẽ khung nổi trên danh sách/trang khác; (P2) cảnh báo đổi nội dung khi khung thu nhỏ có thể không tự mở. Dev tái hiện bằng test, sửa, ra gói/hash mới, báo kết quả đột biến trên source cuối. Sau đó PM audit lại và mới xét kiểm UI thật. Xem `docs/pm/AUDIT-PRELIM-v0.2.4-P2-20261027.md`.
