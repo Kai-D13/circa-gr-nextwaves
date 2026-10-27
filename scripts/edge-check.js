@@ -484,6 +484,9 @@ const STORM_JS = `(async () => {
     await lst.page.send("Profiler.setSamplingInterval", { interval: 100 });
     // Lượt quét lúc tải trang (tạo 13 nút) đo riêng rồi đặt lại số đo, để đợt bão chỉ tính lượt do thay đổi DOM.
     const stats0 = JSON.parse((await evalIn(lst.page, "JSON.stringify(globalThis.__CGN__.grList.stats(true))", lIso && lIso.id)) || "{}");
+    // Bước lấy dòng (querySelectorAll('tr') + Array.from) nằm trước lát quét đầu và không vào stats(): đo riêng trong chính world của
+    // extension; ngưỡng mỗi lượt áp cho (lát dài nhất + lấy dòng dài nhất) — chặn trên cho "lượt quét tính cả bước lấy dòng" (PM 27/10).
+    const collect = JSON.parse((await evalIn(lst.page, "(() => { const t = []; for (let i = 0; i < 50; i++) { const a = performance.now(); Array.from(document.querySelectorAll('tr')); t.push(performance.now() - a); } t.sort((x, y) => x - y); return JSON.stringify({ med: t[25], max: t[49] }); })()", lIso && lIso.id)) || '{"med":0,"max":0}');
     await lst.page.send("Profiler.start", {});
     await evalIn(lst.page, STORM_JS, lMain && lMain.id);
     await sleep(800);
@@ -496,15 +499,16 @@ const STORM_JS = `(async () => {
     info("Toàn bộ tác vụ extension · danh sách từ lúc mở trang tới hết bão DOM (trace CDP)", listTasks.text);
     check("Hiệu năng · không tác vụ extension nào ≥ 50 ms trên danh sách (long task)", listTasks.all < 50, `dài nhất ${listTasks.all.toFixed(2)} ms`);
     // Cùng một ngưỡng cho mọi lượt (PM audit v0.2.0 P2.2): lượt lúc tải trang (kể cả lượt đầu "lạnh") và lượt trong bão DOM.
+    const lay = `lấy dòng tối đa ${Number(collect.max).toFixed(3)} ms (trung vị ${Number(collect.med).toFixed(3)})`;
     check(
-      `Hiệu năng · lúc tải danh sách (tạo ${EXPECTED_BUTTONS.length} nút): mỗi lượt quét < ${PASS_BUDGET_MS} ms`,
-      stats0.applies >= 1 && stats0.maxMs < PASS_BUDGET_MS,
-      `${stats0.applies} lượt, tối đa ${Number(stats0.maxMs).toFixed(3)} ms, tổng ${Number(stats0.totalMs).toFixed(2)} ms`
+      `Hiệu năng · lúc tải danh sách (tạo ${EXPECTED_BUTTONS.length} nút): mỗi lượt quét tính cả bước lấy dòng < ${PASS_BUDGET_MS} ms`,
+      stats0.applies >= 1 && stats0.maxMs + collect.max < PASS_BUDGET_MS,
+      `${stats0.applies} lượt, lát tối đa ${Number(stats0.maxMs).toFixed(3)} ms + ${lay} = ${(stats0.maxMs + collect.max).toFixed(3)} ms; tổng ${Number(stats0.totalMs).toFixed(2)} ms`
     );
     check(
-      `Hiệu năng · danh sách + 300 thay đổi DOM (~1,5 s liên tục): quét lại ≥ 2 lượt (chờ tối đa 1 s), mỗi lượt < ${PASS_BUDGET_MS} ms, CPU extension < 50 ms, 0 request`,
-      stats1.applies >= 2 && stats1.maxMs < PASS_BUDGET_MS && cpuList.ext < 50 && extReqs().length === 0,
-      `bão: ${stats1.applies} lượt (gom từ ${stats1.mutationBatches} đợt thay đổi), tối đa ${Number(stats1.maxMs).toFixed(3)} ms, tổng ${Number(stats1.totalMs).toFixed(2)} ms · CPU extension ${cpuList.ext.toFixed(1)} ms / trang ${cpuList.total.toFixed(1)} ms`
+      `Hiệu năng · danh sách + 300 thay đổi DOM (~1,5 s liên tục): quét lại ≥ 2 lượt (chờ tối đa 1 s), mỗi lượt tính cả bước lấy dòng < ${PASS_BUDGET_MS} ms, CPU extension < 50 ms, 0 request`,
+      stats1.applies >= 2 && stats1.maxMs + collect.max < PASS_BUDGET_MS && cpuList.ext < 50 && extReqs().length === 0,
+      `bão: ${stats1.applies} lượt (gom từ ${stats1.mutationBatches} đợt thay đổi), lát tối đa ${Number(stats1.maxMs).toFixed(3)} ms + lấy dòng ${Number(collect.max).toFixed(3)} ms, tổng ${Number(stats1.totalMs).toFixed(2)} ms · CPU extension ${cpuList.ext.toFixed(1)} ms / trang ${cpuList.total.toFixed(1)} ms`
     );
 
     // Bấm nút của ta: không mở dòng; tạo một phiên, mở Nextwaves, tab POS ở lại danh sách.
