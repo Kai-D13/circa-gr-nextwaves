@@ -1,5 +1,20 @@
 # Kế hoạch tới production — staging done → E2E staging → production Florita (dev đề xuất, 27/10/2026)
 
+> **Chỉnh theo PM review (`docs/pm/REVIEW-PLAN-STG-DONE-PRD-20261027.md`) — các điểm dưới đây thay phần tương ứng bên dưới:**
+> - **Ngày:** 30/10, 4/11, 6/11 là **mốc mục tiêu có điều kiện theo gate**, không phải ngày merge / Go đã duyệt. Không có ETA bảo đảm khi cần tem / SO mới hoặc sửa backend.
+> - **A1:** chạy theo runbook `docs/dev/RUNBOOK-A1-GR03887-20261027.md`: preflight chỉ đọc, đúng 15 EPC theo dòng, **ba chặng có điểm dừng** (sau nhận / trước cấp phép / trước HOÀN THÀNH), đường xử lý khi mất phiên.
+>   - Chỉ chạy sau khi PM duyệt runbook **và** operator xác nhận tem + cho phép đúng lượt đó.
+>   - Không nâng / đổi extension giữa chặng.
+>   - SO / GR mới hoặc chạy lại: operator quyết riêng, sau khi dev chẩn đoán.
+> - **P2:** dev giao spec với anchor DOM thật trang phiếu, cách sống qua POS vẽ lại, gate mọi trạng thái ở 1095 / 1366 / 1440; PM duyệt rồi mới code v0.2.4.
+>   - Sau v0.2.4: audit gói + hồi quy nút "Điền" (grant / plan / apply) trên Edge + kiểm UI thật.
+>   - Đổi handler / logic thì cần gate W1 bổ sung. **Không tự động merge 30/10.**
+> - **Đợt 2 bắt đầu bằng discovery chỉ đọc:**
+>   - O1: tìm lại đơn **đã nhận** theo khoá bất biến (PO / phiếu gửi / biên nhận), vì `/receiving` theo SO từng trả 0 sau nhận. Không có API tin cậy thì đề xuất fail closed + nhập tay để operator quyết. Test gián đoạn sau 2xx / trước W1 / sau PUT một phần / khi đổi ID.
+>   - Tra QR đối chứng mã POS thêm sau HOÀN THÀNH với UID Nextwaves.
+>   - Go production cần: hai quyết định nghiệp vụ (O1, QR), T1-PRD, W1-PRD có phép riêng, rollback / xử lý GR dở, người trực.
+>   - Theo dõi sau Go: mô tả cách xuất log trước TTL 24 giờ, ngưỡng dừng, không hứa xem log nếu không truy cập được máy Florita.
+
 **Mục tiêu:** chốt tiến độ, không mở thêm phạm vi. Mỗi bước có người làm, ngày, điều kiện xong và **một** danh sách bằng chứng (xin một lần).
 
 ## 0. Hiện trạng (27/10, tối)
