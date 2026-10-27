@@ -89,10 +89,7 @@
   - Hai lời gọi **một lần mỗi lượt tải danh sách** (hook parse response; content xử lý tin danh sách) vượt 2 ms khi máy bận (1,9–3,6 ms), dưới 1,5 ms khi máy yên.
   - Hai lời gọi này không do v0.2.2 thêm: v0.2.1 đo cùng lúc cao tương đương.
   - **Chưa đo trên máy POS Florita** (G3): tốc độ máy quyết định mức này.
-- **Hướng giảm nếu PM cần mọi lời gọi < 2 ms kể cả lượt đầu (chưa làm, cần PM chốt):**
-  - hook đẩy phần parse sang task riêng (`setTimeout 0`) để không kéo dài task XHR của trang;
-  - `grList.show()` vẽ nút ở task riêng thay vì trong lúc xử lý tin.
-  - Mỗi lời gọi còn khoảng một nửa; tổng việc không đổi.
+- **PM đã chốt** (§4.2): hai lời gọi này thuộc gate "mọi tác vụ < 50 ms", không phải "< 2 ms"; không tách task.
 - **"Có / không extension":** báo CPU **quy đúng cho script extension** (trace / Profiler lọc `chrome-extension://`), không lấy hiệu hai lần chạy. Chênh lệch giữa hai lần chạy trên máy desktop dao động lớn hơn chính phần extension.
   - Bão 300 thay đổi DOM: extension 0,0–0,2 ms trên tổng trang 1,1–4,2 ms.
 
@@ -152,7 +149,7 @@
 
 ## 4. Còn lại / đề nghị PM
 
-1. **Bằng chứng UI trên Chrome thật với v0.2.2 cài (PM review tạm: bắt buộc trước nghiệm thu G0.3).** Làm **sau gate cuối** của PM.
+1. **Bằng chứng UI trên Chrome thật với v0.2.2 cài (bắt buộc trước nghiệm thu G0.3).** PM audit v0.2.2 **đã cho phép cài** để kiểm G0.3 + G3a chỉ đọc; checklist đầy đủ trong `docs/pm/AUDIT-v0.2.2-G0-G1-G2-20261027.md` mục "G3a".
    - **Điều kiện PM:**
      - chọn Staging, không cấp phép điền;
      - không bấm "Xác nhận nhận hàng" / HOÀN THÀNH, không PUT POS;
@@ -165,9 +162,9 @@
    - **Cách làm:**
      - Claude in Chrome kết nối được: dev quan sát / chụp chỉ đọc.
      - Không kết nối được: operator chụp theo checklist này. Pane của app không nạp được extension.
-2. **Ngân sách theo toàn bộ tác vụ:** đề nghị PM chốt định nghĩa (số đo §1 G0.4).
-   - "Mỗi lời gọi extension < 2 ms ở trạng thái thường": đạt, kể cả lúc máy bận.
-   - "Lời gọi một lần mỗi lượt tải danh sách" (hook parse 76 KB; content xử lý tin danh sách): 1,5 ms lúc máy yên, tới 3,6 ms lúc máy bận. Nếu PM giữ < 2 ms cho cả hai lời gọi này, dev làm hai việc tách task nêu ở G0.4 (v0.2.3).
-   - "Nạp script lúc mở trang": một lần, 5–30 ms tuỳ tải máy, < 50 ms.
-   - Mức trên máy POS Florita cần đo ở G3.
+2. **Ngân sách hiệu năng — PM đã chốt** (`docs/pm/AUDIT-v0.2.2-G0-G1-G2-20261027.md`), không còn câu hỏi mở:
+   - mỗi lượt quét danh sách **< 2 ms, gồm bước lấy dòng**: đạt 1,1–1,3 ms (§3b);
+   - **mọi tác vụ quy cho extension < 50 ms**, kể cả nạp script một lần khi mở trang: đạt, dài nhất 5,4–14,2 ms;
+   - **không áp < 2 ms cho mọi callback.** Hai lời gọi một lần mỗi lượt tải danh sách (1,5–3,6 ms tuỳ tải máy, §1 G0.4) nằm trong gate < 50 ms, nên không làm v0.2.3 tách task.
+   - Mức trên máy POS Florita đo ở G3.
 3. Lượt nhận / ghi staging bằng v0.2.2 vẫn cần operator cho phép riêng đúng GR / PO. Production chỉ đọc; Đợt 2 có gate riêng.
