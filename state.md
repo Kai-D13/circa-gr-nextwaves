@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **27/10/2026 (lần 45, PM review runbook A1 và spec P2)**. Giai đoạn: **`main` có v0.1.5; v0.2.3 trên `batch/v0.2-rfid` (runtime `247386f`, đầu `f76cbcc`, gói `40236D67`) đã qua PM audit và G3a UI chỉ đọc staging. PM chấp nhận runbook A1 sau hai sửa nhỏ về kiểm capture và nhập tay khi mất phiên; chọn P2 v0.2.4 phương án A trong luồng trang, sticky chỉ khi không che thao tác, cho dev code theo `docs/pm/REVIEW-A1-RUNBOOK-P2-v0.2.4-20261027.md`. Chưa có phép operator cho lượt nhận/ghi GR03887, chưa Go merge/vận hành. Ngày 30/10, 4/11, 6/11 là mục tiêu có điều kiện; production chỉ đọc.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **27/10/2026 (lần 46, PM audit sơ bộ v0.2.4)**. Giai đoạn: **`main` có v0.1.5; v0.2.3 trên `batch/v0.2-rfid` đã qua PM audit và G3a UI chỉ đọc staging. Runbook A1 đã sửa đúng hai điểm PM yêu cầu, sẵn sàng trình operator quyết lượt GR03887. P2 v0.2.4 ở `b227585`, gói `E8531EB4`, đã có source/gói/test dev báo nhưng PM phát hiện ba điểm cần sửa trong guard khung/route/cảnh báo; chưa cho cài hoặc merge gói này. Đột biến Node/Edge còn chạy, chưa có kiểm UI v0.2.4 trên trang thật. Chưa có phép operator cho lượt nhận/ghi GR03887. Ngày 30/10, 4/11, 6/11 chỉ là mục tiêu có điều kiện; production chỉ đọc.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -587,7 +587,12 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-45. **Hiện hành (sau PM review runbook A1 và spec P2, 27/10):**
+46. **Hiện hành (sau PM audit sơ bộ v0.2.4, 27/10):**
+    - Runbook A1 `b4cfc67` đã sửa kiểm capture hai tab bằng GET còn mới và đường nhập tay theo đơn vị/lô/số lượng. PM chấp nhận trình operator xác nhận đúng 15 tem vật lý và cho phép riêng một lượt GR03887/PO13806459/SOBD1594095-F; chưa có phép, chưa nhận/PUT/HOÀN THÀNH. Nếu chạy A1 trên v0.2.3 thì không nâng cấp giữa chặng nhận và hoàn tất.
+    - P2 v0.2.4 source `b227585`, gói `E8531EB4`: PM đã so 19/19 ZIP/source/bản giải nén và SHA-256 `E8531EB48BE0AE975081691F768B8EB0707EE0CAD6565B142711612F361A9EA8`. Dev báo Node 145/145 × 6, Edge GR 88/88, Edge tổng 42/42; PM chưa chạy test nặng vì đột biến dev đang chạy. Chưa cài lên Chrome staging thật.
+    - **Chưa duyệt cài/merge:** (P1) guard `anchoredFor()` không đọc lại mã GR hiển thị khi React giữ nguyên node `#all-receipt`; (P2) kết quả đánh giá GR cũ về muộn có thể vẽ khung nổi trên danh sách/trang khác; (P2) cảnh báo đổi nội dung khi khung thu nhỏ có thể không tự mở. Dev tái hiện bằng test, sửa, ra gói/hash mới, báo kết quả đột biến trên source cuối. Sau đó PM audit lại và mới xét kiểm UI thật. Xem `docs/pm/AUDIT-PRELIM-v0.2.4-P2-20261027.md`.
+    - Staging done cần A1 có phép và đạt, P2 trên gói cuối đạt UI/guard/W1; production còn O1, QR POS sau HOÀN THÀNH, máy/reader Florita, T1-PRD chỉ đọc, allowlist/rollback và W1-PRD có phép riêng. Lịch chỉ theo gate.
+45. (cũ, thay bằng mục 46) **Sau PM review runbook A1 và spec P2, 27/10:**
     - PM kiểm runbook `docs/dev/RUNBOOK-A1-GR03887-20261027.md`: 15 hậu tố EPC duy nhất, tổng 1+3+3+4+4=15. Status GR/PO và quy đổi là dev quan sát trên trang thật, PM chưa có response làm sạch để tự đối chiếu. Runbook được chấp nhận để trình operator **sau khi dev thêm kiểm capture đang chạy trên hai tab và sửa đường nhập tay (15 EPC không phải 15 hộp/đơn vị cơ bản)**. Không cần vòng PM review mới nếu chỉ sửa đúng hai điểm. Operator vẫn phải xác nhận đủ tem đúng đơn và cho phép riêng một lượt A1; chưa có phép ghi.
     - P2 v0.2.4: PM chọn phương án A có điều kiện, host Shadow DOM trong luồng trang trước `#all-receipt`; sticky chỉ khi geometry không che `SL nhận`, HỦY/HOÀN THÀNH hay nút trong khung ở 1095/1366/1440, nếu không thì in-flow không sticky. Không dùng nhãn nổi B; thiếu anchor thì báo lỗi và W1 fail closed, không mở nút Điền trên panel nổi cũ. Dev được code trên batch, giao test/gói/DIFF; không thay/cài bản v0.2.3 giữa A1.
     - Đợt 2 O1/QR chỉ đọc tiếp tục song song. Không Go merge/staging done/production từ hai quyết định này. Xem `docs/pm/REVIEW-A1-RUNBOOK-P2-v0.2.4-20261027.md`.
