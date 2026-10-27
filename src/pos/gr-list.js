@@ -2,6 +2,8 @@
  * Trang danh sách phiếu nhận POS (ISOLATED world) — CHỈ phần DOM của nút "Nhận hàng bằng RFID" (Spec v0.2 S2 / S5).
  * Không gọi API, không đọc storage: bộ điều khiển duy nhất ở pos/pos-content.js quyết dòng nào có nút, nhãn gì, bấm thì làm gì.
  *  - show(model): model.byCode = Map<mã GR, {grId, kind, label, title, disabled}>; dòng có mã không nằm trong model → gỡ nút của ta.
+ *    Nhãn ngắn; title = aria-label = tên đầy đủ (mã GR + trạng thái phiên + hành động) — v0.2.3 PM F3.
+ *  - notice(view): vùng thông báo trong luồng trang, ngay trên bảng (huỷ / lỗi / không liên kết) — v0.2.3 PM F4, không dùng khung nổi.
  *  - Tìm dòng: ô lá có chữ đúng /^GR\d{5,}$/ trong một <tr> (không đoán theo thứ tự dòng). Nút vào div.flex của ô cuối, hoặc chính ô cuối.
  *  - <button type="button" class="cgn-rfid-btn">; chặn sự kiện chuột / phím lan lên dòng (dòng POS mở phiếu khi bấm) bằng MỘT bộ nghe
  *    capture ở document (chỉ khi trang là danh sách). Không đụng nút của extension khác (vd. .circa-rfid-po-link của extension Nextwaves).
@@ -22,10 +24,17 @@
   const MAX_WAIT_MS = 1000; // DOM đổi liên tục (đồng hồ, spinner…) vẫn được quét lại tối đa mỗi 1 s
   const SLICE_MS = 1; // mỗi lượt quét dừng sau ~1 ms (cộng một dòng đang làm dở), phần còn lại sang task sau
   // Cao 24px = icon thao tác của dòng POS thật (G0 27/10: nút 28px làm dòng 57px → 61px, 24px giữ nguyên 57px).
+  // Rộng (v0.2.3, PM F3): mọi nhãn ngắn hơn "Nhận hàng bằng RFID" (~144px trên POS thật); chặn cứng MAX_W, chữ thừa thành "…"
+  // để nhãn trạng thái không bao giờ làm cột Hành động nở ra (bảng dàn lại). Tên đầy đủ ở title + aria-label.
+  const MAX_W = 150;
   const STYLE =
-    "display:inline-flex;align-items:center;margin-inline-start:8px;padding:0 10px;height:24px;border:1px solid #1f6feb;" +
-    "border-radius:8px;background:#fff;color:#1f6feb;font:600 12px/1 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;" +
-    "white-space:nowrap;cursor:pointer;";
+    `display:inline-block;box-sizing:border-box;max-width:${MAX_W}px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;` +
+    "margin-inline-start:8px;padding:0 10px;height:24px;line-height:22px;border:1px solid #1f6feb;" +
+    "border-radius:8px;background:#fff;color:#1f6feb;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;" +
+    "font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer;";
+  // Vùng thông báo của trang danh sách (v0.2.3, PM F4): nằm TRONG luồng trang, ngay trên bảng — không phủ dòng / icon / nút / phân trang.
+  const NOTE = "cgn-rfid-note";
+  const NOTE_TONE = { warn: ["#fff8e1", "#b7791f"], err: ["#fdecea", "#c62828"], info: ["#e8f0fe", "#1f6feb"], ok: ["#e6f4ea", "#1a7f37"] };
   const EVENTS = ["mousedown", "mouseup", "pointerdown", "pointerup", "touchstart", "touchend", "dblclick", "keydown", "keyup", "click"];
   const hasDom = typeof document !== "undefined" && typeof MutationObserver !== "undefined";
 
@@ -105,12 +114,16 @@
       if (cur) cur.remove();
       return;
     }
+    const full = want.title || want.label;
+    // So cả kind / title / aria-label: cùng nhãn "Mở phiếu" nhưng phiên đổi (received → applied) vẫn phải cập nhật tên đầy đủ.
     const same =
       cur &&
       cur.getAttribute("data-cgn-gr") === want.grId &&
       cur.getAttribute("data-cgn-code") === code &&
       cur.getAttribute("data-cgn-kind") === want.kind &&
       cur.textContent === want.label &&
+      cur.title === full &&
+      cur.getAttribute("aria-label") === full &&
       cur.disabled === !!want.disabled;
     if (same) return;
     const btn = cur && cur.getAttribute("data-cgn-gr") === want.grId ? cur : makeButton();
@@ -118,7 +131,8 @@
     btn.setAttribute("data-cgn-code", code);
     btn.setAttribute("data-cgn-kind", want.kind);
     if (btn.textContent !== want.label) btn.textContent = want.label;
-    btn.title = want.title || want.label;
+    btn.title = full;
+    btn.setAttribute("aria-label", full);
     btn.disabled = !!want.disabled;
     if (btn !== cur) {
       if (cur) cur.remove();
@@ -144,6 +158,62 @@
     WARM_STEPS[step]();
     record(now() - t0);
     if (step + 1 < WARM_STEPS.length) warmTimer = setTimeout(warmUp, 0, step + 1);
+  }
+
+  // ---- vùng thông báo (chỉ trang danh sách) ----
+  let noticeView = null;
+  let noticeEl = null;
+
+  function buildNotice(view) {
+    const [bg, fg] = NOTE_TONE[view.tone] || NOTE_TONE.info;
+    const box = document.createElement("div");
+    box.className = NOTE;
+    box.setAttribute("role", view.tone === "err" || view.tone === "warn" ? "alert" : "status");
+    box.setAttribute(
+      "style",
+      `box-sizing:border-box;display:flex;align-items:flex-start;gap:12px;margin:8px 0;padding:8px 12px;border-left:4px solid ${fg};` +
+        `border-radius:6px;background:${bg};color:#111;font:13px/1.45 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;`
+    );
+    const text = document.createElement("div");
+    text.setAttribute("style", "flex:1;min-width:0;");
+    const title = document.createElement("div");
+    title.setAttribute("style", "font-weight:600;");
+    title.textContent = String(view.title || "");
+    text.appendChild(title);
+    for (const line of view.lines || []) {
+      const p = document.createElement("div");
+      p.setAttribute("style", "white-space:pre-wrap;word-break:break-word;");
+      p.textContent = String(line);
+      text.appendChild(p);
+    }
+    box.appendChild(text);
+    for (const b of view.buttons || []) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = String(b.label);
+      btn.setAttribute("style", "flex:none;border:1px solid #111;background:#fff;color:#111;border-radius:6px;padding:2px 10px;font:inherit;cursor:pointer;");
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        if (b.onClick) b.onClick();
+      });
+      box.appendChild(btn);
+    }
+    return box;
+  }
+
+  // Đặt ngay trước bảng (hoặc khung MUI chứa bảng); app vẽ lại bảng thì đặt lại. Không có bảng thì lên đầu trang.
+  function syncNotice() {
+    if (!noticeView) {
+      if (noticeEl) noticeEl.remove();
+      noticeEl = null;
+      return;
+    }
+    if (!noticeEl) noticeEl = buildNotice(noticeView);
+    const table = document.querySelector("table");
+    const anchor = table ? table.closest("[class*='MuiTableContainer']") || table : null;
+    if (anchor && anchor.parentElement) {
+      if (noticeEl.parentElement !== anchor.parentElement || noticeEl.nextElementSibling !== anchor) anchor.parentElement.insertBefore(noticeEl, anchor);
+    } else if (!noticeEl.isConnected) (document.body || document.documentElement).prepend(noticeEl);
   }
 
   function record(ms) {
@@ -173,6 +243,7 @@
     if (!active || !hasDom) return;
     if (sliceTimer) clearTimeout(sliceTimer); // quét lại từ đầu theo DOM / model mới nhất
     sliceTimer = null;
+    syncNotice();
     // Chưa có dòng nào cần nút (vd. trang vừa tải, response danh sách chưa về): chỉ gỡ nút còn sót, không quét bảng.
     if (!model || !model.byCode || model.byCode.size === 0) {
       const t0 = now();
@@ -183,13 +254,13 @@
     runSlice(Array.from(document.querySelectorAll("tr")), 0);
   }
 
-  // Thay đổi do chính nút của ta (thêm / gỡ / đổi chữ nút) không kích hoạt lượt quét lại.
+  // Thay đổi do chính nút / vùng thông báo của ta (thêm / gỡ / đổi chữ / dời chỗ) không kích hoạt lượt quét lại.
   function isOwn(m) {
     const t = m.target;
     const el = t && t.nodeType === 1 ? t : t && t.parentElement;
-    if (el && el.closest && el.closest("button." + BTN)) return true;
+    if (el && el.closest && el.closest("button." + BTN + ", ." + NOTE)) return true;
     const nodes = [...m.addedNodes, ...m.removedNodes];
-    return nodes.length > 0 && nodes.every((n) => n.nodeType === 1 && n.classList && n.classList.contains(BTN));
+    return nodes.length > 0 && nodes.every((n) => n.nodeType === 1 && n.classList && (n.classList.contains(BTN) || n.classList.contains(NOTE)));
   }
 
   function flush() {
@@ -239,11 +310,24 @@
       warmTimer = null;
       pendingSince = 0;
       model = null;
+      noticeView = null; // rời danh sách: dọn cả vùng thông báo
+      if (noticeEl) noticeEl.remove();
+      noticeEl = null;
       if (hasDom) for (const b of document.querySelectorAll("button." + BTN)) b.remove();
     },
     show(m) {
       model = m;
       apply();
+    },
+    // notice(view | null): view = {tone: warn|err|info|ok, title, lines[], buttons[{label, onClick}]} — chỉ dùng khi trang là danh sách.
+    notice(view) {
+      if (!active || !hasDom) return;
+      const next = view || null;
+      if (next === noticeView) return syncNotice();
+      noticeView = next;
+      if (noticeEl) noticeEl.remove();
+      noticeEl = null;
+      syncNotice();
     },
     rowValid(tr, code, grId) {
       if (!hasDom || !tr || !tr.isConnected) return false;

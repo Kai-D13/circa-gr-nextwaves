@@ -127,8 +127,10 @@ test("bấm trên danh sách → đọc lại GR + PO + SO → MỘT phiên, m�
     );
     assert.equal(pos.url, LIST_URL, "tab POS ở lại danh sách");
     await until(() => model(pos, "GR03878") && model(pos, "GR03878").kind === "open_nw");
-    assert.equal(model(pos, "GR03878").label, "Đang nhận trên Nextwaves");
-    assert.match(pos.view.title, /GR03878: đã mở màn quét Nextwaves/);
+    assert.equal(model(pos, "GR03878").label, "Mở Nextwaves");
+    // v0.2.3 F4: thành công thể hiện bằng nút; không khung nổi, không vùng thông báo trên danh sách.
+    assert.equal(pos.view, null, "không khung nổi trên danh sách");
+    assert.equal(pos.grListNotice, null, "thành công không cần thông báo");
     // Nextwaves khớp đơn + lượt nhận 2xx + kết quả nhận (gửi từ trang Nextwaves) → background đưa tab POS về trang phiếu.
     const match = { nwPoId: "55bd221f-65de-4a4d-8a77-40c568a6f176", nwPoNumber: "PO28237814", nwOrderId: "f930f66d-679a-4ed8-9c8e-b48aea91a8be", nwRefId: "SOBD1593858-1056745", shipmentIds: [SHIP], expected: H.receivingPO28237814(), receiptIdsBefore: [], nwWriteLocks: [] };
     assert.equal((await b.sendFromTab(nw, { type: "session:nwMatched", key: KEY, match })).ok, true);
@@ -139,6 +141,64 @@ test("bấm trên danh sách → đọc lại GR + PO + SO → MỘT phiên, m�
     assert.equal(log.scanAt, new Date(scanAt).toISOString());
     assert.equal((await b.sendFromTab(nw, { type: "session:received", key: KEY, payload: { units: [], nwPoNumber: "PO28237814", receiptIds: [], at: Date.now() } })).ok, true);
     await until(() => pos.url === GR_PAGE);
+  } finally {
+    b.close();
+  }
+});
+
+// v0.2.3 (PM F3): nhãn ngắn (không dài hơn nút bắt đầu), tên đầy đủ = mã GR + trạng thái PHIÊN + hành động; đổi trạng thái phiên
+// (kể cả cùng nhãn "Mở phiếu": received → applied) phải đổi tên đầy đủ trên cùng bảng.
+test("F3 nút danh sách qua mọi trạng thái trên cùng bảng: nhãn ngắn, kind đúng, title gồm mã GR + trạng thái phiên + hành động", async () => {
+  const { b, pos } = await openList();
+  try {
+    const m = () => model(pos, "GR03878");
+    assert.deepEqual([m().kind, m().label], ["start", "Nhận hàng bằng RFID"]);
+    assert.match(m().title, /^GR03878 · chưa có phiên · Nhận hàng bằng RFID/);
+    pos.grListCtrl.onSelect({ code: "GR03878" }, GR_ID, "GR03878", "start");
+    const busy = await until(() => pos.grListModels.map((x) => x && x.byCode && x.byCode.get("GR03878")).find((v) => v && v.kind === "busy"));
+    assert.deepEqual([busy.label, busy.disabled], ["Đang kiểm…", true]);
+    assert.match(busy.title, /^GR03878 · đang kiểm phiếu, PO và SO/);
+    assert.equal(pos.view, null, "đang kiểm: không khung nổi");
+    await until(() => m() && m().kind === "open_nw");
+    assert.equal(m().label, "Mở Nextwaves");
+    assert.match(m().title, /^GR03878 · phiên .*\(waiting_nw\) · Mở lại tab Nextwaves/);
+    const seen = {};
+    for (const [state, kind, label] of [
+      ["nw_ready", "open_nw", "Mở Nextwaves"],
+      ["received", "open_gr", "Mở phiếu"],
+      ["applying", "open_gr", "Mở phiếu"],
+      ["applied", "open_gr", "Mở phiếu"],
+      ["apply_stopped", "open_gr", "Mở phiếu"],
+    ]) {
+      await b.patchSession(KEY, { state });
+      const v = await until(() => m() && m().title.includes(`(${state})`) && m());
+      assert.deepEqual([v.kind, v.label], [kind, label], state);
+      assert.match(v.title, kind === "open_gr" ? /· Mở phiếu để lập kế hoạch/ : /· Mở lại tab Nextwaves/, state);
+      seen[state] = v.title;
+    }
+    assert.notEqual(seen.received, seen.applied, "cùng nhãn 'Mở phiếu' nhưng tên đầy đủ đổi theo trạng thái phiên");
+    for (const v of [busy, m()]) assert.ok(v.label.length <= "Nhận hàng bằng RFID".length, `nhãn "${v.label}" không dài hơn nút bắt đầu`);
+  } finally {
+    b.close();
+  }
+});
+
+test("F4 thông báo danh sách: rời danh sách thì dọn; quay lại không hiện thông báo cũ; không khung nổi", async () => {
+  const { b, pos } = await openList({ server: { grStatus: "COMPLETED" } });
+  try {
+    pos.grListCtrl.onSelect({ code: "GR03878" }, GR_ID, "GR03878", "start");
+    await until(() => pos.grListNotice && /chưa mở được Nextwaves/.test(pos.grListNotice.title));
+    assert.equal(pos.view, null);
+    pos.url = `${POS}/ban-hang`;
+    pos.post({ mark: HOOK, type: "route", payload: { href: `${POS}/ban-hang` } });
+    await until(() => !pos.grListActive);
+    assert.equal(pos.grListNotice, null, "rời danh sách → dọn thông báo");
+    pos.url = LIST_URL;
+    pos.post({ mark: HOOK, type: "route", payload: { href: LIST_URL } });
+    await until(() => pos.grListActive);
+    await settle(80);
+    assert.equal(pos.grListNotice, null, "quay lại → không hiện thông báo cũ");
+    assert.equal(pos.view, null);
   } finally {
     b.close();
   }
@@ -262,8 +322,9 @@ for (const [name, change, title] of R2_CASES) {
       await until(() => calls(srv, /goods-receipt\/2de6c0ec/) === 1);
       change(pos, r);
       // Huỷ ngay khi GET GR vẫn đang treo — trước hạn hết giờ của GET (2 s trong trình duyệt giả).
-      if (title) await until(() => pos.view && pos.view.title === title, 1500);
+      if (title) await until(() => pos.grListNotice && pos.grListNotice.title === `GR03878: ${title}`, 1500);
       else await settle(30);
+      if (title) assert.equal(pos.view, null, `${name}: báo trong vùng thông báo của danh sách, không khung nổi`);
       release();
       await settle(120);
       assert.equal(b.session(KEY), null, name);
@@ -286,8 +347,8 @@ test("R2: URL đổi mà hook không báo — khi đang đọc GR → dừng nga
       await until(() => calls(srv, kind === "gr" ? /goods-receipt\/2de6c0ec/ : /goods-receipt\/search/) === 1);
       pos.url = `${LIST_URL}?page=3`; // không post "route"
       release();
-      await until(() => pos.view && /Danh sách đã đổi — bấm lại|chưa mở được Nextwaves/.test(pos.view.title));
-      assert.match(pos.view.title, /Danh sách đã đổi — bấm lại/, kind);
+      await until(() => pos.grListNotice && /Danh sách đã đổi — bấm lại|chưa mở được Nextwaves/.test(pos.grListNotice.title));
+      assert.match(pos.grListNotice.title, /Danh sách đã đổi — bấm lại/, kind);
       assert.equal(b.session(KEY), null, kind);
       assert.equal(nwTabs(b).length, 0, kind);
       if (kind === "gr") assert.equal(calls(srv, /\/po\//), 0, "dừng ngay sau GET GR");
@@ -302,8 +363,10 @@ test("GET GR hết giờ (mạng) → báo lỗi mạng, KHÔNG báo nhầm 'Dan
   try {
     hold(srv.st, "gr"); // treo quá hạn hết giờ GET (2 s trong trình duyệt giả)
     pos.grListCtrl.onSelect({ code: "GR03878" }, GR_ID, "GR03878", "start");
-    await until(() => pos.view && /chưa mở được Nextwaves/.test(pos.view.title), 3500);
-    assert.match(pos.view.lines.join("\n"), /Hết giờ \/ mất kết nối/);
+    await until(() => pos.grListNotice && /chưa mở được Nextwaves/.test(pos.grListNotice.title), 3500);
+    assert.match(pos.grListNotice.lines.join("\n"), /Hết giờ \/ mất kết nối/);
+    assert.equal(pos.grListNotice.tone, "err");
+    assert.equal(pos.view, null, "lỗi trên danh sách: không khung nổi");
     assert.equal(b.session(KEY), null);
   } finally {
     b.close();
@@ -320,13 +383,15 @@ test("R2: danh sách đổi ngay trước session:start (đang tìm GR theo SO) 
     pos.post(listRes(2, 2, [ROW78]));
     await settle(30);
     release();
-    await until(() => pos.view && pos.view.title === "Danh sách đã đổi — bấm lại");
+    await until(() => pos.grListNotice && pos.grListNotice.title === "GR03878: Danh sách đã đổi — bấm lại");
     assert.equal(b.session(KEY), null);
     assert.equal(nwTabs(b).length, 0);
     await until(() => model(pos, "GR03878") && model(pos, "GR03878").kind === "start" && !model(pos, "GR03878").disabled);
     pos.grListCtrl.onSelect({ code: "GR03878" }, GR_ID, "GR03878", "start");
     await until(() => b.session(KEY));
     assert.equal(nwTabs(b).length, 1);
+    await until(() => pos.grListNotice === null);
+    assert.equal(pos.grListNotice, null, "bấm lại thành công → thông báo huỷ cũ được dọn");
   } finally {
     b.close();
   }
@@ -341,7 +406,9 @@ test("GR đọc lại khác dòng danh sách: mã khác → 'Danh sách đã đ�
     const { b, pos } = await openList({ server });
     try {
       pos.grListCtrl.onSelect({ code: "GR03878" }, GR_ID, "GR03878", "start");
-      await until(() => pos.view && expect.test(pos.view.title));
+      await until(() => pos.grListNotice && expect.test(pos.grListNotice.title));
+      assert.equal(pos.view, null, "báo trong vùng thông báo, không khung nổi");
+      assert.ok(pos.grListNotice.buttons.some((x) => x.label === "Đóng"), "có nút Đóng");
       assert.equal(b.session(KEY), null, JSON.stringify(server));
       assert.equal(nwTabs(b).length, 0);
       if (server.poNoSo) await until(() => model(pos, "GR03878") === null);

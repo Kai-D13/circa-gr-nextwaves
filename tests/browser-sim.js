@@ -239,11 +239,18 @@ function createBrowser(server, opts = {}) {
           if (c.dead) return;
           t.grListActive = false;
           t.grListModel = null;
+          t.grListNotice = null;
         },
         show: (m) => {
           if (c.dead) return;
           t.grListModel = m;
           t.grListModels.push(m);
+        },
+        // v0.2.3: vùng thông báo trong luồng trang danh sách (thay khung nổi)
+        notice: (v) => {
+          if (c.dead || !t.grListActive) return;
+          t.grListNotice = v || null;
+          if (v) t.grListNotices.push(v);
         },
         rowValid: (row, code, grId) => {
           const v = t.grListModel && t.grListModel.byCode ? t.grListModel.byCode.get(code) : null;
@@ -269,7 +276,7 @@ function createBrowser(server, opts = {}) {
   }
 
   function openTab(url) {
-    const t = { id: nextTabId++, url, closed: false, ctx: null, view: null, views: [], loads: 0, reloads: 0, focusCount: 0, ss: new Map(), post: () => {}, grListCtrl: null, grListActive: false, grListModel: null, grListModels: [] };
+    const t = { id: nextTabId++, url, closed: false, ctx: null, view: null, views: [], loads: 0, reloads: 0, focusCount: 0, ss: new Map(), post: () => {}, grListCtrl: null, grListActive: false, grListModel: null, grListModels: [], grListNotice: null, grListNotices: [] };
     tabs.set(t.id, t);
     load(t);
     return t;
@@ -285,6 +292,8 @@ function createBrowser(server, opts = {}) {
     },
     setConfig: (cfg) => storage.set({ config: cfg }),
     session: (key) => clone((store.sessions || {})[key] || null),
+    // Đổi trực tiếp vài trường của một phiên trong storage (vd. state) — listener storage của content chạy như trên Chrome.
+    patchSession: (key, patch) => storage.set({ sessions: Object.assign({}, store.sessions, { [key]: Object.assign({}, (store.sessions || {})[key], patch) }) }),
     sendFromPopup: (msg) => sendMessage(null, msg),
     sendFromTab: (t, msg) => sendMessage(t, msg),
     // Như chrome.runtime.onInstalled (vd. {reason: "update", previousVersion}).

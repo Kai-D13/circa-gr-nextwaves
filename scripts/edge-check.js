@@ -101,11 +101,55 @@ function tableHtml(title, withListCall) {
   }).join("");
   const head = ["Mã phiếu kiểm", "Phiếu nhập hàng", "Mã phiếu PUT", "Trạng thái", "Thời gian tạo", "Thời gian hoàn thành", "Hành động"].map((h) => `<th>${h}</th>`).join("");
   const call = (url) => `(function(){var x=new XMLHttpRequest();x.open("GET",${JSON.stringify(url)});var h=${AUTH_JS};for(var k in h)x.setRequestHeader(k,h[k]);x.send();})();`;
+  // Như trang thật: bảng trong khung MUI; dưới bảng là chọn số dòng + mũi tên phân trang (F4: thông báo không được phủ các điều khiển này).
+  const pager =
+    '<div class="pager" style="display:flex;justify-content:flex-end;align-items:center;gap:12px;padding:8px 16px">Hiển thị mỗi trang ' +
+    '<select id="cgn-test-size"><option>20</option></select><span>từ 1 đến 20 trong 32 phiếu nhận hàng</span>' +
+    '<button type="button" id="cgn-test-prev">‹</button><button type="button" id="cgn-test-next">›</button></div>';
   return (
-    `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${POS_CSS}</head><body><div id="app"><table><thead><tr>${head}</tr></thead>` +
-    `<tbody id="rows">${trs}</tbody></table></div><script>${call(`${POS}/backend/v1/entity`)}${withListCall ? call(LIST_API) : ""}</script></body></html>`
+    `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${POS_CSS}</head><body><div id="app"><div class="MuiTableContainer-root"><table><thead><tr>${head}</tr></thead>` +
+    `<tbody id="rows">${trs}</tbody></table></div>${pager}</div><script>${call(`${POS}/backend/v1/entity`)}${withListCall ? call(LIST_API) : ""}</script></body></html>`
   );
 }
+// v0.2.3 (PM F3 / F4): bề rộng trang có side panel Claude trên máy operator (1095×756) + hai cỡ màn hình thường gặp.
+const LIST_VIEWPORTS = [
+  [1095, 756],
+  [1366, 768],
+  [1440, 900],
+];
+// Hình học bảng danh sách (main world): cao tiêu đề, cao dòng có / không nút, bề rộng nút theo kind, nút nằm trong ô.
+const LIST_GEO_JS = `(() => {
+  const r = (el) => el.getBoundingClientRect();
+  const rows = [...document.querySelectorAll("#rows tr")];
+  const btns = [...document.querySelectorAll("button.cgn-rfid-btn")];
+  const inCell = btns.every((b) => { const c = b.closest("td"); if (!c) return false; const x = r(b), y = r(c); return x.left >= y.left - 0.5 && x.right <= y.right + 0.5 && x.top >= y.top - 0.5 && x.bottom <= y.bottom + 0.5; });
+  return JSON.stringify({
+    vw: innerWidth,
+    headH: Math.round(r(document.querySelector("thead tr")).height),
+    rowsWith: [...new Set(rows.filter((tr) => tr.querySelector("button.cgn-rfid-btn")).map((tr) => Math.round(r(tr).height)))],
+    rowsWithout: [...new Set(rows.filter((tr) => !tr.querySelector("button.cgn-rfid-btn")).map((tr) => Math.round(r(tr).height)))],
+    startW: Math.max(0, ...btns.filter((b) => b.getAttribute("data-cgn-kind") === "start").map((b) => r(b).width)),
+    maxW: Math.max(0, ...btns.map((b) => r(b).width)),
+    inCell,
+    n: btns.length,
+    perRow: Math.max(0, ...rows.map((tr) => tr.querySelectorAll("button.cgn-rfid-btn").length)),
+  });
+})()`;
+// F4: điểm giữa từng điều khiển của bảng / phân trang phải trúng chính nó (không bị thứ gì của extension phủ).
+const LIST_CLICKABLE_JS = `(() => {
+  const els = [...document.querySelectorAll("button.cgn-rfid-btn"), ...document.querySelectorAll(".circa-rfid-po-link"),
+    ...[...document.querySelectorAll("#rows tr")].slice(0, 4).flatMap((tr) => [tr.cells[0], ...tr.lastElementChild.querySelectorAll("div.cursor-pointer")]),
+    document.getElementById("cgn-test-size"), document.getElementById("cgn-test-prev"), document.getElementById("cgn-test-next")].filter(Boolean);
+  const bad = [];
+  for (const el of els) {
+    el.scrollIntoView({ block: "center", inline: "center" });
+    const b = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    if (!hit || !(hit === el || el.contains(hit))) bad.push((el.id || el.className || el.tagName) + "→" + (hit ? hit.tagName + "." + hit.className : "null"));
+  }
+  scrollTo(0, 0);
+  return JSON.stringify({ n: els.length, bad });
+})()`;
 // Màn quét Nextwaves dựng theo cấu trúc THẬT: modal phủ khung nhìn; modal 980 rộng, cách đỉnh 30, thân cuộn; chân modal (Hủy + Xác nhận
 // nhận hàng, outerHTML thật) nằm CUỐI thân cuộn — ở 1440×900 chưa cuộn thì nút ngoài khung nhìn, cuộn xuống cuối thì vào góc dưới phải.
 const NW_MODAL_HTML =
@@ -469,13 +513,18 @@ const STORM_JS = `(async () => {
     const sameCell = btns.filter((b) => b.sameCell).length;
     check("Danh sách · sống chung nút .circa-rfid-po-link (không gỡ / không đè)", theirs === LINKS && sameCell === EXPECTED_SAME_CELL, `circa-rfid-po-link ${theirs}/${LINKS}, cùng ô ${sameCell}/${EXPECTED_SAME_CELL}`);
     check("Danh sách · chỉ xem: 0 request API của extension, không khung", extReqs().length === 0 && !(await panelShadow(lst.page)), JSON.stringify(extReqs().map((r) => r.path)));
-    // G0 27/10: trên POS thật (1440×900) nút cao 28px làm dòng 57px → 61px (lệch bố cục); nút phải không làm dòng cao thêm.
-    await lst.page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
-    await sleep(300);
-    const rowH = JSON.parse((await evalIn(lst.page, 'JSON.stringify([...document.querySelectorAll("#rows tr")].map((tr) => [!!tr.querySelector("button.cgn-rfid-btn"), Math.round(tr.getBoundingClientRect().height)]))', lMain && lMain.id)) || "[]");
-    const hWith = [...new Set(rowH.filter((x) => x[0]).map((x) => x[1]))];
-    const hWithout = [...new Set(rowH.filter((x) => !x[0]).map((x) => x[1]))];
-    check("Danh sách · 1440×900: nút không làm dòng cao thêm (dòng có nút = dòng không nút)", hWith.length > 0 && hWithout.length > 0 && Math.max(...hWith) <= Math.max(...hWithout), `dòng có nút ${hWith.join("/")}px · không nút ${hWithout.join("/")}px`);
+    // G0 27/10 + G3a (PM F3): nút không làm dòng cao thêm — ở cả 3 bề rộng, đo lại sau mỗi lần nút đổi trạng thái (bên dưới).
+    const geoAt = async (w, h) => {
+      await lst.page.send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+      await sleep(400);
+      return JSON.parse((await evalIn(lst.page, LIST_GEO_JS, lMain && lMain.id)) || "{}");
+    };
+    const fmtGeo = (g) => `tiêu đề ${g.headH}px · dòng có nút ${g.rowsWith.join("/")}px · không nút ${g.rowsWithout.join("/")}px · nút rộng tối đa ${Math.round(g.maxW)}px`;
+    const geoBefore = {};
+    for (const [w, h] of LIST_VIEWPORTS) {
+      const g = (geoBefore[w] = await geoAt(w, h));
+      check(`Danh sách · ${w}×${h} trước khi bấm: nút không làm dòng cao thêm, nằm trong ô`, g.rowsWith.length > 0 && g.rowsWithout.length > 0 && Math.max(...g.rowsWith) <= Math.max(...g.rowsWithout) && g.inCell, fmtGeo(g));
+    }
     await lst.page.send("Emulation.clearDeviceMetricsOverride", {});
     await sleep(300);
 
@@ -524,6 +573,79 @@ const STORM_JS = `(async () => {
       rowClicks === 0 && s2.length === 1 && s2[0].returnUrl === `${POS}/danh-sach-phieu-nhan-hang/${GR_ID}` && nwTabs2.length === 1 && /\/danh-sach-phieu-nhan-hang$/.test(listUrl),
       `bấm dòng ${rowClicks} · phiên ${s2.length} · tab Nextwaves ${nwTabs2.length} · nút giờ: "${label}" · URL ${listUrl}`
     );
+
+    // v0.2.3 PM F3: sau khi bấm (open_nw) và khi phiên sang received / applied (open_gr) — bảng không dàn lại, nút không rộng hơn
+    // nút bắt đầu, không khung nổi trên danh sách (F4: thành công thể hiện bằng nút).
+    const btnInfo = async (code) => JSON.parse((await evalIn(lst.page, `JSON.stringify((b => b && { text: b.textContent, kind: b.getAttribute("data-cgn-kind"), aria: b.getAttribute("aria-label"), title: b.title })(document.querySelector('button.cgn-rfid-btn[data-cgn-code="${code}"]')))`, lMain && lMain.id)) || "null");
+    const setState = (state) => evalIn(sw, `chrome.storage.local.get("sessions").then((x) => { const s = x.sessions || {}; for (const k in s) if (s[k].grId === "${GR_ID}") s[k].state = "${state}"; return chrome.storage.local.set({ sessions: s }).then(() => true); })`);
+    const geoCheck = async (phase) => {
+      for (const [w, h] of LIST_VIEWPORTS) {
+        const g = await geoAt(w, h);
+        const b0 = geoBefore[w];
+        check(
+          `Danh sách · ${w}×${h} ${phase}: bảng không dàn lại (tiêu đề / dòng như trước khi bấm), nút ≤ nút bắt đầu, trong ô`,
+          g.headH === b0.headH && Math.max(...g.rowsWith, ...g.rowsWithout) === Math.max(...b0.rowsWith, ...b0.rowsWithout) && g.maxW <= b0.startW + 0.5 && g.inCell && g.perRow === 1,
+          `${fmtGeo(g)} (trước: ${fmtGeo(b0)}; nút bắt đầu ${Math.round(b0.startW)}px)`
+        );
+      }
+      await lst.page.send("Emulation.clearDeviceMetricsOverride", {});
+      await sleep(300);
+    };
+    const i1 = await btnInfo("GR03878");
+    check('Danh sách · sau khi bấm: nút "Mở Nextwaves" (open_nw), aria-label / title đầy đủ có mã GR + trạng thái phiên; không khung nổi', !!i1 && i1.text === "Mở Nextwaves" && i1.kind === "open_nw" && /^GR03878 · .*\(waiting_nw\)/.test(i1.aria) && i1.title === i1.aria && !(await panelShadow(lst.page)), JSON.stringify(i1));
+    await geoCheck("sau khi bấm (Mở Nextwaves)");
+    await setState("received");
+    await sleep(1200);
+    const i2 = await btnInfo("GR03878");
+    await geoCheck("phiên received (Mở phiếu)");
+    await setState("applied");
+    await sleep(1200);
+    const i3 = await btnInfo("GR03878");
+    check('Danh sách · received → applied: cùng nhãn "Mở phiếu" nhưng aria-label / title đổi theo trạng thái phiên', !!i2 && !!i3 && i2.text === "Mở phiếu" && i3.text === "Mở phiếu" && i2.kind === "open_gr" && /\(received\)/.test(i2.aria) && /\(applied\)/.test(i3.aria) && i3.title === i3.aria, `${i2 && i2.aria} → ${i3 && i3.aria}`);
+
+    // v0.2.3 PM F4: lỗi (GR03887: GET phiếu 404 trên trang giả) → thông báo TRONG LUỒNG TRANG ngay trên bảng; không phủ nút / icon / mã /
+    // chọn số dòng / phân trang ở 1095×756; không vòng MutationObserver; Đóng thì gỡ.
+    await lst.page.send("Emulation.setDeviceMetricsOverride", { width: 1095, height: 756, deviceScaleFactor: 1, mobile: false });
+    await evalIn(lst.page, 'document.querySelector(\'button.cgn-rfid-btn[data-cgn-code="GR03887"]\').click(), true', lMain && lMain.id);
+    await sleep(3000);
+    const note = JSON.parse((await evalIn(lst.page, `JSON.stringify((n => n && { text: n.textContent, role: n.getAttribute("role"), beforeTable: n.nextElementSibling === document.querySelector(".MuiTableContainer-root"), above: n.getBoundingClientRect().bottom <= document.querySelector(".MuiTableContainer-root").getBoundingClientRect().top + 0.5, pos: getComputedStyle(n).position })(document.querySelector(".cgn-rfid-note")))`, lMain && lMain.id)) || "null");
+    const clk = JSON.parse((await evalIn(lst.page, LIST_CLICKABLE_JS, lMain && lMain.id)) || "{}");
+    check(
+      "Danh sách · 1095×756 lỗi: thông báo trong luồng trang ngay trên bảng (không khung nổi), đọc được, mọi nút / icon / mã / phân trang còn bấm được",
+      !!note && note.beforeTable && note.above && note.pos === "static" && note.role === "alert" && /GR03887: chưa mở được Nextwaves/.test(note.text) && /Đóng/.test(note.text) && !(await panelShadow(lst.page)) && clk.n >= 15 && clk.bad.length === 0,
+      note ? `"${note.text.slice(0, 70)}…" · role ${note.role} · ${clk.n} điều khiển, bị phủ ${clk.bad.length}${clk.bad.length ? " " + clk.bad.join("; ") : ""}` : "không thấy thông báo"
+    );
+    await evalIn(lst.page, "JSON.stringify(globalThis.__CGN__.grList.stats(true))", lIso && lIso.id);
+    await sleep(1500);
+    const idle = JSON.parse((await evalIn(lst.page, "JSON.stringify(globalThis.__CGN__.grList.stats())", lIso && lIso.id)) || "{}");
+    check("Danh sách · có thông báo, trang đứng yên 1,5 s: không vòng MutationObserver (0 lượt quét)", idle.applies === 0, `lượt quét ${idle.applies}, đợt thay đổi ${idle.mutationBatches}`);
+    await evalIn(lst.page, '[...document.querySelectorAll(".cgn-rfid-note button")].find((b) => b.textContent === "Đóng").click(), true', lMain && lMain.id);
+    await sleep(400);
+    check("Danh sách · bấm Đóng → gỡ thông báo", (await evalIn(lst.page, '!document.querySelector(".cgn-rfid-note")', lMain && lMain.id)) === true);
+    await lst.page.send("Emulation.clearDeviceMetricsOverride", {});
+
+    // Rời / quay lại danh sách trong SPA (hook báo route), đổi trang / bộ lọc, tải lại trang: dọn thông báo, nút đúng, không phiên / tab thứ hai.
+    await evalIn(lst.page, 'document.querySelector(\'button.cgn-rfid-btn[data-cgn-code="GR03886"]\').click(), true', lMain && lMain.id);
+    await sleep(3000);
+    const hadNote = await evalIn(lst.page, '!!document.querySelector(".cgn-rfid-note")', lMain && lMain.id);
+    await evalIn(lst.page, 'history.pushState(null, "", "/ban-hang"), true', lMain && lMain.id);
+    await sleep(800);
+    const away = JSON.parse((await evalIn(lst.page, 'JSON.stringify({ note: !!document.querySelector(".cgn-rfid-note"), btns: document.querySelectorAll("button.cgn-rfid-btn").length })', lMain && lMain.id)) || "{}");
+    await evalIn(lst.page, 'history.pushState(null, "", "/danh-sach-phieu-nhan-hang"), true', lMain && lMain.id);
+    await sleep(1500);
+    const back = JSON.parse((await evalIn(lst.page, LIST_GEO_JS, lMain && lMain.id)) || "{}");
+    const backNote = await evalIn(lst.page, '!!document.querySelector(".cgn-rfid-note")', lMain && lMain.id);
+    check("Danh sách · rời trang (SPA) → gỡ nút + thông báo; quay lại → nút đủ, không hiện thông báo cũ", hadNote === true && !away.note && away.btns === 0 && !backNote && back.n === EXPECTED_BUTTONS.length && back.perRow === 1, `trước khi rời: thông báo ${hadNote} · khi rời: thông báo ${away.note}, nút ${away.btns} · quay lại: nút ${back.n}, thông báo ${backNote}`);
+    const pageCall = `(function(){var x=new XMLHttpRequest();x.open("GET",${JSON.stringify(LIST_API.replace("page=1", "page=2"))});var h=${AUTH_JS};for(var k in h)x.setRequestHeader(k,h[k]);x.send();})(), true`;
+    await evalIn(lst.page, pageCall, lMain && lMain.id);
+    await sleep(1500);
+    const paged = JSON.parse((await evalIn(lst.page, LIST_GEO_JS, lMain && lMain.id)) || "{}");
+    check("Danh sách · đổi trang / bộ lọc (request danh sách mới): nút đủ, mỗi dòng một nút", paged.n === EXPECTED_BUTTONS.length && paged.perRow === 1, `nút ${paged.n}, tối đa ${paged.perRow} nút / dòng`);
+    await lst.page.send("Page.reload", {});
+    await sleep(4500);
+    const s3 = (await sessions()).filter((x) => x.grId === GR_ID);
+    const nwTabs3 = await nwTabIds();
+    check("Danh sách · tải lại trang sau khi đã tạo phiên: vẫn MỘT phiên, MỘT tab Nextwaves", s3.length === 1 && nwTabs3.length === 1, `phiên ${s3.length} · tab Nextwaves ${nwTabs3.length}`);
     lst.page.close();
     await closeTarget(lst.targetId);
 

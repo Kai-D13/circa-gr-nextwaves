@@ -291,7 +291,8 @@
         await evaluate();
       } while (again);
     } catch (err) {
-      if (!applying) showError("Lỗi extension", String((err && err.message) || err), [{ label: "Thử lại", onClick: refresh }]);
+      if (onList) setListNote("err", "Lỗi extension", String((err && err.message) || err));
+      else if (!applying) showError("Lỗi extension", String((err && err.message) || err), [{ label: "Thử lại", onClick: refresh }]);
     } finally {
       running = false;
     }
@@ -438,6 +439,30 @@
   }
 
   // ---------- trang danh sách ----------
+  // v0.2.3 (PM F4): trên danh sách KHÔNG dùng khung nổi. Đang kiểm / thành công thể hiện bằng chính nút của dòng; huỷ / lỗi /
+  // phiếu không liên kết được báo trong vùng thông báo thuộc luồng trang, ở trên bảng (L.notice) — không phủ dòng, icon, nút, phân trang.
+  function showListNote() {
+    if (L) L.notice(onList ? listNote : null);
+    panel.hide();
+  }
+  function setListNote(tone, title, lines) {
+    listNote = {
+      tone,
+      title,
+      lines: [].concat(lines || []),
+      buttons: [
+        {
+          label: "Đóng",
+          onClick: () => {
+            listNote = null;
+            showListNote();
+          },
+        },
+      ],
+    };
+    showListNote();
+  }
+
   function leaveList() {
     if (!onList) return;
     onList = false;
@@ -445,15 +470,14 @@
     listNote = null;
     if (listSessionsTimer) clearTimeout(listSessionsTimer);
     listSessionsTimer = null;
-    if (L) L.deactivate();
+    if (L) L.deactivate(); // gỡ cả nút lẫn vùng thông báo
   }
 
   // Danh sách chưa được dùng (cửa hàng chưa xác nhận / không thuộc danh sách chạy thử): gỡ nút; còn lý do huỷ cú bấm thì vẫn báo.
   function clearListButtons() {
     listCtx = null;
     if (onList && L) L.show(null);
-    if (onList && listNote) panel.show(listNote);
-    else panel.hide();
+    showListNote();
   }
 
   async function loadListSessions(env) {
@@ -472,8 +496,25 @@
     listCtx = { env, storeId };
     await loadListSessions(env);
     renderList();
-    if (listNote) panel.show(listNote);
-    else panel.hide();
+    showListNote();
+  }
+
+  // v0.2.3 (PM F3): nhãn nhìn thấy không dài hơn START_LABEL (bảng POS không dàn lại); nghĩa đầy đủ — mã GR + trạng thái PHIÊN
+  // extension (không phải trạng thái POS) + hành động — nằm ở title và aria-label (gr-list.js).
+  const SESSION_STATE_VI = {
+    waiting_nw: "chờ mở / nhận trên Nextwaves",
+    nw_ready: "Nextwaves đã sẵn sàng nhận",
+    received: "Nextwaves đã nhận, chờ điền POS",
+    applying: "đang điền POS",
+    applied: "đã điền POS",
+    apply_stopped: "dừng điền POS",
+  };
+  const sessionText = (s) => `phiên ${SESSION_STATE_VI[s.state] || s.state} (${s.state})`;
+  function listButton(r, s) {
+    if (click && click.kind === "list" && click.grId === r.id) return { kind: "busy", label: "Đang kiểm…", disabled: true, title: `${r.code} · đang kiểm phiếu, PO và SO trước khi mở Nextwaves` };
+    if (s && (s.state === "waiting_nw" || s.state === "nw_ready")) return { kind: "open_nw", label: "Mở Nextwaves", title: `${r.code} · ${sessionText(s)} · Mở lại tab Nextwaves của phiên này` };
+    if (s) return { kind: "open_gr", label: "Mở phiếu", title: `${r.code} · ${sessionText(s)} · Mở phiếu để lập kế hoạch / điền / HOÀN THÀNH` };
+    return { kind: "start", label: START_LABEL, disabled: !!click, title: `${r.code} · chưa có phiên · Nhận hàng bằng RFID: đọc lại phiếu, PO, SO rồi mở màn quét Nextwaves` };
   }
 
   function renderList() {
@@ -483,13 +524,7 @@
     const byCode = new Map();
     for (const r of list.rows.values()) {
       if (!P.isReceivable({ status: r.status }) || r.posId !== ctx.storeId || notLinkable.has(r.id)) continue;
-      const s = listSessions.get(r.id);
-      let v;
-      if (click && click.kind === "list" && click.grId === r.id) v = { kind: "busy", label: "Đang kiểm phiếu…", disabled: true };
-      else if (s && (s.state === "waiting_nw" || s.state === "nw_ready")) v = { kind: "open_nw", label: "Đang nhận trên Nextwaves", title: "Mở lại tab Nextwaves của phiếu này" };
-      else if (s) v = { kind: "open_gr", label: s.state === "applied" ? "Đã điền — mở phiếu" : "Đã nhận — mở phiếu", title: "Mở phiếu để lập kế hoạch / điền / HOÀN THÀNH" };
-      else v = { kind: "start", label: START_LABEL, disabled: !!click, title: "Đọc lại phiếu + PO + SO rồi mở màn quét Nextwaves" };
-      byCode.set(r.code, Object.assign({ grId: r.id }, v));
+      byCode.set(r.code, Object.assign({ grId: r.id }, listButton(r, listSessions.get(r.id))));
     }
     L.show({ byCode });
   }
@@ -523,32 +558,23 @@
     if (kind === "open_gr") return location.assign(E.api.posGrPage(env, grId));
     if (kind !== "start" || click) return;
     const tok = newClick({ kind: "list", grId, code, row, reqSeq: list.shownSeq, queryKey: list.shownQueryKey, envId: env.id, storeId });
-    listNote = { tone: "busy", title: `Đang kiểm ${code}…`, lines: ["Đọc lại phiếu, PO và SO trước khi mở Nextwaves."] };
-    panel.show(listNote);
+    listNote = null; // đang kiểm: nút của dòng thành "Đang kiểm…" (vô hiệu), không có khung / thông báo
+    showListNote();
     renderList();
     const res = await startFromGr(env, storeId, grId, code, tok);
     if (click === tok) click = null;
     if (!onList) return;
     if (res.status === "started" || res.status === "existing") {
-      listNote = { tone: "ok", title: `${code}: đã mở màn quét Nextwaves`, lines: ["Nhận hàng trên tab Nextwaves. Nhận xong, extension tự mở phiếu này để lập kế hoạch điền."] };
+      listNote = null; // thành công: nút thành "Mở Nextwaves", tab Nextwaves đã mở
+      showListNote();
     } else if (res.status === "not_linkable") {
       notLinkable.add(grId);
-      listNote = { tone: "info", title: `${code}: không nhận bằng RFID được`, lines: ["Phiếu này không đi từ SO thuocsi (PO không có mã giao)."] };
+      setListNote("info", `${code}: không nhận bằng RFID được`, "Phiếu này không đi từ SO thuocsi (PO không có mã giao).");
     } else if (res.status === "cancelled") {
-      listNote = { tone: "warn", title: res.message || LIST_CHANGED, lines: [] };
+      setListNote("warn", `${code}: ${res.message || LIST_CHANGED}`);
     } else {
-      listNote = { tone: "err", title: `${code}: chưa mở được Nextwaves`, lines: [res.message] };
+      setListNote("err", `${code}: chưa mở được Nextwaves`, res.message);
     }
-    listNote.buttons = [
-      {
-        label: "Đóng",
-        secondary: true,
-        onClick: () => {
-          listNote = null;
-          panel.hide();
-        },
-      },
-    ];
     refresh();
   }
 
@@ -557,7 +583,8 @@
       onSelect: (row, grId, code, kind) => {
         onListSelect(row, grId, code, kind).catch((err) => {
           if (click) click = null;
-          showError("Lỗi extension", String((err && err.message) || err));
+          if (onList) setListNote("err", "Lỗi extension", String((err && err.message) || err));
+          else showError("Lỗi extension", String((err && err.message) || err));
         });
       },
       onDomChanged: () => {
