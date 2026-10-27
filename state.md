@@ -550,7 +550,12 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-34. **Hiện hành (sau dev giao v0.2.0, 27/10):**
+35. **Hiện hành (sau PM audit v0.2.0, 27/10):**
+    - PM đã kiểm độc lập `batch/v0.2-rfid` tại `682c509` và gói `096D97D9`: `npm test` 131/131; dựng lại ZIP cùng SHA, 19/19 file khớp source và bản giải nén; Edge trên trang giả 16/16 hai lượt. Xem `docs/pm/AUDIT-v0.2.0-SOURCE-PACK-20261027.md`.
+    - **Dev:** sửa P2.1 replay response danh sách cũ khi content nạp muộn; làm rõ/sửa P2.2 phép kiểm lượt quét lúc tải trang (<2 ms theo ngân sách PM, nhưng test hiện cho <16 ms). Runtime sửa phải tăng version/gói/hash; bàn giao diff, test và số đo.
+    - **G0 tích hợp trang thật:** dev/PM lấy chỉ đọc trên phiên staging đã đăng nhập: response danh sách GR, outerHTML một dòng và vùng HOÀN THÀNH/Hủy, kiểm khung POS/Nextwaves và hiệu năng thật. Bộ 5 ảnh v0.1.6 là checklist đề xuất; PM chấp nhận bằng chứng UI tương đương vì phần khung và Nextwaves không đổi trong v0.2. Operator hỗ trợ mở phiên hoặc chuyển mục thiếu nếu dev/PM không truy cập được; không bắt operator tự thu đủ bộ trước khi dev làm việc.
+    - Chưa Go merge/cài v0.2 để vận hành, chưa Go nhận/ghi staging. Lượt có tác động cần phép operator riêng. Production vẫn chỉ đọc; Đợt 2 có gate riêng.
+34. (cũ, thay bằng mục 35) **Sau dev giao v0.2.0, 27/10:**
     - **PM:** audit nhánh `batch/v0.2-rfid` (đầu `682c509`, runtime `ef67a7b`) và gói `096D97D9` theo `docs/dev/BATCH-v0.2.0.md` (G1 test / đột biến, G2 Edge / hiệu năng). Chốt gate UI v0.1.6 khi có ảnh thật.
     - **Operator (hoặc dev chỉ đọc nếu operator mở phiên / cho phép Claude in Chrome):** G0:
       - 5 ảnh UI v0.1.6 (3 POS trên GR03878, 2 Nextwaves);
