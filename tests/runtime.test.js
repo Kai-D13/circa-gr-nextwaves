@@ -44,6 +44,7 @@ function makeServer(opts = {}) {
     if (u.origin === POS) {
       if (u.pathname === "/thuocsi-warehouse/qrcode") {
         const code = u.searchParams.get("code");
+        if (opts.qrHold) await opts.qrHold; // treo tra QR tới khi test cho chạy tiếp
         if (opts.qrDown && opts.qrDown.has(code)) return { status: 503, json: { message: "tạm lỗi" } };
         const q = qr[code];
         return { status: 200, json: { status: "OK", data: q ? [{ uniqueId: code, shortId: code, productId: q.productId, lot: q.lot, expiredDate: q.expiredDate, status: "NORMAL" }] : [] } };
@@ -1132,6 +1133,34 @@ test("P2: đổi route sang phiếu khác (GET phiếu mới còn chờ) → khu
     assert.equal(srv.st.puts.length, 0);
   } finally {
     release();
+    b.close();
+  }
+});
+
+test("P2: lượt đánh giá cũ về muộn sau khi đổi route (tra QR GR03878 còn chờ) → view của GR03878 KHÔNG vẽ lên trang phiếu khác", async () => {
+  const OTHER = "0f0f0f0f-1111-4222-8333-444455556666";
+  let releaseQr;
+  let releaseGr;
+  const qrHold = new Promise((r) => (releaseQr = r));
+  const grHold = new Promise((r) => (releaseGr = r));
+  const { b, srv, pos } = await openToReceived({ server: { qrHold, grHolds: { [OTHER]: grHold } } });
+  try {
+    await until(() => viewTitle(pos) === "Đang tra 12 UID trên POS…");
+    const other = `${POS}/danh-sach-phieu-nhan-hang/${OTHER}`;
+    pos.url = other;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: other } });
+    await until(() => pos.view === null);
+    releaseQr(); // lượt cũ (GR03878) tra xong, lập kế hoạch, vẽ — trong khi trang đã là phiếu khác
+    await until(() => srv.st.log.filter((r) => new URL(r.url).pathname === "/thuocsi-warehouse/qrcode").length >= 12);
+    await settle(150);
+    assert.equal(pos.view, null, "không vẽ view kế hoạch của GR03878 trên trang phiếu khác");
+    assert.ok(!pos.views.slice(-3).some((v) => v && v.grCode === "GR03878" && /kế hoạch/i.test(v.title)), "không có view kế hoạch GR03878 sau khi đổi route");
+    releaseGr();
+    await until(() => viewTitle(pos) === "Không đọc được phiếu nhận");
+    assert.equal(srv.st.puts.length, 0);
+  } finally {
+    releaseQr();
+    releaseGr();
     b.close();
   }
 });

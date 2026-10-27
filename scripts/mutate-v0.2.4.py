@@ -1,6 +1,6 @@
-"""Đột biến có chủ đích cho các hàng rào của v0.2.4 = 102 ca của v0.2.3 + 11 ca P2 (PM review 27/10 §2: khung trang phiếu trong
+"""Đột biến có chủ đích cho các hàng rào của v0.2.4 = 102 ca của v0.2.3 + 12 ca P2 (PM review 27/10 §2: khung trang phiếu trong
 luồng trang, view phiếu mang mã phiếu, W1 fail closed khi khung không gắn đúng trang, thiếu chỗ gắn → lỗi giao diện ở khung nổi
-không nút Điền + chẩn đoán nhật ký phiên, /chi-tiet-so chỉ nút mở phiếu, đổi route gỡ khung cũ). Phần DOM của khung trong luồng
+không nút Điền + chẩn đoán nhật ký phiên, /chi-tiet-so chỉ nút mở phiếu, đổi route gỡ khung cũ, bỏ view phiếu cũ về muộn). Phần DOM của khung trong luồng
 (gắn / gắn lại / kiểm mã / chống vòng / tự mở lại / thiếu chỗ gắn) kiểm bằng scripts/mutate-edge-v0.2.4.js trên Edge thật.
 v0.2.3 = 96 ca của v0.2.2 + 6 ca F3 / F4 (PM review G3a 27/10: nhãn ngắn + tên đầy
 đủ theo trạng thái phiên; thông báo danh sách trong luồng trang, không khung nổi). Phần DOM (vị trí thông báo, đồng bộ title /
@@ -18,7 +18,7 @@ Mỗi ca gỡ đúng MỘT hàng rào trong src/, chạy `node --test "tests/*.t
 Chạy trên BẢN SAO trong thư mục tạm — không sửa src/ của repo. Cần Node (node --test) trên PATH.
 
   python -I scripts/mutate-v0.2.4.py            # mọi ca
-  python -I scripts/mutate-v0.2.4.py 102        # chỉ 11 ca P2 (bắt đầu từ ca thứ 103)
+  python -I scripts/mutate-v0.2.4.py 102        # chỉ 12 ca P2 (bắt đầu từ ca thứ 103)
 
 Đột biến trên src/lib/env.js được áp lên cả src/main/env.js (bản sao y hệt) để không bị bắt chỉ vì hai bản lệch nhau.
 """
@@ -176,6 +176,7 @@ muts = [
     ("src/pos/pos-content.js", "  const showGr = (gr, view) => panel.show(Object.assign({}, view, { grCode: gr.code }));", "  const showGr = (gr, view) => panel.show(view);", "P2 view của phiếu không mang mã phiếu"),
     ("src/pos/pos-content.js", "      grPanel.show(view, view.grCode || null);", "      grPanel.show(view, null);", "P2 khung trang phiếu không kiểm mã phiếu"),
     ("src/pos/pos-content.js", "    if (!applying) panel.hide(); // v0.2.4", "    // v0.2.4", "P2 đổi route không gỡ khung phiếu cũ"),
+    ("src/pos/pos-content.js", '    if (page && page.kind === "gr" && page.grId !== String(gr.id).toLowerCase()) return;\n', "", "P2 lượt đánh giá cũ về muộn vẽ view phiếu cũ lên trang phiếu khác"),
 ]
 
 

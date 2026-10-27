@@ -234,7 +234,12 @@
       grPanel.hide();
     },
   };
-  const showGr = (gr, view) => panel.show(Object.assign({}, view, { grCode: gr.code }));
+  // View của một phiếu. Đang ở trang của phiếu KHÁC (lượt đánh giá cũ về muộn sau khi đổi route) → bỏ, không vẽ.
+  const showGr = (gr, view) => {
+    const page = pageNow();
+    if (page && page.kind === "gr" && page.grId !== String(gr.id).toLowerCase()) return;
+    return panel.show(Object.assign({}, view, { grCode: gr.code }));
+  };
 
   function showError(title, lines, buttons, gr) {
     const v = { tone: "err", title, lines: [].concat(lines || []), buttons: buttons || [] };
