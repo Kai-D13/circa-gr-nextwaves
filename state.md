@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **27/10/2026 (lần 41, dev giao v0.2.3 sửa F3 / F4)**. Giai đoạn: **`main` có v0.1.5; v0.2.3 trên `batch/v0.2-rfid` (runtime `247386f`, đầu `f76cbcc`, gói `40236D67`) sửa F3 (nhãn ngắn + tên đầy đủ theo trạng thái phiên) và F4 (thông báo danh sách trong luồng trang, không khung nổi) theo `docs/pm/REVIEW-G3a-F3-F4-v0.2.3-20261027.md`; chờ PM audit nguồn / gói rồi mới cài lại Chrome staging để kiểm G3a. G3a chưa đạt toàn bộ, chưa Go merge/vận hành; lượt nhận/ghi cần phép operator riêng. Production chỉ đọc; O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **27/10/2026 (lần 42, PM audit v0.2.3)**. Giai đoạn: **`main` có v0.1.5; v0.2.3 trên `batch/v0.2-rfid` (runtime `247386f`, đầu `f76cbcc`, gói `40236D67`) đã qua PM audit source/gói/Edge cho F3/F4. PM cho phép cài v0.2.3 để kiểm G3a chỉ đọc trên Chrome staging theo `docs/pm/AUDIT-v0.2.3-F3-F4-G3a-20261027.md`. G3a trên trang thật chưa đạt toàn bộ, chưa Go merge/vận hành; lượt nhận/ghi cần phép operator riêng. Production chỉ đọc; O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -587,7 +587,11 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-41. **Hiện hành (sau dev giao v0.2.3, 27/10):**
+42. **Hiện hành (sau PM audit v0.2.3, 27/10):**
+    - PM kiểm diff `3218cae..f76cbcc`, chạy `npm test` **135/135**, Edge trên bản giải nén **41/41**, SHA `40236D67A5A4135B3D9B37683167A81667F668A08CBC29DF4F0472076DA5D96C` và **19/19** file ZIP/source/bản cài khớp. F3/F4 đạt gate source/gói/Edge; đột biến 102/102 + DOM 9/9 và đối chứng v0.2.2 hỏng 7/41 là số dev báo, PM chưa chạy lại. Xem `docs/pm/AUDIT-v0.2.3-F3-F4-G3a-20261027.md`.
+    - **Cho cài v0.2.3 để kiểm G3a chỉ đọc** trên Chrome staging: trước/sau bấm ở 1095×756 mốc 57px trên trang thật, không khung nổi che phân trang; Nextwaves khung mở rộng sau cuộn không che Xác nhận nhận hàng (một ảnh hoặc quan sát trực tiếp); số tab, popup một phiên, version 0.2.3. Không cần ảnh khung thu nhỏ, không bấm xác nhận/ghi/HOÀN THÀNH. Kiểm phiên đang nhận/điền dở trước khi thay extension và chỉ bật một bản.
+    - P2 khung phiếu che `SL nhận` tại 1095px: chưa sửa trong v0.2.3; tách batch UI riêng trước vận hành W1/production, không tự mặc định thu nhỏ khung ở trạng thái cần hành động. G3a chưa đạt toàn bộ, chưa Go merge; G3b/W1/production có gate và phép riêng.
+41. (cũ, thay bằng mục 42) **Sau dev giao v0.2.3, 27/10:**
     - **PM:** audit nguồn / gói v0.2.3 (`f76cbcc`, runtime `247386f`, gói `40236D67`) theo `docs/dev/BATCH-v0.2.3.md`. Quyết phương án P2 khung trang phiếu (§4.2 báo cáo).
     - **Sau PM cho cài:** kiểm G3a lại trên Chrome staging với `C:\circa-gr-nextwaves-v0.2.3`:
       - danh sách trước / sau bấm ở 1095px (dòng 57px, tiêu đề không xuống dòng);
