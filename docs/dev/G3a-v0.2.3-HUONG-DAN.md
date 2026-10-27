@@ -13,6 +13,13 @@ Kích thước: kiểm ở cửa sổ như lần trước, vùng trang khoảng 
 - Đã gỡ 0.2.2 và nạp 0.2.3. Bản mới là extension mới (ID khác), nên phiên GR03879 của 0.2.2 **không** chuyển sang. Phiên đó chưa nhận, không mất gì.
 - Chỉ bật một bản extension; popup chọn Staging; ô cấp phép điền trống.
 - Ghi lại: `chrome://extensions` hiện 0.2.3.
+- **Kiểm nhanh bản đang chạy trước khi bấm** (lượt 1 ngày 27/10 chạy nhầm bản cũ): trên danh sách, di chuột vào một nút "Nhận hàng bằng RFID".
+  - **0.2.3:** tooltip bắt đầu bằng mã phiếu, ví dụ `GR03887 · chưa có phiên · Nhận hàng bằng RFID: …`.
+  - **0.2.0–0.2.2:** tooltip là `Đọc lại phiếu + PO + SO rồi mở màn quét Nextwaves`. Gặp tooltip này thì dừng, quay lại `chrome://extensions` của **chính hồ sơ Chrome đang đăng nhập POS**:
+    - bật Developer mode, xem mọi thẻ "Circa GR ← Nextwaves" (version + đường dẫn nạp);
+    - gỡ mọi thẻ không phải 0.2.3 / không nạp từ `C:\circa-gr-nextwaves-v0.2.3`;
+    - nếu chưa có thẻ 0.2.3 thì Load unpacked thư mục đó;
+    - chọn Staging, tải lại (F5) tab POS, đóng tab Nextwaves cũ.
 
 ## 1. Danh sách POS (`/danh-sach-phieu-nhan-hang`, tab "Tất cả")
 
