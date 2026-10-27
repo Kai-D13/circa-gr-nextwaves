@@ -17,6 +17,7 @@
 //     quay lại → luôn ≤ 1 khung, đúng chỗ, không nút Điền trên phiếu khác; nghỉ 2 s không gắn lại lần nào (không vòng observer).
 //     PM audit sơ bộ P1: chỉ đổi CHỮ mã phiếu trên thẻ thông tin / breadcrumb (giữ #all-receipt, không đổi route) và bấm Điền trong
 //     CÙNG tác vụ (trước observer) → 0 PUT, cấp phép còn; observer gỡ khung; quá 10 s → khung nổi báo lỗi; mã đúng trở lại → gắn lại.
+//     PM audit rev 1 P1: mã KHÔNG đồng nhất (chỉ thẻ thông tin đổi, hoặc chỉ breadcrumb đổi) + bấm Điền cùng tác vụ → 0 claim, 0 PUT.
 //     Trang liên tục gỡ khung → bỏ gắn (không vòng vô hạn), khung nổi báo lỗi, không nút Điền; hết tranh giành → "Kiểm tra lại".
 //  4. W1 bằng BÀN PHÍM: focus nút "Điền" + Enter → 5 PUT đúng kế hoạch #E33C777A của lượt thật → tải lại → "đã điền 11 UID".
 //  5. Trace CDP từ lúc mở trang: không tác vụ nào của extension ≥ 50 ms.
@@ -434,6 +435,30 @@ function extensionTasks(events) {
     const back = await waitText(/Điền vào phiếu/);
     gm = await geo();
     check("quay lại GR03880: một khung đúng chỗ, nút Điền", !!back && gm.hosts === 1 && gm.beforeAnchor, JSON.stringify(gm));
+
+    // PM audit rev 1 P1: mã phiếu KHÔNG đồng nhất giữa thẻ thông tin (khối ngay trước #all-receipt) và breadcrumb. Trong CÙNG tác vụ:
+    // đổi mã ở MỘT chỗ → bấm Điền (trước observer) → trả mã về. Cả hai chiều phải: 0 claim (phiên vẫn received), 0 PUT, cấp phép còn.
+    const partStmt = (part, from, to) =>
+      `{ const a = document.getElementById("all-receipt"); let info = a.previousElementSibling; while (info && info.hasAttribute("data-cgn-panel")) info = info.previousElementSibling;` +
+      ` const box = ${part === "info" ? "info" : "info.previousElementSibling"}; const w = document.createTreeWalker(box, NodeFilter.SHOW_TEXT); let t;` +
+      ` while ((t = w.nextNode())) if (t.nodeValue.includes(${JSON.stringify(from)})) t.nodeValue = t.nodeValue.replaceAll(${JSON.stringify(from)}, ${JSON.stringify(to)}); }`;
+    for (const [part, name] of [["info", "thẻ thông tin GR09999, breadcrumb vẫn GR03880"], ["crumb", "breadcrumb GR09999, thẻ thông tin vẫn GR03880"]]) {
+      const puts0 = st.puts.length;
+      const nn = await panelNodes(pg);
+      const fb = nn && all(nn.sr, (x) => x.nodeName === "BUTTON" && /^Điền vào phiếu/.test(textOf(x)))[0];
+      if (fb) {
+        const ob = await pg.send("DOM.resolveNode", { backendNodeId: fb.backendNodeId });
+        await pg.send("Runtime.callFunctionOn", { objectId: ob.result.object.objectId, functionDeclaration: `function () { ${partStmt(part, GR_CODE, "GR09999")} this.click(); ${partStmt(part, "GR09999", GR_CODE)} return true; }`, returnByValue: true });
+      }
+      await sleep(800);
+      const sx = JSON.parse(await evalIn(sw, `chrome.storage.local.get("sessions").then((x) => JSON.stringify(x.sessions[${JSON.stringify(KEY)}]))`));
+      const gx = (await grants()).length;
+      check(`mã không đồng nhất (${name}) + bấm Điền cùng tác vụ → 0 claim (phiên vẫn received), 0 PUT, cấp phép còn`, !!fb && st.puts.length === puts0 && gx === 1 && sx.state === "received", `PUT ${st.puts.length - puts0} · cấp phép ${gx} · phiên ${sx.state}`);
+      if (sx.state !== "received") break; // bản cũ đã ghi — các bước sau không còn ý nghĩa
+      await clickPanelButton(pg, "Kiểm tra lại"); // bị chặn → khung báo "Không điền được"; kiểm lại → kế hoạch + nút Điền
+      const ok = await waitText(/Điền vào phiếu/);
+      check(`… sau đó "Kiểm tra lại" (mã đã đồng nhất) → nút Điền trở lại`, !!ok);
+    }
 
     // PM audit sơ bộ P1: React đổi mã trên thẻ thông tin / breadcrumb sang phiếu khác, GIỮ NGUYÊN node #all-receipt, không đổi route,
     // và nút Điền bị bấm NGAY trong cùng tác vụ — trước khi MutationObserver kịp chạy → không giành quyền, không tiêu cấp phép, 0 PUT.

@@ -1,5 +1,6 @@
 /*
- * Đọc response POS (GR, PO, tìm GR theo SO) thành dạng gọn và kiểm liên kết GR ↔ PO ↔ mã giao. Thuần.
+ * Đọc response POS (GR, PO, tìm GR theo SO) thành dạng gọn và kiểm liên kết GR ↔ PO ↔ mã giao. Thuần (grPageAnchor đọc DOM được
+ * truyền vào, không giữ gì).
  * Không giữ dữ liệu ngoài phạm vi cần (không giá, không thông tin người dùng).
  */
 (function (root) {
@@ -155,7 +156,32 @@
     return { ok: true, productId, lot, expiredDate, status: String(d.status || "") };
   }
 
-  const lib = { normalizeGr, normalizePo, normalizeGrSearch, normalizeGrSearchPage, checkSoGrs, soWriteLock, isReceivable, resolveDelivery, grFingerprintSource, normalizeQrLookup, RECEIVABLE };
+  // ---- trang phiếu (v0.2.4): chỗ gắn khung + phiếu đang hiển thị. Đọc DOM được truyền vào (`doc`), không giữ gì. ----
+  // DOM thật (GR03887, 27/10): cột nội dung = breadcrumb, thẻ thông tin phiếu ("Chi tiết phiếu nhận hàng GR… (PO…)", chứa bảng
+  // ĐẦU TIÊN của trang), #all-receipt (bảng sản phẩm). Khung extension (data-cgn-panel) chèn ngay trước #all-receipt.
+  const GR_CODE_RE = /GR\d+/g;
+  const grCodesIn = (n) => [...new Set(String((n && n.textContent) || "").match(GR_CODE_RE) || [])];
+
+  // #all-receipt nếu trang đang hiển thị ĐÚNG phiếu `code`, ngược lại null (fail closed). PM audit rev 1 P1:
+  //  - mã chuẩn = thẻ thông tin phiếu (khối đứng ngay trước #all-receipt, bỏ qua khung extension): đúng MỘT mã GR và khớp CHÍNH XÁC;
+  //  - khối đứng trước nữa (breadcrumb) có mã GR khác → chưa rõ trang hiện phiếu nào → null. Breadcrumb không tự mở khoá được gì.
+  // Không `code` (view chưa biết phiếu, không có nút ghi): chỉ cần #all-receipt.
+  function grPageAnchor(doc, code) {
+    const a = doc && doc.getElementById("all-receipt");
+    if (!a || !a.parentElement) return null;
+    if (!code) return a;
+    let info = a.previousElementSibling;
+    while (info && info.hasAttribute("data-cgn-panel")) info = info.previousElementSibling;
+    const main = grCodesIn(info);
+    if (main.length !== 1 || main[0] !== code) return null;
+    for (let n = info.previousElementSibling; n; n = n.previousElementSibling) {
+      if (n.hasAttribute("data-cgn-panel")) continue;
+      if (grCodesIn(n).some((c) => c !== code)) return null;
+    }
+    return a;
+  }
+
+  const lib = { normalizeGr, normalizePo, normalizeGrSearch, normalizeGrSearchPage, checkSoGrs, soWriteLock, isReceivable, resolveDelivery, grFingerprintSource, normalizeQrLookup, grPageAnchor, RECEIVABLE };
   root.__CGN__ = root.__CGN__ || {};
   root.__CGN__.pos = lib;
   if (typeof module !== "undefined" && module.exports) module.exports = lib;

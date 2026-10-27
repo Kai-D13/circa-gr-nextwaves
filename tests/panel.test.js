@@ -87,8 +87,10 @@ test("viewSig (PM audit sơ bộ P2): đổi tone / tiêu đề / dòng chữ / 
 
 test("content script trang POS: khung trang phiếu gắn trước #all-receipt (không dùng bảng đầu tiên), không chèn vào body", () => {
   const src = fs.readFileSync(path.join(__dirname, "..", "src", "pos", "pos-content.js"), "utf8");
-  assert.match(src, /document\.getElementById\("all-receipt"\)/);
-  assert.ok(!/querySelector\("table"\)/.test(src), "không lấy bảng đầu tiên của trang");
+  const model = fs.readFileSync(path.join(__dirname, "..", "src", "lib", "pos-model.js"), "utf8");
+  assert.match(src, /P\.grPageAnchor\(document, code\)/, "content script dùng chỗ gắn của pos-model");
+  assert.match(model, /doc && doc\.getElementById\("all-receipt"\)/);
+  for (const s of [src, model]) assert.ok(!/querySelector\("table"\)/.test(s), "không lấy bảng đầu tiên của trang");
   const panel = fs.readFileSync(path.join(__dirname, "..", "src", "ui", "panel.js"), "utf8");
   const inline = panel.slice(panel.indexOf("function createInlinePanel"));
   assert.ok(!/document\.body/.test(inline), "khung trong luồng không bao giờ chèn vào body");

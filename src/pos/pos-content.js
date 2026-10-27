@@ -173,17 +173,10 @@
     return env ? E.classifyPosPage(location.href, env) : null;
   }
 
-  // Chỗ gắn khung trang phiếu: #all-receipt (bảng đầu tiên của trang là bảng THÔNG TIN phiếu, không dùng). Có `code` thì một khối
-  // đứng trước anchor (breadcrumb / thẻ thông tin) phải mang đúng mã phiếu — view của phiếu khác không gắn vào trang này.
+  // Chỗ gắn khung trang phiếu: #all-receipt (bảng đầu tiên của trang là bảng THÔNG TIN phiếu, không dùng). Có `code` thì thẻ thông
+  // tin phải hiện đúng một mã GR = `code`, breadcrumb không được mang mã khác (pos-model.grPageAnchor — PM audit rev 1 P1).
   function grAnchor(code) {
-    const a = document.getElementById("all-receipt");
-    if (!a || !a.parentElement) return null;
-    if (!code) return a;
-    for (let n = a.previousElementSibling; n; n = n.previousElementSibling) {
-      if (n.hasAttribute("data-cgn-panel")) continue;
-      if ((n.textContent || "").includes(code)) return a;
-    }
-    return null;
+    return P.grPageAnchor(document, code);
   }
 
   function retryUi() {
@@ -241,10 +234,16 @@
       grPanel.hide();
     },
   };
-  // View của một phiếu. Đang ở trang của phiếu KHÁC (lượt đánh giá cũ về muộn sau khi đổi route) → bỏ, không vẽ.
+  // Trang /chi-tiet-so đang xem: URL + các phiếu nhận của SO đó (đọc ở lượt evaluateSo của CHÍNH URL này).
+  let soPage = null; // {href, grIds:Set}
+  // View của một phiếu chỉ vẽ trên trang của chính phiếu đó, hoặc trên /chi-tiet-so của đúng SO chứa phiếu đó. Ngược lại (lượt đánh
+  // giá cũ về muộn, tiến trình ghi của phiếu A khi đã sang trang phiếu / SO khác — PM audit rev 1 P2) → bỏ, không vẽ.
   const showGr = (gr, view) => {
     const page = pageNow();
-    if (page && page.kind === "gr" && page.grId !== String(gr.id).toLowerCase()) return;
+    const id = String(gr.id).toLowerCase();
+    if (!page) return;
+    if (page.kind === "gr" && page.grId !== id) return;
+    if (page.kind === "so" && !(soPage && soPage.href === location.href && soPage.grIds.has(id))) return;
     return panel.show(Object.assign({}, view, { grCode: gr.code }));
   };
 
@@ -440,7 +439,10 @@
 
   // Đường (3): /chi-tiet-so/<SO>
   async function evaluateSo(env, storeId, so) {
+    const href = location.href;
+    soPage = null;
     const found = await searchGrsOfSo(env, storeId, so);
+    if (found.ok) soPage = { href, grIds: new Set(found.list.map((g) => String(g.id).toLowerCase())) };
     if (!found.ok) {
       unwatch();
       return showError("Không đọc đủ danh sách phiếu nhận của SO — extension không đi tiếp", found.error, [{ label: "Thử lại", onClick: refresh }]);
@@ -995,7 +997,9 @@
     lastHref = href;
     chosenGrId = null;
     cancelClick("Đã rời trang — huỷ lượt chuẩn bị");
-    if (!applying) panel.hide(); // v0.2.4: gỡ khung của trang cũ ngay, không để view phiếu cũ nằm trên trang mới
+    // v0.2.4: gỡ khung của trang cũ ngay, kể cả khi đang ghi (PM audit rev 1 P2) — tiến trình ghi vẫn chạy tới hết; view của nó chỉ
+    // hiện lại nếu quay về đúng trang phiếu (showGr).
+    panel.hide();
     refresh();
   }
 

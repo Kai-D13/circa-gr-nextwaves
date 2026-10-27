@@ -62,7 +62,10 @@ function makeServer(opts = {}) {
         return { status: 200, json: po };
       }
       if (u.pathname === "/backend/v1/order/goods-receipt/search" && req.method === "GET") {
+        if (opts.searchHold && decodeURIComponent(u.search).includes(`so_thuocsi=${opts.searchHold.so},`)) await opts.searchHold.p; // treo tìm theo SO đó
         const r = H.sample("pos-stg-gr-search-so-1593858.json");
+        // Tìm theo SO khác SO mẫu (1593858) → không có phiếu nhận (đơn của SO khác không có trong dữ liệu mẫu).
+        if (opts.otherSoEmpty && !decodeURIComponent(u.search).includes("so_thuocsi=1593858,")) Object.assign(r.data, { goods_receipts: [], total: 0 });
         if (opts.extraGr) {
           r.data.goods_receipts.push(Object.assign(H.clone(r.data.goods_receipts[0]), { id: "11111111-2222-4333-8444-555555555555", code: "GR03999", purchase_order_code: "PO00006999" }));
           r.data.total = 2;
@@ -1234,6 +1237,92 @@ test("P2 (PM audit sơ bộ): đang điền (PUT treo) mà SPA sang danh sách �
     await sessionState(b, "applied");
     await settle(100);
     assert.equal(pos.floatViews.length, float0, "không khung nổi trên danh sách (F4)");
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("P2 (PM audit rev 1): đang điền GR03878 (PUT treo) mà SPA sang /chi-tiet-so của SO KHÁC → 0 khung / nút của GR03878 trên trang SO đó; tiến trình ghi vẫn xong đúng hợp đồng (6 PUT, applied, lease trả)", async () => {
+  let release;
+  const hold = new Promise((r) => (release = r));
+  const { b, srv, pos } = await openToReceived({ server: { putHolds: { 1: hold }, otherSoEmpty: true } });
+  try {
+    await grant(b);
+    (await until(() => fillButton(pos))).onClick();
+    await until(() => srv.st.puts.length === 1);
+    const n0 = pos.views.length;
+    const to = `${POS}/chi-tiet-so/SOBD1599999`;
+    pos.url = to;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: to } });
+    await settle(30);
+    assert.equal(pos.view, null, "đổi trang: gỡ khung của GR03878 ngay, kể cả khi đang ghi");
+    release();
+    const s = await sessionState(b, "applied");
+    assert.equal(s.lease, null);
+    assert.equal(srv.st.puts.length, 6);
+    assert.equal(codesOnGr(srv).length, 12);
+    await until(() => pos.loads >= 2); // trang SO B tự tải lại sau khi ghi xong
+    pos.post(POS_AUTH);
+    await until(() => viewTitle(pos) === "SO SOBD1599999: không có phiếu nhận đang chờ nhận");
+    const shown = pos.views.slice(n0);
+    assert.ok(!shown.some((v) => v && (v.grCode === "GR03878" || /GR03878/.test(v.title || ""))), `không view nào của GR03878 trên SO B: ${shown.map((v) => v && v.title).join(" | ")}`);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("P2 (PM audit rev 1): lượt evaluateSo của SO A về muộn sau khi SPA sang SO B → không vẽ phiếu của SO A trên trang SO B", async () => {
+  let release;
+  const p = new Promise((r) => (release = r));
+  const srv = makeServer({ searchHold: { so: "1593858", p }, otherSoEmpty: true });
+  const b = createBrowser(srv.handle);
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const pos = b.openTab(`${POS}/chi-tiet-so/SOBD1593858`);
+    pos.post(POS_AUTH);
+    await until(() => srv.st.log.some((r) => decodeURIComponent(r.url).includes("so_thuocsi=1593858,")));
+    const to = `${POS}/chi-tiet-so/SOBD1599999`;
+    pos.url = to;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: to } });
+    await settle(30);
+    release(); // tìm theo SO A về → lượt cũ đọc GR03878, vẽ nút "Nhận hàng bằng RFID" của nó — trong khi trang đã là SO B
+    await until(() => viewTitle(pos) === "SO SOBD1599999: không có phiếu nhận đang chờ nhận");
+    await settle(100);
+    assert.ok(!pos.views.some((v) => v && (v.grCode === "GR03878" || /GR03878|SOBD1593858/.test(v.title || ""))), pos.views.map((v) => v && v.title).join(" | "));
+    assert.equal(b.tabs().filter((t) => t.url.startsWith(NW)).length, 0);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("P2 (PM audit rev 1): đã xem /chi-tiet-so SO A (chứa GR03878) → về phiếu, điền (PUT treo) → SPA sang SO B → không dùng danh sách phiếu cũ của SO A để vẽ GR03878 trên SO B", async () => {
+  let release;
+  const hold = new Promise((r) => (release = r));
+  const { b, srv, pos } = await openToReceived({ server: { putHolds: { 1: hold }, otherSoEmpty: true } });
+  try {
+    await grant(b);
+    await until(() => fillButton(pos));
+    const route = (href) => {
+      pos.url = href;
+      pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href } });
+    };
+    route(`${POS}/chi-tiet-so/SOBD1593858`); // SO A: phiếu GR03878 hiện ở khung nổi, chỉ nút "Mở phiếu"
+    await until(() => pos.view && pos.view.buttons && pos.view.buttons.some((x) => x.label === "Mở phiếu GR03878"));
+    route(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    (await until(() => pos.viewKind === "inline" && fillButton(pos))).onClick();
+    await until(() => srv.st.puts.length === 1);
+    const n0 = pos.views.length;
+    route(`${POS}/chi-tiet-so/SOBD1599999`);
+    await settle(30);
+    release();
+    await sessionState(b, "applied");
+    await settle(100);
+    const shown = pos.views.slice(n0).filter((v) => v && v.grCode === "GR03878");
+    assert.deepEqual(shown.map((v) => v.title), [], "không view nào của GR03878 trên SO B");
     assert.equal(srv.st.puts.length, 6);
   } finally {
     release();

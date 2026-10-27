@@ -1,7 +1,8 @@
-"""Đột biến có chủ đích cho các hàng rào của v0.2.4 = 102 ca của v0.2.3 + 12 ca P2 + 8 ca PM audit sơ bộ (PM review 27/10 §2: khung trang phiếu trong
+"""Đột biến có chủ đích cho các hàng rào của v0.2.4 = 102 ca của v0.2.3 + 12 ca P2 + 8 ca PM audit sơ bộ + 8 ca PM audit rev 1 (PM review 27/10 §2: khung trang phiếu trong
 luồng trang, view phiếu mang mã phiếu, W1 fail closed khi khung không gắn đúng trang, thiếu chỗ gắn → lỗi giao diện ở khung nổi
 không nút Điền + chẩn đoán nhật ký phiên, /chi-tiet-so chỉ nút mở phiếu, đổi route gỡ khung cũ, bỏ view phiếu cũ về muộn; audit sơ bộ 27/10: kiểm lại mã phiếu ngay lúc hỏi, view lượt cũ về muộn không vẽ trên trang
-mới / danh sách, thu nhỏ mở lại khi nội dung cảnh báo đổi — ui/panel.js chạy thật trên tests/fake-dom.js). Phần DOM của khung trong luồng
+mới / danh sách, thu nhỏ mở lại khi nội dung cảnh báo đổi; audit rev 1: mã chuẩn trên thẻ thông tin khớp chính xác, breadcrumb
+bất đồng → chặn, tiến trình ghi không vẽ trên /chi-tiet-so SO khác — ui/panel.js chạy thật trên tests/fake-dom.js). Phần DOM của khung trong luồng
 (gắn / gắn lại / kiểm mã / chống vòng / tự mở lại / thiếu chỗ gắn) kiểm bằng scripts/mutate-edge-v0.2.4.js trên Edge thật.
 v0.2.3 = 96 ca của v0.2.2 + 6 ca F3 / F4 (PM review G3a 27/10: nhãn ngắn + tên đầy
 đủ theo trạng thái phiên; thông báo danh sách trong luồng trang, không khung nổi). Phần DOM (vị trí thông báo, đồng bộ title /
@@ -19,7 +20,7 @@ Mỗi ca gỡ đúng MỘT hàng rào trong src/, chạy `node --test "tests/*.t
 Chạy trên BẢN SAO trong thư mục tạm — không sửa src/ của repo. Cần Node (node --test) trên PATH.
 
   python -I scripts/mutate-v0.2.4.py            # mọi ca
-  python -I scripts/mutate-v0.2.4.py 102        # chỉ 20 ca P2 + PM (bắt đầu từ ca thứ 103)
+  python -I scripts/mutate-v0.2.4.py 102        # chỉ 28 ca P2 + PM (bắt đầu từ ca thứ 103)
 
 Đột biến trên src/lib/env.js được áp lên cả src/main/env.js (bản sao y hệt) để không bị bắt chỉ vì hai bản lệch nhau.
 """
@@ -176,8 +177,8 @@ muts = [
     ("src/pos/pos-content.js", "      if (!uiMissing) floatPanel.hide();", "      floatPanel.hide();", "P2 view mới xoá lỗi giao diện khi chỗ gắn vẫn thiếu"),
     ("src/pos/pos-content.js", "    return panel.show(Object.assign({}, view, { grCode: gr.code }));", "    return panel.show(view);", "P2 view của phiếu không mang mã phiếu"),
     ("src/pos/pos-content.js", "      grPanel.show(view, view.grCode || null);", "      grPanel.show(view, null);", "P2 khung trang phiếu không kiểm mã phiếu"),
-    ("src/pos/pos-content.js", "    if (!applying) panel.hide(); // v0.2.4", "    // v0.2.4", "P2 đổi route không gỡ khung phiếu cũ"),
-    ("src/pos/pos-content.js", '    if (page && page.kind === "gr" && page.grId !== String(gr.id).toLowerCase()) return;\n', "", "P2 lượt đánh giá cũ về muộn vẽ view phiếu cũ lên trang phiếu khác"),
+    ("src/pos/pos-content.js", "(showGr).\n    panel.hide();\n", "(showGr).\n", "P2 đổi route không gỡ khung phiếu cũ"),
+    ("src/pos/pos-content.js", '    if (page.kind === "gr" && page.grId !== id) return;\n', "", "P2 lượt đánh giá cũ về muộn vẽ view phiếu cũ lên trang phiếu khác"),
     # v0.2.4 — PM audit sơ bộ (docs/pm/AUDIT-PRELIM-v0.2.4-P2-20261027.md); ui/panel.js chạy thật trên tests/fake-dom.js
     ("src/ui/panel.js", "    const valid = () => placed() && o.find(code) === anchor;", "    const valid = () => placed();", "PM P1 khung đúng chỗ không kiểm lại mã phiếu trên trang"),
     ("src/ui/panel.js", "    const anchoredFor = (c) => !failed && !!view && !!c && code === c && valid();", "    const anchoredFor = (c) => !failed && !!view && !!c && code === c && placed();", "PM P1 anchoredFor không đọc lại mã phiếu lúc gọi"),
@@ -187,6 +188,15 @@ muts = [
     ("src/pos/pos-content.js", "      if (evalHref !== null && location.href !== evalHref) return;\n", "", "PM P2 kết quả lượt đánh giá cũ về muộn vẽ trên trang mới"),
     ("src/pos/pos-content.js", '      if (!page || page.kind === "gr_list") return;', "      if (!page) return;", "PM P2 vẽ khung nổi trên danh sách (F4)"),
     ("src/pos/pos-content.js", "    evalHref = location.href;\n", "", "PM P2 không ghi URL của lượt đánh giá"),
+    # v0.2.4 — PM audit rev 1 (docs/pm/AUDIT-REV1-v0.2.4-P2-20261027.md)
+    ("src/lib/pos-model.js", "    if (main.length !== 1 || main[0] !== code) return null;\n", "", "PM rev1 P1 bỏ mã chuẩn trên thẻ thông tin (breadcrumb tự mở khoá)"),
+    ("src/lib/pos-model.js", "    if (main.length !== 1 || main[0] !== code) return null;", "    if (main[0] !== code) return null;", "PM rev1 P1 thẻ thông tin nhiều mã GR vẫn nhận"),
+    ("src/lib/pos-model.js", "    if (main.length !== 1 || main[0] !== code) return null;", "    if (main.length !== 1 || !main[0].includes(code)) return null;", "PM rev1 P1 mã khớp chuỗi con, không chính xác"),
+    ("src/lib/pos-model.js", "      if (grCodesIn(n).some((c) => c !== code)) return null;\n", "", "PM rev1 P1 breadcrumb mang mã khác vẫn nhận"),
+    ("src/lib/pos-model.js", "    while (info && info.hasAttribute(\"data-cgn-panel\")) info = info.previousElementSibling;\n", "", "PM rev1 P1 lấy khung extension làm thẻ thông tin"),
+    ("src/pos/pos-content.js", "(showGr).\n    panel.hide();\n", "(showGr).\n    if (!applying) panel.hide();\n", "PM rev1 P2 đang ghi đổi route không gỡ khung"),
+    ("src/pos/pos-content.js", '    if (page.kind === "so" && !(soPage && soPage.href === location.href && soPage.grIds.has(id))) return;\n', "", "PM rev1 P2 tiến trình phiếu A vẽ trên /chi-tiet-so SO khác"),
+    ("src/pos/pos-content.js", "soPage && soPage.href === location.href && soPage.grIds.has(id)", "soPage && soPage.grIds.has(id)", "PM rev1 P2 dùng danh sách phiếu của SO đã xem trước đó"),
 ]
 
 

@@ -6,6 +6,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createDom } = require("./fake-dom.js");
 const { createInlinePanel } = require("../src/ui/panel.js");
+const { grPageAnchor } = require("../src/lib/pos-model.js");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -20,19 +21,11 @@ function grPage(code) {
   col.append(crumb, info, anchor);
   dom.document.body.appendChild(col);
   dom.flush();
-  // Như grAnchor của pos/pos-content.js: #all-receipt, và (có mã) một khối đứng trước — không phải khung — chứa đúng mã.
-  const find = (c) => {
-    const a = dom.document.getElementById("all-receipt");
-    if (!a || !a.parentElement) return null;
-    if (!c) return a;
-    for (let n = a.previousElementSibling; n; n = n.previousElementSibling) {
-      if (n.hasAttribute("data-cgn-panel")) continue;
-      if (n.textContent.includes(c)) return a;
-    }
-    return null;
-  };
-  const setCode = (from, to) => {
-    for (const box of [crumb, info]) for (const t of box.childNodes) if (t.nodeType === 3) t.data = t.data.replaceAll(from, to); // sửa nút chữ, giữ node
+  // Chỗ gắn THẬT mà pos/pos-content.js dùng.
+  const find = (c) => grPageAnchor(dom.document, c);
+  // Sửa nút chữ, giữ node. `boxes` mặc định cả breadcrumb + thẻ thông tin.
+  const setCode = (from, to, boxes = [crumb, info]) => {
+    for (const box of boxes) for (const t of box.childNodes) if (t.nodeType === 3) t.data = t.data.replaceAll(from, to);
   };
   const hosts = () => dom.all(dom.document.documentElement, (e) => e.hasAttribute("data-cgn-panel"));
   const buttons = (host) => dom.all(host, (e) => e.tagName === "BUTTON");
@@ -163,6 +156,68 @@ test("thiếu #all-receipt → không chèn vào body, sau waitMs onMissing('mis
     p.dom.flush();
     assert.deepEqual(ev, ["missing", "found"]);
     assert.equal(p.hosts()[0].nextElementSibling, p.anchor);
+    assert.equal(panel.anchoredFor("GR03887"), true);
+    panel.hide();
+  } finally {
+    p.uninstall();
+  }
+});
+
+test("grPageAnchor (PM audit rev 1 P1): mã chuẩn = thẻ thông tin (khối ngay trước #all-receipt) khớp CHÍNH XÁC; breadcrumb mang mã khác → null; khung extension đứng giữa không tính", () => {
+  const p = grPage("GR03887");
+  try {
+    const { document: doc } = p.dom;
+    assert.equal(grPageAnchor(doc, "GR03887"), p.anchor, "thẻ thông tin + breadcrumb cùng GR03887");
+    assert.equal(grPageAnchor(doc, null), p.anchor, "view chưa biết phiếu: chỉ cần #all-receipt");
+    assert.equal(grPageAnchor(doc, "GR0388"), null, "khớp chính xác, không phải chuỗi con");
+    assert.equal(grPageAnchor(doc, "GR038870"), null);
+
+    p.setCode("GR03887", "GR03888", [p.info]); // thẻ thông tin đã là GR03888, breadcrumb còn GR03887
+    assert.equal(grPageAnchor(doc, "GR03887"), null, "thẻ thông tin khác mã: breadcrumb không tự mở khoá");
+    assert.equal(grPageAnchor(doc, "GR03888"), null, "breadcrumb còn mã cũ: chưa rõ trang hiện phiếu nào");
+    p.setCode("GR03888", "GR03887", [p.info]);
+
+    p.setCode("GR03887", "GR03888", [p.crumb]); // đối xứng: breadcrumb GR03888, thẻ thông tin GR03887
+    assert.equal(grPageAnchor(doc, "GR03887"), null, "breadcrumb bất đồng → fail closed");
+    p.setCode("GR03888", "GR03887", [p.crumb]);
+
+    p.crumb.textContent = "Kho hàngDanh sách phiếu nhận hàng"; // breadcrumb không có mã: chỉ thẻ thông tin quyết
+    assert.equal(grPageAnchor(doc, "GR03887"), p.anchor);
+    assert.equal(grPageAnchor(doc, "GR0388"), null, "khớp chính xác trên thẻ thông tin (không nhờ breadcrumb)");
+    assert.equal(grPageAnchor(doc, "R03887"), null);
+
+    p.info.appendChild(p.dom.el("span", "Phiếu liên quan GR09999")); // thẻ thông tin có HAI mã GR → không rõ
+    assert.equal(grPageAnchor(doc, "GR03887"), null);
+    p.info.childNodes[p.info.childNodes.length - 1].remove();
+
+    const panel = createInlinePanel("GR ← Nextwaves", { find: (c) => grPageAnchor(doc, c), waitMs: 60000 });
+    panel.show(FILL, "GR03887"); // khung (chữ có "GR03887") chèn giữa thẻ thông tin và #all-receipt
+    assert.equal(p.hosts().length, 1);
+    assert.equal(grPageAnchor(doc, "GR03887"), p.anchor, "bỏ qua khung để tìm thẻ thông tin");
+    p.setCode("GR03887", "GR03888", [p.info]);
+    assert.equal(grPageAnchor(doc, "GR03887"), null, "chữ của chính khung không thay được thẻ thông tin");
+    assert.equal(panel.anchoredFor("GR03887"), false);
+    panel.hide();
+
+    p.info.remove();
+    assert.equal(grPageAnchor(doc, "GR03887"), null, "không có thẻ thông tin trước bảng → null");
+  } finally {
+    p.uninstall();
+  }
+});
+
+test("P1 (PM audit rev 1): CHỈ thẻ thông tin đổi sang GR khác (breadcrumb còn mã cũ, giữ #all-receipt), observer chưa chạy → anchoredFor false; observer → gỡ khung", () => {
+  const p = grPage("GR03887");
+  try {
+    const panel = createInlinePanel("GR ← Nextwaves", { find: p.find, waitMs: 60000 });
+    panel.show(FILL, "GR03887");
+    assert.equal(panel.anchoredFor("GR03887"), true);
+    p.setCode("GR03887", "GR03888", [p.info]);
+    assert.equal(panel.anchoredFor("GR03887"), false);
+    p.dom.flush();
+    assert.equal(p.hosts().length, 0);
+    p.setCode("GR03888", "GR03887", [p.info]);
+    p.dom.flush();
     assert.equal(panel.anchoredFor("GR03887"), true);
     panel.hide();
   } finally {
