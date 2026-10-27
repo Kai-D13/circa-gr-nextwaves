@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **27/10/2026 (lần 40, PM review G3a lần 1)**. Giai đoạn: **`main` có v0.1.5; v0.2.2 trên `batch/v0.2-rfid` (`3218cae`, gói `AB96179D`) đã qua audit G0.1/G0.2/G1/G2 và đang kiểm G3a trên Chrome staging. Bốn ảnh thật cho thấy F3 (bảng dàn lại sau bấm) và F4 (khung che phân trang/hành động); PM cho dev sửa v0.2.3 theo `docs/pm/REVIEW-G3a-F3-F4-v0.2.3-20261027.md`. G3a chưa đạt toàn bộ, chưa Go merge/vận hành; lượt nhận/ghi cần phép operator riêng. Production chỉ đọc; O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **27/10/2026 (lần 41, dev giao v0.2.3 sửa F3 / F4)**. Giai đoạn: **`main` có v0.1.5; v0.2.3 trên `batch/v0.2-rfid` (runtime `247386f`, đầu `f76cbcc`, gói `40236D67`) sửa F3 (nhãn ngắn + tên đầy đủ theo trạng thái phiên) và F4 (thông báo danh sách trong luồng trang, không khung nổi) theo `docs/pm/REVIEW-G3a-F3-F4-v0.2.3-20261027.md`; chờ PM audit nguồn / gói rồi mới cài lại Chrome staging để kiểm G3a. G3a chưa đạt toàn bộ, chưa Go merge/vận hành; lượt nhận/ghi cần phép operator riêng. Production chỉ đọc; O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -203,6 +203,15 @@ Cập nhật: **27/10/2026 (lần 40, PM review G3a lần 1)**. Giai đoạn: **
   - **v0.2.2** (`a1975f1`, gói `AB96179D`): F1 nút 24px; F2 khung đặt lại khi cuộn (capture ở document, rAF).
     - Edge 25 mục dựng theo DOM thật: v0.2.2 25/25; v0.2.1 hỏng 3/25 đúng F1 / F2.
     - Đột biến DOM 6/6; `npm test` 133/133; đột biến Node 96/96; Edge trên gói giải nén 25/25 × 7. **Chưa cài.**
+
+- **Lần 41 (27/10, dev giao v0.2.3 theo PM review G3a — mục 40):** `docs/dev/BATCH-v0.2.3.md`.
+  - **F3:** nhãn "Nhận hàng bằng RFID" / "Đang kiểm…" / "Mở Nextwaves" / "Mở phiếu"; `title` = `aria-label` = mã GR + trạng thái phiên (chữ + mã) + hành động. Nút ≤ 150px, ellipsis, cao 24px; `syncRow` so cả `title` / `aria-label`.
+  - **F4:** danh sách không dùng khung nổi; huỷ / lỗi / không liên kết báo trong khối thông báo **trong luồng trang ngay trên bảng** (Đóng; gỡ khi rời trang / bấm lại).
+  - **Kiểm:**
+    - `npm test` 135/135 × 3; đột biến Node 102/102 (2 ca sót lượt đầu do thiếu test → sửa test `f76cbcc`, chạy lại 6/6); DOM 9/9.
+    - Edge 41 mục (1095×756 / 1366×768 / 1440×900, trước / sau bấm / received / applied, thông báo lỗi không phủ 29 điều khiển, rời / quay lại, đổi trang, tải lại): gói 41/41 × 2; v0.2.2 hỏng 7/41 đúng F3 / F4.
+  - **Hiệu năng:** lượt quét gồm lấy dòng 1,0–1,2 ms; tác vụ dài nhất 6,7–7,0 ms. **Chưa cài.**
+  - Ghi phương án P2 (khung trang phiếu che "SL nhận" ở 1095px): dev khuyên mặc định thu nhỏ khi không cần thao tác + hướng dẫn thu nhỏ; chờ PM chọn.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -578,7 +587,16 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-40. **Hiện hành (sau PM review bốn ảnh G3a v0.2.2, 27/10):**
+41. **Hiện hành (sau dev giao v0.2.3, 27/10):**
+    - **PM:** audit nguồn / gói v0.2.3 (`f76cbcc`, runtime `247386f`, gói `40236D67`) theo `docs/dev/BATCH-v0.2.3.md`. Quyết phương án P2 khung trang phiếu (§4.2 báo cáo).
+    - **Sau PM cho cài:** kiểm G3a lại trên Chrome staging với `C:\circa-gr-nextwaves-v0.2.3`:
+      - danh sách trước / sau bấm ở 1095px (dòng 57px, tiêu đề không xuống dòng);
+      - Nextwaves sau cuộn với khung mở rộng;
+      - số tab, popup, version.
+
+      Dev tự quan sát nếu Claude in Chrome kết nối; không thì operator theo hướng dẫn G3a. Không nhận / điền / HOÀN THÀNH.
+    - Chưa Go merge / vận hành. G3b / W1 / production có gate và phép riêng.
+40. (cũ, thay bằng mục 41) **Sau PM review bốn ảnh G3a v0.2.2, 27/10:**
     - PM xem trực tiếp ảnh danh sách trước/sau bấm GR03879 và phiếu GR03878 mở/thu khung. Phần đã thấy: nút đúng 7 dòng chờ nhận/đang nhận, dòng trước bấm 57px, POS vẫn ở danh sách sau bấm; khung phiếu không che HỦY/HOÀN THÀNH. Chưa kết luận G3a đạt toàn bộ.
     - F3: nhãn trạng thái dài làm bảng dàn lại, dòng cao khoảng 73px tại vùng trang 1095×756. F4: khung thông báo che phân trang và cột hành động cuối. Cả hai phải sửa trước merge/vận hành. PM duyệt nhãn ngắn có nghĩa đầy đủ ở `title`/`aria-label`; trên danh sách không giữ khung nổi thành công, lỗi/cảnh báo phải hiện mà không phủ điều khiển. Xem hợp đồng và gate trong `docs/pm/REVIEW-G3a-F3-F4-v0.2.3-20261027.md`.
     - **Dev được làm v0.2.3 ngay** trên nhánh batch, tăng version/ZIP/SHA, giao DIFF/test/Edge ở 1095×756 và ảnh thật sau sửa để PM audit. Không cần chờ đủ ảnh Nextwaves mới viết code. PM chưa duyệt merge hoặc dùng bản này để nhận/ghi.
