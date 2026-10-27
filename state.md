@@ -578,7 +578,12 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-38. **Hiện hành (sau dev giao G0 + v0.2.2, 27/10):**
+39. **Hiện hành (sau PM audit G0/G1/G2 v0.2.2, 27/10):**
+    - PM audit `batch/v0.2-rfid` tại `3218cae` (runtime `a1975f1`, gói `AB96179D`): G0.1 response và G0.2 DOM chấp nhận cho tích hợp; G1 source/test và G2 gói/Edge đạt. PM độc lập chạy 133/133 test, Edge gói 25/25, gói cũ v0.2.1 hỏng đúng 3/25 F1/F2, dựng lại SHA và so 19/19 file. Xem `docs/pm/AUDIT-v0.2.2-G0-G1-G2-20261027.md`.
+    - **Cho phép cài v0.2.2 trên Chrome staging để kiểm G0.3 UI và phần G3a chỉ đọc**, sau khi xác nhận không có phiên nhận/điền dở và không bật hai bản extension cùng lúc. Chọn Staging, không cấp phép điền; kiểm nút danh sách, khung POS và khung Nextwaves sau cuộn. Được bấm bắt đầu RFID để tạo phiên/GET, không bấm Xác nhận nhận hàng/HOÀN THÀNH, không PUT. Ảnh hoặc quan sát trực tiếp ba màn theo báo cáo PM; không bắt đúng năm ảnh cũ.
+    - Ngân sách: mỗi lượt quét danh sách <2 ms gồm bước lấy dòng; mọi tác vụ extension <50 ms. Không áp <2 ms cho mọi callback. Dev sửa mâu thuẫn mô tả giữa §3b và §4.2 của `docs/dev/BATCH-v0.2.2-G0.md`, không đổi runtime/gói vì lỗi tài liệu.
+    - Chưa Go merge hoặc dùng v0.2.2 để vận hành nhận/ghi. G3b sau nhận hàng/quay về GR còn chờ lượt thật với phép operator riêng đúng GR/PO; production vẫn chỉ đọc và có gate Đợt 2.
+38. (cũ, thay bằng mục 39) **Sau dev giao G0 + v0.2.2, 27/10:**
     - **PM:** audit G0 và v0.2.2 (`a1975f1`, gói `AB96179D`) theo `docs/dev/BATCH-v0.2.2-G0.md`. Quyết hai điểm dev đề nghị:
       - Edge trên trang dựng theo cấu trúc / kích thước thật (1366×768, 1440×900) có thay được ảnh khung với extension cài thật không;
       - định nghĩa ngân sách toàn bộ tác vụ: mỗi lời gọi extension < 2 ms ở trạng thái thường; nạp script một lần mỗi trang < 50 ms.
