@@ -23,6 +23,13 @@
 - Đơn này có thêm phần "Còn thiếu 15. Xử lý đơn mua hàng thế nào?" (lựa chọn giữ đơn mở…) phía trên chân modal. Chân modal (Hủy / Xác nhận nhận hàng) nằm thấp hơn trường hợp mẫu G0.
 - Đã bấm GR03887 (không phải GR03879 như checklist gợi ý). Theo PM, chọn GR nào phù hợp chưa có phiên đều được.
 
+## Operator gửi thêm 2 ảnh
+
+| Ảnh | Thấy | Đánh giá dev |
+|---|---|---|
+| 3 — popup extension | Tiêu đề **"GR ← Nextwaves v0.2.3"**; Môi trường Staging; ô cấp phép điền **trống**; "Phiên gần đây": **đúng một phiên** STG · GR03887 "Đã khớp đơn Nextwaves" (`nw_ready`), SOBD1594095-F → PO13806459, 20:24:25 27/10/2026 | **Đạt:** đang chạy **0.2.3**, không cấp phép, một phiên |
+| 4 — màn quét Nextwaves đã cuộn tới cuối | Thấy chân modal: "Còn thiếu 15…" (Giữ đơn mở / Đóng đơn dù còn thiếu), "Chưa khớp mã nào…", nút **Hủy** và **"Xác nhận nhận hàng"** | **Một phần:** nút hiện sau khi cuộn. Ảnh **cắt theo khung modal (961px)**, không có khung extension, nên chưa chứng minh "khung mở rộng và nút cùng hiện, không chồng". Ở bề rộng của ảnh 2 (~1917px) khung nằm ngoài modal, không thể chồng |
+
 ## Còn thiếu để PM quyết G3a
 
 1. **Danh sách sau khi bấm** (dòng GR03887), vùng trang ~1095px (side panel Claude mở):
@@ -32,5 +39,9 @@
    - tooltip có "GR03887 · phiên … (waiting_nw hoặc nw_ready)".
 
    Đây cũng là bằng chứng đang chạy 0.2.3.
-2. **Nextwaves cuộn thân modal tới cuối**: khung mở rộng và nút "Xác nhận nhận hàng" cùng hiện, không chồng nhau, ở ~1095px. **Không bấm.**
-3. Số tab Nextwaves extension đã mở (kỳ vọng 1); popup có đúng một phiên GR03887; `chrome://extensions` hiện 0.2.3.
+2. **Nextwaves cuộn thân modal tới cuối:** chụp **cả trang** (không cắt theo modal), khung extension mở rộng và nút "Xác nhận nhận hàng" cùng hiện, không chồng nhau, ở ~1095px. **Không bấm.**
+3. Số tab Nextwaves extension đã mở (kỳ vọng 1).
+
+   Đã có (ảnh 3): popup đúng một phiên GR03887, version 0.2.3.
+
+   Phiên GR03887 đang `nw_ready`, nên nút danh sách của dòng này phải là "Mở Nextwaves", tooltip "GR03887 · phiên Nextwaves đã sẵn sàng nhận (nw_ready) · Mở lại tab Nextwaves…".
