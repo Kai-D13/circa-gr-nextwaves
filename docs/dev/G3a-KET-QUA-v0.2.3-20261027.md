@@ -40,7 +40,19 @@
   - Lượt 0.2.2 dàn lại ở 1095px; ảnh này ~1230px, gần mức đó, tiêu đề vẫn một dòng.
   - Tooltip chưa chụp: `title` / `aria-label` đã kiểm trên Edge.
 
-## Còn thiếu để PM quyết G3a
+## Kết luận dev — đề nghị PM chốt G3a với bằng chứng hiện có (không xin thêm ảnh)
+
+- **Nextwaves:** dược sĩ chỉ đặt hàng lên đầu đọc rồi bấm "Xác nhận nhận hàng". Điều duy nhất cần chắc là khung extension không che nút đó.
+  - Đã đủ bằng chứng:
+    - ảnh 2: ở màn hình thật của operator, khung nằm **ngoài** modal, bên phải, nên không thể chồng nút trong modal;
+    - ảnh 4: nút hiện đủ sau khi cuộn;
+    - Edge trên cấu trúc modal thật: không chồng ở 1366×768 / 1440×900, kể cả ngay sau khi cuộn.
+  - Không cần ảnh ghép thêm.
+- **Số tab:** popup có đúng một phiên GR03887 (ảnh 3). Edge kiểm một phiên / một tab, kể cả tải lại trang. Operator không báo có tab thừa.
+- **POS:** danh sách trước / sau bấm (ảnh 1, 5) và trang phiếu (lượt 0.2.2, khung không đổi) đạt.
+- **Dev đề nghị: G3a đạt với v0.2.3.** Mục dưới đây giữ lại để PM tham chiếu; dev không yêu cầu operator làm thêm.
+
+## (Tham chiếu) Danh mục ban đầu
 
 1. ~~**Danh sách sau khi bấm**~~ — **đã có (ảnh 5), đạt.** Yêu cầu ban đầu: dòng GR03887, vùng trang ~1095px (side panel Claude mở):
    - nút **"Mở Nextwaves"**;
