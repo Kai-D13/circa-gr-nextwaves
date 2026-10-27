@@ -162,7 +162,7 @@ muts = [
     # v0.2.3 — PM F3 (nhãn ngắn, tên đầy đủ theo trạng thái phiên) / F4 (thông báo danh sách trong luồng trang, không khung nổi)
     ("src/pos/pos-content.js", 'return { kind: "open_nw", label: "Mở Nextwaves",', 'return { kind: "open_nw", label: "Đang nhận trên Nextwaves",', "F3 nhãn đang nhận dài (bảng dàn lại)"),
     ("src/pos/pos-content.js", "const sessionText = (s) => `phiên ${SESSION_STATE_VI[s.state] || s.state} (${s.state})`;", "const sessionText = (s) => \"phiên đang có\";", "F3 tên đầy đủ không có trạng thái phiên"),
-    ("src/pos/pos-content.js", "      listNote = null; // thành công: nút thành \"Mở Nextwaves\", tab Nextwaves đã mở\n      showListNote();", "      listNote = null;\n      panel.show({ tone: \"ok\", title: `${code}: đã mở màn quét Nextwaves`, lines: [] });", "F4 thành công vẫn hiện khung nổi trên danh sách"),
+    ("src/pos/pos-content.js", "      listNote = null; // thành công: nút thành \"Mở Nextwaves\", tab Nextwaves đã mở\n      showListNote();", "      listNote = null;\n      panel.show({ tone: \"ok\", title: `${code}: đã mở màn quét Nextwaves`, lines: [] });", "F4 thành công vẫn hiện khung nổi trên danh sách (kép: gỡ cả chặn khung trên danh sách của router v0.2.4)", [('      if (!page || page.kind === "gr_list") return;', "      if (!page) return;")]),
     ("src/pos/pos-content.js", "    if (L) L.notice(onList ? listNote : null);\n    panel.hide();", "    if (onList && listNote) panel.show(listNote);\n    else panel.hide();", "F4 thông báo danh sách bằng khung nổi"),
     ("src/pos/pos-content.js", "    listCtx = null;\n    listNote = null;\n    if (listSessionsTimer)", "    listCtx = null;\n    if (listSessionsTimer)", "F4 rời danh sách không dọn thông báo (quay lại hiện thông báo cũ)"),
     ("src/pos/pos-content.js", "    listNote = null; // đang kiểm: nút của dòng thành \"Đang kiểm…\" (vô hiệu), không có khung / thông báo\n    showListNote();\n", "", "F4 bấm lại không dọn thông báo cũ"),
@@ -227,17 +227,23 @@ def main():
             print(out[-2000:])
             return 2
         killed = 0
-        for f, a, b, name in muts[start:]:
+        for m in muts[start:]:
+            f, a, b, name = m[:4]
+            # Ca kép: phần tử thứ 5 = các cặp (neo, thay) gỡ thêm trên cùng file (hàng rào lớp dưới che hàng rào đang kiểm).
+            pairs = [(a, b)] + list(m[4] if len(m) > 4 else [])
             p = os.path.join(base, f)
             orig = open(p, encoding="utf-8").read()
-            if orig.count(a) != 1:
-                print("ANCHOR?", name, orig.count(a), flush=True)
+            if any(orig.count(x) != 1 for x, _ in pairs):
+                print("ANCHOR?", name, [orig.count(x) for x, _ in pairs], flush=True)
                 continue
             # env.js có bản sao y hệt cho MAIN world: đột biến áp lên cả hai.
             twins = [p] + ([os.path.join(base, "src/main/env.js")] if f == "src/lib/env.js" else [])
             origs = {q: open(q, encoding="utf-8").read() for q in twins}
             for q in twins:
-                open(q, "w", encoding="utf-8", newline="\n").write(origs[q].replace(a, b))
+                mutated = origs[q]
+                for x, y in pairs:
+                    mutated = mutated.replace(x, y)
+                open(q, "w", encoding="utf-8", newline="\n").write(mutated)
             try:
                 _, out = run_tests(base)
             finally:

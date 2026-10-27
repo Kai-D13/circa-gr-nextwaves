@@ -1329,3 +1329,29 @@ test("P2 (PM audit rev 1): đã xem /chi-tiet-so SO A (chứa GR03878) → về 
     b.close();
   }
 });
+
+test("P2: đang điền GR03878 (PUT treo) mà SPA sang trang phiếu KHÁC → tiến trình / kết quả điền của GR03878 không vẽ trên trang phiếu đó; vẫn điền đủ", async () => {
+  const OTHER = "0f0f0f0f-1111-4222-8333-444455556666";
+  let release;
+  const hold = new Promise((r) => (release = r));
+  const { b, srv, pos } = await openToReceived({ server: { putHolds: { 1: hold } } });
+  try {
+    await grant(b);
+    (await until(() => fillButton(pos))).onClick();
+    await until(() => srv.st.puts.length === 1);
+    const n0 = pos.views.length;
+    const to = `${POS}/danh-sach-phieu-nhan-hang/${OTHER}`;
+    pos.url = to;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: to } });
+    await settle(30);
+    release();
+    await sessionState(b, "applied");
+    await settle(100);
+    const shown = pos.views.slice(n0).filter((v) => v && v.grCode === "GR03878");
+    assert.deepEqual(shown.map((v) => v.title), [], "không view nào của GR03878 trên trang phiếu khác");
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    release();
+    b.close();
+  }
+});
