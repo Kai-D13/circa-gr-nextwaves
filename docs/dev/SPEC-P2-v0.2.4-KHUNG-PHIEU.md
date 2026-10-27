@@ -2,6 +2,13 @@
 
 **Căn cứ:** `docs/pm/REVIEW-PLAN-STG-DONE-PRD-20261027.md` §3 (PM duyệt hướng nghiên cứu "trong luồng trang", chưa duyệt layout / code).
 
+> **Sửa sau khi đo lại (dev, 27/10 tối, chỉ đọc):**
+> - Trang phiếu cuộn bằng **window**. Khung `overflow-scroll` cao theo nội dung và không cuộn, nên §1 ghi "khung cuộn của trang (không phải window)" là sai.
+> - Khối thử `position: sticky` trước `#all-receipt` **không dính**.
+> - PM đã chọn A có điều kiện (`docs/pm/REVIEW-A1-RUNBOOK-P2-v0.2.4-20261027.md` §2). v0.2.4 dùng nhánh dự phòng PM cho phép: **trong luồng, không dính, mọi cỡ màn hình**.
+> - Thiếu chỗ gắn → khung nổi chỉ báo lỗi, **không nút Điền**, W1 đóng (không dùng fallback nổi có nút như §2 cũ).
+> - Xem `docs/dev/BATCH-v0.2.4.md` §0.
+
 **Vấn đề:** ở 1095×756 (ảnh G3a-6), khung nổi 460px góc dưới phải che cột "SL nhận" (+ / − / xoá) của dòng sản phẩm. HỦY / HOÀN THÀNH không bị che.
 
 ## 1. DOM thật trang phiếu (khảo sát chỉ đọc, GR03887, POS staging, 27/10, 1095×756)
