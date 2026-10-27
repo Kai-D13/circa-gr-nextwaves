@@ -68,7 +68,8 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 | v0.1.4 | 10A29BC4 | 91e3bd1 (đầu `49bf0a4`) | PM đạt P2.4; **T1 lần 1 lỗi `envFromConfig`** (mọi bản ≤ 0.1.4 dính) |
 | **v0.1.5** | **CDD02C3D** | **456205a** (đầu nhánh `fa66de6`; **đã merge vào `main` `aa42dcc`** 26/10) | Sửa nạp `env.js`; **PM đạt** (`docs/pm/AUDIT-T1-FIX-v0.1.5-STG-20261025.md`); **T1 lần 2 trên phiên thật**: PM đóng gate. `0b9aeb3` mẫu T1, `afd98d5` mẫu T3 + test, `25082b2` mẫu chạy trọn luồng GR03880 + test, `7eadfe3` sửa test chạy đua, `fa66de6` request receive-scan từ HAR (không đổi `src/`) |
 | v0.1.6 | 34B4AE1A | b4017d7 (nhánh `batch/v0.1.6-ui`) | Khung không che nút trang (POS HOÀN THÀNH / Hủy, NW Xác nhận nhận hàng) + thu nhỏ gọn; `docs/dev/FIX-UI-v0.1.6.md`; PM đạt gate source / gói (`AUDIT-UI-v0.1.6-SOURCE-PACK`); **chờ ảnh UI chỉ đọc trên trang thật** |
-| **v0.2.1** | **E34FF7C5** | **cbac491** (nhánh `batch/v0.2-rfid`) | Sửa PM audit v0.2.0: P2.1 hook chỉ gửi lại lượt danh sách mới nhất; P2.2 mỗi lượt quét nút < 2 ms kể cả lúc tải trang (chia lát, làm ấm, một bộ nghe capture); `docs/dev/BATCH-v0.2.1.md`; **chờ PM audit lại + G0 thật; chưa cài** |
+| **v0.2.2** | **AB96179D** | **a1975f1** (nhánh `batch/v0.2-rfid`) | G0 trang thật 27/10 (chỉ đọc, trình duyệt trong app): F1 nút danh sách 24px; F2 khung đặt lại khi cuộn; edge-check dựng theo DOM thật (25 mục); `docs/dev/BATCH-v0.2.2-G0.md`; **chờ PM audit; chưa cài** |
+| v0.2.1 | E34FF7C5 | cbac491 (nhánh `batch/v0.2-rfid`) | Sửa PM audit v0.2.0: P2.1 hook chỉ gửi lại lượt danh sách mới nhất; P2.2 mỗi lượt quét nút < 2 ms kể cả lúc tải trang (chia lát, làm ấm, một bộ nghe capture); `docs/dev/BATCH-v0.2.1.md`; **chờ PM audit lại + G0 thật; chưa cài** |
 | v0.2.0 | 096D97D9 | ef67a7b (đầu nhánh `682c509`, chỉ thêm test) | Nút danh sách GR + chỉ tạo phiên khi bấm + sửa lỗi tồn + hiệu năng; `docs/dev/BATCH-v0.2.0.md`; **chờ PM audit G1 / G2 + G0 trang thật; chưa cài** |
 
 - Bản giải nén để cài: `C:\circa-gr-nextwaves-v0.1.x` (đối chiếu từng file với `src/` của commit).
@@ -109,7 +110,7 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 | `npm test` | **100 test trên `main`** (nhánh `batch/v0.1.6-ui`: 106, thêm `panel.test.js` 6) (`node --test --test-timeout=60000`): env-keys 7, hooks 5, manifest 3, models 15, plan-apply 19, resolve 8, runtime 29, t1-real 2 (response T1 thật), t3-real 5 (lượt nhận thật 25/10), full-real 7 (lượt trọn luồng GR03880 26/10: tra QR, 5 PUT, HOÀN THÀNH, storage — toàn bộ phía POS là dữ liệu thật). Chạy ~10 s. Cặp GR03878 còn dựng lại 10/12 kết quả tra QR POS |
 | `python -I scripts/mutate-v0.1.5.py [từ_ca]` | 60 đột biến (nhánh v0.1.6: `mutate-v0.1.6.py` 65 ca = 60 + 5 ca khung), chép sang thư mục tạm, ~45 phút. **Chạy một mình**: không chạy stress / test khác đè lên. Ca "bị bắt vì hết giờ 240 s" **không phải bằng chứng**, phải tìm nguyên nhân treo |
 | `node scripts/edge-check.js <thư mục cài>` | Edge / Chrome **thật** (hồ sơ tạm, không đăng nhập). Kiểm 2 world trên Nextwaves; đường POS GR03878 với CDP Fetch trả `samples/`; phiên; tab Nextwaves; không token. v0.1.5: 9/9. Nhánh v0.1.6: thêm 3 mục bố cục (trang POS giả có nút HOÀN THÀNH góc dưới phải) → 12 mục; v0.1.6 12/12, v0.1.5 2/12 |
-| **Nhánh `batch/v0.2-rfid` (v0.2.1)** | `npm test` **133** (`v02.test.js` 20 ca: danh sách, R1, R2, S3, S4, hết giờ GET, hook thật → content nạp muộn). `python -I scripts/mutate-v0.2.1.py` **96 ca**. `node scripts/edge-check.js` **17 mục** (trang danh sách giả 20 dòng; mỗi lượt quét < 2 ms cả lúc tải trang lẫn bão 300 thay đổi DOM; CPU quy cho extension qua CDP Profiler; trang bán hàng). `node scripts/mutate-edge-v0.2.1.js`: 3 đột biến DOM nút danh sách trên Edge thật (~5 phút). `node scripts/bench-gr-list.js <gr-list.js> [lần] [dòng]`: đo `gr-list.js` ngoài extension, so bản cũ / mới. `tests/helpers.js` có `loadHook` (hook MAIN world thật trong `node:vm`). Bẫy: R2 phải huỷ **trước** hạn hết giờ GET 2 s của trình duyệt giả, nếu không hết giờ che mất ca thiếu kiểm; số đo ms trên máy đang bận dao động — chạy nhiều lần, ghi cả lần đối chứng bản cũ cùng buổi |
+| **Nhánh `batch/v0.2-rfid` (v0.2.2)** | `npm test` **133** (`v02.test.js` 20 ca: danh sách, R1, R2, S3, S4, hết giờ GET, hook thật → content nạp muộn). `python -I scripts/mutate-v0.2.2.py` **96 ca**. `node scripts/edge-check.js` **25 mục**, trang dựng từ mẫu thật G0 27/10 (`samples/*-20261027.*`): danh sách 20 dòng thật (body ~76 KB); thanh HỦY / HOÀN THÀNH thật; màn quét Nextwaves cấu trúc thật (modal, thân cuộn); khung ở 1366×768 / 1440×900; mỗi lượt quét < 2 ms; trace CDP toàn bộ tác vụ (dòng "ĐO", `CGN_TRACE_OUT=<file>`); không tác vụ ≥ 50 ms. `node scripts/mutate-edge-v0.2.2.js`: 6 đột biến DOM (gr-list + panel) trên Edge thật (~10 phút). `node scripts/bench-gr-list.js <gr-list.js> [lần] [dòng]`: đo `gr-list.js` ngoài extension, so bản cũ / mới. `tests/helpers.js` có `loadHook` (hook MAIN world thật trong `node:vm`). Bẫy: R2 phải huỷ **trước** hạn hết giờ GET 2 s của trình duyệt giả, nếu không hết giờ che mất ca thiếu kiểm; số đo ms trên máy đang bận dao động — chạy nhiều lần, ghi cả lần đối chứng bản cũ cùng buổi |
 | `node scripts/edge-upgrade-check.js <bản cũ> <bản mới>` | Nâng cấp giữ cùng extension ID (P2.4) trên Edge thật |
 | `python -I scripts/pack.py` | `src/` → `dist/*.zip` + SHA-256 (8 ký tự đầu = mã gói); tái lập được từ checkout sạch |
 
@@ -143,12 +144,14 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 
 0. **Hiện hành (27/10):**
    - v0.2.0 (`096D97D9`) PM audit 27/10 (`docs/pm/AUDIT-v0.2.0-SOURCE-PACK-20261027.md`): P2.1 replay danh sách, P2.2 ngưỡng lúc tải trang. Dev sửa → **v0.2.1** (gói `E34FF7C5`, `cbac491`, giải nén `C:\circa-gr-nextwaves-v0.2.1`), báo cáo `docs/dev/BATCH-v0.2.1.md`. **Chưa cài**, chưa nhận / ghi staging bằng v0.2.
-   - **G0 còn thiếu** (chốt tích hợp / merge / cài). Operator 27/10 cho dev lấy **chỉ đọc bằng Claude in Chrome** trên Chrome đã đăng nhập staging, và sẽ cài v0.1.6 trên Chrome đó để kiểm khung:
-     - ảnh khung v0.1.6 trên POS GR03878 và màn quét Nextwaves (checklist PM, không phải chỉ tiêu cứng 5 ảnh);
-     - Copy response danh sách GR (chỉ body; không header / token / cookie);
-     - outerHTML một dòng danh sách và vùng nút HOÀN THÀNH / Hủy (làm sạch trước khi vào `samples/`);
-     - hiệu năng trên DOM danh sách thật (phát lại trong edge-check, có / không extension).
-     Nếu DOM thật khác giả định thì sửa `rowCode` / `slotOf` trong `gr-list.js`, ra gói mới.
+   - PM audit v0.2.1 (`docs/pm/AUDIT-v0.2.1-SOURCE-PACK-20261027.md`): G1 / G2 đạt, G0 còn chờ.
+   - **G0 đã lấy 27/10** (`docs/dev/BATCH-v0.2.2-G0.md`). Claude in Chrome không kết nối, nên lấy trong **trình duyệt của app** (pane Browser).
+     - Operator **tự đăng nhập** POS / Nextwaves staging. Dev chỉ đọc; có thể chạy `gr-list.js` nguyên văn trong trang để thử đặt nút / click / đo (cục bộ, không ghi server).
+     - Pane bị ẩn thì operator không thấy trang đăng nhập: gọi `show_pane` (preview) trước khi nhờ đăng nhập.
+     - Khung nhìn giả lập (`resize_window`) bị xoá khi pane đổi rộng: đặt lại ngay trước khi đo.
+     - Body response không đưa nguyên ra ngoài: rút gọn / đo trong trang.
+   - Từ G0 ra **v0.2.2** (`a1975f1`, gói `AB96179D`): nút danh sách 24px; khung đặt lại khi cuộn. Edge dựng theo DOM thật 25 mục.
+   - Còn: ảnh khung với extension cài thật (pane không nạp được extension); chờ PM quyết bằng chứng tương đương.
    - **Đợt 2** (spec riêng): O1, mã QR POS thêm sau HOÀN THÀNH, xung đột reader trên máy Florita, PRD Florita chỉ đọc → W1-PRD.
 1. **T1 lần 2 (25/10) đã chạy với v0.1.5, dev đánh giá đạt:** `docs/dev/T1-KET-QUA-v0.1.5-20261025.md`.
    - Response thật lưu ở `samples/*-T1-20261025.json`, test `tests/t1-real.test.js` (nhánh `0b9aeb3`).

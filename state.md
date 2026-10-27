@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **27/10/2026 (lần 36, dev giao v0.2.1 sửa PM audit v0.2.0)**. Giai đoạn: **`main` có v0.1.5. v0.2.1 (nút "Nhận hàng bằng RFID" trên danh sách GR, chỉ tạo phiên khi bấm; sửa P2.1 / P2.2) trên nhánh `batch/v0.2-rfid` (`cbac491`, gói `E34FF7C5`), chờ PM audit lại; G0 ảnh / response / DOM thật vẫn là gate chốt tích hợp, merge và cài — operator đã cho dev lấy chỉ đọc bằng Claude in Chrome. Chưa merge v0.1.6 / v0.2, chưa cài v0.2; mọi lượt nhận / ghi cần phép riêng. Production chỉ đọc; O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **27/10/2026 (lần 38, dev giao G0 trang thật + v0.2.2)**. Giai đoạn: **`main` có v0.1.5. v0.2.2 (nút "Nhận hàng bằng RFID" trên danh sách GR, chỉ tạo phiên khi bấm; sửa từ G0: nút 24px, khung đặt lại khi cuộn) trên nhánh `batch/v0.2-rfid` (`a1975f1`, gói `AB96179D`), chờ PM audit G0 + v0.2.2. G0 lấy chỉ đọc trong trình duyệt của app (response / DOM / vị trí nút / hiệu năng thật); ảnh khung với extension cài thật chưa có — dev đề nghị dùng Edge trên cấu trúc thật làm bằng chứng tương đương. Chưa merge v0.1.6 / v0.2, chưa cài v0.2; mọi lượt nhận / ghi cần phép riêng. Production chỉ đọc; O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -184,6 +184,25 @@ Cập nhật: **27/10/2026 (lần 36, dev giao v0.2.1 sửa PM audit v0.2.0)**. 
     - Danh sách 200 dòng: tối đa ≤ 1,4 ms mỗi lát (v0.2.0: 2–9,5 ms một lượt).
   - `npm test` 133/133 × 3; đột biến 96/96; đột biến DOM trên Edge 3/3; Edge 17/17 (src × 5, gói × 2).
   - G0: operator cho phép dev dùng Claude in Chrome **chỉ đọc** trên Chrome đã đăng nhập staging, và sẽ cài v0.1.6 để kiểm khung. Lúc giao, Claude in Chrome chưa kết nối.
+
+- **Lần 38 (27/10, dev giao G0 trang thật + v0.2.2 theo PM audit v0.2.1 — mục 37):** `docs/dev/BATCH-v0.2.2-G0.md`.
+  - **Cách lấy:** Claude in Chrome không kết nối → operator chọn trình duyệt trong app, **tự đăng nhập** POS / Nextwaves staging. Dev chỉ đọc (không token / cookie / header; không nhận / điền / HOÀN THÀNH).
+  - **G0.1 response danh sách thật khớp parser:** 76 KB / 20 dòng, `data.goods_receipts[{id, code, status, purchase_order_id, pos_info.id}]`, `total/page/limit`; không tên nhân viên. Phân tích của hook trên body thật ≤ 0,8 ms.
+  - **G0.2 DOM thật khớp `gr-list.js`:** bảng MUI, mã ở ô đầu, ô cuối `div.flex`.
+    - Chạy `gr-list.js` nguyên văn trong trang (cục bộ): 7/7 nút đúng dòng; click thật vào nút không mở dòng (đối chứng bấm dòng thì mở).
+    - Tìm ra **F1**: nút 28px làm dòng 57 → 61px.
+  - **G0.3:** thanh HỦY / HOÀN THÀNH cố định góc dưới phải (vị trí thật đã ghi). Màn quét Nextwaves là modal, "Xác nhận nhận hàng" ở cuối thân cuộn.
+    - Tìm ra **F2**: khung không đặt lại khi cuộn → che nút tới 1 s sau khi cuộn.
+    - Ảnh khung với extension cài thật **chưa có**: pane không nạp được extension, Chrome không kết nối.
+  - **G0.4 hiệu năng toàn bộ tác vụ (trace CDP, trang dựng từ DOM thật):**
+    - Trạng thái thường mỗi lời gọi < 2 ms (cả lúc máy bận).
+    - Hai lời gọi một lần mỗi lượt tải danh sách (hook parse 76 KB; content xử lý tin danh sách): ≤ 1,5 ms lúc máy yên, 1,9–3,6 ms lúc máy bận. v0.2.1 cùng lúc cao tương đương.
+    - Nạp script một lần mỗi trang 5–30 ms tuỳ tải; không tác vụ nào ≥ 50 ms.
+    - Trên trang thật: `show()` cả `querySelectorAll('tr')` 1,4 ms, riêng bước lấy dòng ≤ 0,2 ms.
+    - Dev đề nghị PM chốt định nghĩa ngân sách; nếu cần < 2 ms cho cả hai lời gọi một lần → v0.2.3 tách task.
+  - **v0.2.2** (`a1975f1`, gói `AB96179D`): F1 nút 24px; F2 khung đặt lại khi cuộn (capture ở document, rAF).
+    - Edge 25 mục dựng theo DOM thật: v0.2.2 25/25; v0.2.1 hỏng 3/25 đúng F1 / F2.
+    - Đột biến DOM 6/6; `npm test` 133/133; đột biến Node 96/96; Edge trên gói giải nén 25/25 × 7. **Chưa cài.**
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -559,7 +578,13 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-37. **Hiện hành (sau PM audit v0.2.1, 27/10):**
+38. **Hiện hành (sau dev giao G0 + v0.2.2, 27/10):**
+    - **PM:** audit G0 và v0.2.2 (`a1975f1`, gói `AB96179D`) theo `docs/dev/BATCH-v0.2.2-G0.md`. Quyết hai điểm dev đề nghị:
+      - Edge trên trang dựng theo cấu trúc / kích thước thật (1366×768, 1440×900) có thay được ảnh khung với extension cài thật không;
+      - định nghĩa ngân sách toàn bộ tác vụ: mỗi lời gọi extension < 2 ms ở trạng thái thường; nạp script một lần mỗi trang < 50 ms.
+    - **Operator:** nếu PM vẫn cần ảnh thật, cài gói v0.2.2 (hoặc v0.1.6) trên Chrome đã đăng nhập staging khi Claude in Chrome kết nối được, để dev chụp chỉ đọc. Lượt nhận / ghi staging vẫn cần phép riêng đúng GR / PO.
+    - Chưa Go merge / cài v0.2.x để vận hành. Production chỉ đọc; Đợt 2 có gate riêng.
+37. (cũ, thay bằng mục 38) **Sau PM audit v0.2.1, 27/10:**
     - PM đã kiểm độc lập `cbac491` / gói `E34FF7C5`: 133/133 test; dựng lại SHA và so 19/19 file source/ZIP/bản giải nén; Edge trên gói 17/17 hai lượt (lượt tải tối đa 1,2 và 1,0 ms); benchmark bảng giả 200 dòng tạo đủ 130 nút. P2.1 đóng ở source/test, P2.2 đóng trên Edge trang giả. Xem `docs/pm/AUDIT-v0.2.1-SOURCE-PACK-20261027.md`.
     - **G1 source/gói và G2 Edge trang giả đạt; G0 trang thật còn chờ.** Dev đã được operator cho phép dùng Claude in Chrome chỉ đọc nhưng bàn giao cho biết Chrome chưa kết nối. Dev lấy response/DOM/UI và đo toàn bộ tác vụ trên trang danh sách staging thật, đối chiếu selector/parser; khác giả định thì sửa, phát hành gói mới và PM audit lại.
     - Chưa Go merge/cài v0.2.1 để vận hành, chưa Go nhận/ghi staging. Mỗi lượt có tác động cần operator cho phép riêng. Production chỉ đọc; Đợt 2 có gate riêng.
