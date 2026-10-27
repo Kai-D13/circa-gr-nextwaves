@@ -57,3 +57,12 @@ Chỉ lấy body, kèm url / status / giờ. Tên nhân viên đã thay. Hash = 
 | `nw-stg-receive-scan-req-PO76458756-20261026.json` | STG | `POST …/inter-tenant-shipments/<id>/receive-scan` + 4 GET ngay sau | Từ "Copy all as HAR (sanitized)" tab màn quét (DevTools, Preserve log). **Lệnh copy này không kèm body response**, nên chỉ có request body (`keep_open`, 11 EPC), status, kích thước response (`responseSize`). 12:10:00.943 receive-scan 200 (2188 B) → tìm theo SO 22 B (= total 0) → `/receiving` → extension GET PO + phiếu gửi. `58a4feac` |
 
 PO staging PO00006745 (của GR03877) chỉ ghi tóm tắt trong `state.md` §2.1, không có file.
+
+### G0 trang thật 27/10/2026 (chỉ đọc, trình duyệt trong app, operator tự đăng nhập; dùng cho `scripts/edge-check.js`)
+
+| File | Môi trường | Nguồn | Ghi chú |
+|---|---|---|---|
+| `pos-stg-gr-list-page1-20261027.json` | STG | `GET …/goods-receipt/search?query=pos_id=…,,with_items=true,with_details=true,is_count_all_status=true&limit=20&page=1&order_by=created_at=desc` (trang danh sách) | Bản gốc 76.205 B, 20 dòng, total 32. **Rút gọn trong trang** (đủ trường parser + số item/detail mỗi dòng) + `goods_receipts_full_first` nguyên vẹn. Không có tên nhân viên. Không có sha bản gốc (không đưa body ra khỏi trang) |
+| `pos-stg-gr-list-row-GR03887-20261027.html` | STG | DOM `/danh-sach-phieu-nhan-hang` | outerHTML một dòng MUI (7 cột; mã ở ô đầu; ô cuối `div.flex` 2 icon) |
+| `pos-stg-gr-action-bar-GR03878-20261027.html` | STG | DOM `/danh-sach-phieu-nhan-hang/<grId>` (Đang nhận) | Thanh cố định góc dưới phải: ô nhập ẩn máy quét + HỦY + HOÀN THÀNH; kèm số đo vị trí ở 1440×900 |
+| `nw-stg-receive-modal-footer-20261027.html` | STG | DOM màn quét Nextwaves `/vi/purchases/receive?po=PO76149046` (đơn "Đã xác nhận", chỉ đọc) | Chân modal (Hủy + "Xác nhận nhận hàng") nằm cuối thân cuộn; kèm cấu trúc modal và số đo trước / sau khi cuộn |
