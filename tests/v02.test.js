@@ -130,6 +130,7 @@ test("bấm trên danh sách → đọc lại GR + PO + SO → MỘT phiên, m�
     assert.equal(model(pos, "GR03878").label, "Mở Nextwaves");
     // v0.2.3 F4: thành công thể hiện bằng nút; không khung nổi, không vùng thông báo trên danh sách.
     assert.equal(pos.view, null, "không khung nổi trên danh sách");
+    assert.equal(pos.views.length, 0, "không lần nào hiện khung nổi trên danh sách (kể cả thoáng qua)");
     assert.equal(pos.grListNotice, null, "thành công không cần thông báo");
     // Nextwaves khớp đơn + lượt nhận 2xx + kết quả nhận (gửi từ trang Nextwaves) → background đưa tab POS về trang phiếu.
     const match = { nwPoId: "55bd221f-65de-4a4d-8a77-40c568a6f176", nwPoNumber: "PO28237814", nwOrderId: "f930f66d-679a-4ed8-9c8e-b48aea91a8be", nwRefId: "SOBD1593858-1056745", shipmentIds: [SHIP], expected: H.receivingPO28237814(), receiptIdsBefore: [], nwWriteLocks: [] };
@@ -177,6 +178,7 @@ test("F3 nút danh sách qua mọi trạng thái trên cùng bảng: nhãn ngắ
       seen[state] = v.title;
     }
     assert.notEqual(seen.received, seen.applied, "cùng nhãn 'Mở phiếu' nhưng tên đầy đủ đổi theo trạng thái phiên");
+    assert.equal(pos.views.length, 0, "suốt các trạng thái: không lần nào hiện khung nổi trên danh sách");
     for (const v of [busy, m()]) assert.ok(v.label.length <= "Nhận hàng bằng RFID".length, `nhãn "${v.label}" không dài hơn nút bắt đầu`);
   } finally {
     b.close();
@@ -387,11 +389,15 @@ test("R2: danh sách đổi ngay trước session:start (đang tìm GR theo SO) 
     assert.equal(b.session(KEY), null);
     assert.equal(nwTabs(b).length, 0);
     await until(() => model(pos, "GR03878") && model(pos, "GR03878").kind === "start" && !model(pos, "GR03878").disabled);
+    const releaseGr = hold(srv.st, "gr"); // giữ lượt bấm lại ở trạng thái "Đang kiểm…"
     pos.grListCtrl.onSelect({ code: "GR03878" }, GR_ID, "GR03878", "start");
+    await until(() => model(pos, "GR03878") && model(pos, "GR03878").kind === "busy");
+    assert.equal(pos.grListNotice, null, "bấm lại → dọn thông báo huỷ cũ ngay khi bắt đầu kiểm (không để thông báo cũ cạnh nút Đang kiểm…)");
+    releaseGr();
     await until(() => b.session(KEY));
     assert.equal(nwTabs(b).length, 1);
-    await until(() => pos.grListNotice === null);
-    assert.equal(pos.grListNotice, null, "bấm lại thành công → thông báo huỷ cũ được dọn");
+    assert.equal(pos.grListNotice, null);
+    assert.equal(pos.views.length, 0, "không lần nào hiện khung nổi trên danh sách");
   } finally {
     b.close();
   }
