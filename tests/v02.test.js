@@ -174,6 +174,61 @@ test("R1 thứ tự lượt: A gửi → B gửi → B về → A về → giữ
   }
 });
 
+// PM audit v0.2.0 P2.1: hook THẬT (helpers.loadHook) → content THẬT nạp muộn, nhận đúng những gì hook gửi lại khi chào.
+const LIST_API = (page) => `${POS}/backend/v1/order/goods-receipt/search?query=pos_id=${STORE},,with_items=true,with_details=true&limit=20&page=${page}`;
+const listBody = (rows) => JSON.stringify({ data: { goods_receipts: rows.map((r) => ({ id: r.id, code: r.code, status: r.status, purchase_order_id: r.poId, pos_info: { id: r.posId } })), total: rows.length, page: 1, limit: 20 } });
+function hookSend(h, page) {
+  const x = h.xhr();
+  x.open("GET", LIST_API(page));
+  for (const [k, v] of Object.entries(POS_AUTH.payload.headers)) x.setRequestHeader(k, v); // như app POS gửi
+  x.send();
+  return x;
+}
+const forward = (h, from, tab) => h.posted.slice(from).forEach((m) => tab.post(m));
+async function lateContent(h) {
+  const srv = makeServer();
+  const b = createBrowser(srv.handle);
+  await b.setConfig({ mode: "STG", url: "" });
+  const pos = b.openTab(LIST_URL); // header cửa hàng cũng đến từ lần chào hook (auth)
+  const n = h.posted.length;
+  h.hello("cgn/pos-content");
+  forward(h, n, pos);
+  return { b, srv, pos };
+}
+
+test("P2.1 hook thật → content nạp muộn: A gửi, B gửi, B về, A về → hiện nút theo B; B đang chờ → không hiện dữ liệu A, B về thì hiện", async () => {
+  const h = H.loadHook(POS, "pos/pos-hook.js", "/danh-sach-phieu-nhan-hang");
+  const a = hookSend(h, 1);
+  const bReq = hookSend(h, 2);
+  bReq.finish(200, listBody([ROW78]));
+  a.finish(200, listBody([row("GR03002", uuid(2))]));
+  const t1 = await lateContent(h);
+  try {
+    await until(() => t1.pos.grListActive && model(t1.pos, "GR03878"));
+    await settle(60);
+    assert.deepEqual([...t1.pos.grListModel.byCode.keys()], ["GR03878"]);
+    assert.equal(t1.srv.st.log.length, 0, "chỉ xem danh sách → 0 request API");
+  } finally {
+    t1.b.close();
+  }
+  const h2 = H.loadHook(POS, "pos/pos-hook.js", "/danh-sach-phieu-nhan-hang");
+  hookSend(h2, 1).finish(200, listBody([row("GR03002", uuid(2))]));
+  const b2 = hookSend(h2, 2); // đang chờ khi content nạp
+  const t2 = await lateContent(h2);
+  try {
+    await until(() => t2.pos.grListActive);
+    await settle(80);
+    assert.equal(model(t2.pos, "GR03002"), null, "không hiện dữ liệu lượt cũ khi lượt mới đang chờ");
+    const n = h2.posted.length;
+    b2.finish(200, listBody([ROW78]));
+    forward(h2, n, t2.pos);
+    await until(() => model(t2.pos, "GR03878"));
+    assert.equal(model(t2.pos, "GR03002"), null);
+  } finally {
+    t2.b.close();
+  }
+});
+
 // R2: thay đổi xảy ra trong lúc đang đọc GR (GET GR treo) → cú bấm bị huỷ NGAY (không chờ GET trả về), không tạo phiên,
 // không mở Nextwaves. Cột 3: tiêu đề khung kỳ vọng ngay khi huỷ (null = trang đã rời danh sách, không còn khung danh sách).
 const R2_CASES = [

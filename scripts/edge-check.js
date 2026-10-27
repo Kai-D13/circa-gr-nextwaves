@@ -15,7 +15,8 @@
 //     bấm → một phiên, mở Nextwaves, tab POS ở lại danh sách.
 //  6. (v0.2) Hiệu năng: bơm 300 thay đổi DOM trên danh sách và trên trang bán hàng giả. CPU quy cho script extension đo bằng
 //     CDP Profiler (lọc chrome-extension://), thời gian từng lượt quét nút đo trong gr-list; 0 request của extension.
-//     Ngân sách: mỗi lượt quét < 2 ms; tổng CPU extension trong cả đợt < 50 ms (⇒ không có task > 50 ms do extension).
+//     Ngân sách: mỗi lượt quét < 2 ms — cùng ngưỡng cho lượt lúc tải trang (kể cả lượt đầu "lạnh") và lượt trong bão DOM;
+//     tổng CPU extension trong cả đợt < 50 ms (⇒ không có task > 50 ms do extension).
 //  7. (v0.2) Trang bán hàng giả: không khung, không nút, không request của extension.
 // In "ĐẠT" / "HỎNG" từng mục; mã thoát 0 nếu tất cả đạt.
 "use strict";
@@ -46,6 +47,7 @@ const check = (name, ok, detail) => {
 };
 
 // ---------- trang POS giả ----------
+const PASS_BUDGET_MS = 2; // ngân sách PM: mỗi lượt quét nút < 2 ms
 const AUTH_JS = `{"authorization":"Bearer kiem-thu","x-client-id":"1","x-store-id":"${STORE}","grpc-timeout":"30S","x-cgn-test-page":"1"}`;
 // Trang phiếu: nút HOÀN THÀNH cố định góc dưới phải (vị trí như POS thật, operator 26/10).
 const GR_HTML =
@@ -369,10 +371,16 @@ const STORM_JS = `(async () => {
     const prof1 = (await lst.page.send("Profiler.stop", {})).result.profile;
     const stats1 = JSON.parse((await evalIn(lst.page, "JSON.stringify(globalThis.__CGN__.grList.stats())", lIso && lIso.id)) || "{}");
     const cpuList = extensionCpuMs(prof1);
+    // Cùng một ngưỡng cho mọi lượt (PM audit v0.2.0 P2.2): lượt lúc tải trang (kể cả lượt đầu "lạnh") và lượt trong bão DOM.
     check(
-      "Hiệu năng · danh sách + 300 thay đổi DOM (~1,5 s liên tục): quét lại ≥ 2 lượt (chờ tối đa 1 s), mỗi lượt < 2 ms, CPU extension < 50 ms, 0 request",
-      stats1.applies >= 2 && stats1.maxMs < 2 && stats0.maxMs < 16 && cpuList.ext < 50 && extReqs().length === 0,
-      `tải trang: ${stats0.applies} lượt, tối đa ${Number(stats0.maxMs).toFixed(3)} ms · bão: ${stats1.applies} lượt (gom từ ${stats1.mutationBatches} đợt thay đổi), tối đa ${Number(stats1.maxMs).toFixed(3)} ms, tổng ${Number(stats1.totalMs).toFixed(2)} ms · CPU extension ${cpuList.ext.toFixed(1)} ms / trang ${cpuList.total.toFixed(1)} ms`
+      `Hiệu năng · lúc tải danh sách (tạo ${EXPECTED_BUTTONS.length} nút): mỗi lượt quét < ${PASS_BUDGET_MS} ms`,
+      stats0.applies >= 1 && stats0.maxMs < PASS_BUDGET_MS,
+      `${stats0.applies} lượt, tối đa ${Number(stats0.maxMs).toFixed(3)} ms, tổng ${Number(stats0.totalMs).toFixed(2)} ms`
+    );
+    check(
+      `Hiệu năng · danh sách + 300 thay đổi DOM (~1,5 s liên tục): quét lại ≥ 2 lượt (chờ tối đa 1 s), mỗi lượt < ${PASS_BUDGET_MS} ms, CPU extension < 50 ms, 0 request`,
+      stats1.applies >= 2 && stats1.maxMs < PASS_BUDGET_MS && cpuList.ext < 50 && extReqs().length === 0,
+      `bão: ${stats1.applies} lượt (gom từ ${stats1.mutationBatches} đợt thay đổi), tối đa ${Number(stats1.maxMs).toFixed(3)} ms, tổng ${Number(stats1.totalMs).toFixed(2)} ms · CPU extension ${cpuList.ext.toFixed(1)} ms / trang ${cpuList.total.toFixed(1)} ms`
     );
 
     // Bấm nút của ta: không mở dòng; tạo một phiên, mở Nextwaves, tab POS ở lại danh sách.

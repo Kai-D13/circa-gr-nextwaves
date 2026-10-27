@@ -77,4 +77,86 @@ const STG_CTX = { soBase: "SOBD1593858", buymedSlug: "buymed-stag", warehouseId:
 
 const STORE_2222 = "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d";
 
-module.exports = { sample, lib, clone, receivingPO28237814, poDetailPO28237814Received, shipmentPO28237814Received, qrByUidPO28237814, STG_CTX, STORE_2222, RECEIPT_ID };
+// ---------- hook MAIN world (pos-hook.js, nw-hook.js) trong node:vm với XMLHttpRequest / fetch giả ----------
+const vm = require("node:vm");
+const assert = require("node:assert/strict");
+const SRC = path.join(__dirname, "..", "src");
+
+class FakeXHR {
+  constructor() {
+    this.listeners = {};
+    this.status = 0;
+    this.responseType = "";
+    this.responseText = "";
+    this.sent = null;
+    this.headers = {};
+  }
+  open(method, url) {
+    this.method = method;
+    this.url = url;
+  }
+  setRequestHeader(k, v) {
+    this.headers[k] = v;
+  }
+  send(body) {
+    this.sent = body === undefined ? null : body;
+  }
+  addEventListener(type, fn) {
+    (this.listeners[type] = this.listeners[type] || []).push(fn);
+  }
+  finish(status, text) {
+    this.status = status;
+    this.responseText = text;
+    for (const fn of this.listeners.loadend || []) fn();
+  }
+}
+
+function loadHook(origin, file, pagePath = "/") {
+  const posted = [];
+  const listeners = [];
+  const popListeners = [];
+  const fetchCalls = [];
+  const loc = { href: origin + pagePath, origin, pathname: pagePath };
+  const win = {
+    console,
+    URL,
+    location: loc,
+    // history giả: pushState đổi URL như SPA (không tải lại trang).
+    history: {
+      pushState: (_s, _t, url) => {
+        const u = new URL(url, loc.href);
+        loc.href = u.href;
+        loc.pathname = u.pathname;
+      },
+      replaceState: (_s, _t, url) => {
+        const u = new URL(url, loc.href);
+        loc.href = u.href;
+        loc.pathname = u.pathname;
+      },
+    },
+    XMLHttpRequest: FakeXHR,
+    postMessage: (data) => posted.push(JSON.parse(JSON.stringify(data))),
+    addEventListener: (type, fn) => (type === "message" ? listeners.push(fn) : type === "popstate" ? popListeners.push(fn) : null),
+    fetch: async (input, init) => {
+      fetchCalls.push({ input, init });
+      const res = win.__nextFetch || { status: 200, text: "{}" };
+      return { status: res.status, clone: () => ({ text: async () => res.text }) };
+    },
+  };
+  win.window = win;
+  vm.createContext(win);
+  const g = vm.runInContext("globalThis", win);
+  // Đúng danh sách file MAIN world trong manifest cho trang này (env + hook).
+  const manifest = JSON.parse(fs.readFileSync(path.join(SRC, "manifest.json"), "utf8"));
+  const entry = manifest.content_scripts.find((c) => c.world === "MAIN" && c.js.includes(file) && c.matches.some((m) => m.startsWith(origin)));
+  assert.ok(entry, `manifest không có mục MAIN cho ${file} trên ${origin}`);
+  for (const f of entry.js) vm.runInContext(fs.readFileSync(path.join(SRC, f), "utf8"), win, { filename: f });
+  const xhr = () => vm.runInContext("new XMLHttpRequest()", win);
+  const fetch = (url, init) => vm.runInContext("fetch", win)(url, init);
+  const hello = (mark) => listeners.forEach((fn) => fn({ source: g, data: { mark, type: "hello" } }));
+  const history = () => vm.runInContext("window.history", win);
+  const popstate = () => popListeners.forEach((fn) => fn({}));
+  return { win, posted, xhr, fetch, hello, fetchCalls, history, popstate, loc };
+}
+
+module.exports = { FakeXHR, loadHook, sample, lib, clone, receivingPO28237814, poDetailPO28237814Received, shipmentPO28237814Received, qrByUidPO28237814, STG_CTX, STORE_2222, RECEIPT_ID };

@@ -23,7 +23,8 @@
   const LIST_MAX_BYTES = 2 * 1024 * 1024;
   const LIST_MAX_ROWS = 200;
   let listSeq = 0; // reqSeq cấp lúc GỬI
-  let lastList = null; // kết quả gần nhất — gửi lại khi content chào
+  // Lượt mới nhất đã GỬI `{req, res}` — gửi lại khi content chào. `res` null = đang chờ; response lượt cũ về muộn không ghi vào đây.
+  let lastList = null;
 
   function post(type, payload) {
     try {
@@ -52,7 +53,10 @@
     try {
       if (e.source !== window || !e.data || e.data.mark !== "cgn/pos-content" || e.data.type !== "hello") return;
       if (lastAuth) post("auth", lastAuth);
-      if (lastList) post("gr-list", lastList);
+      if (lastList) {
+        post("gr-list-request", lastList.req);
+        if (lastList.res) post("gr-list", lastList.res);
+      }
     } catch (_) {
       /* bỏ qua */
     }
@@ -70,7 +74,8 @@
 
   function beginList(call) {
     listSeq += 1;
-    post("gr-list-request", { envId: call.envId, reqSeq: listSeq, queryKey: call.queryKey });
+    lastList = { req: { envId: call.envId, reqSeq: listSeq, queryKey: call.queryKey }, res: null };
+    post("gr-list-request", lastList.req);
     return listSeq;
   }
 
@@ -94,7 +99,7 @@
     } catch (_) {
       msg = Object.assign({ ok: false }, base);
     }
-    lastList = msg;
+    if (lastList && lastList.req.reqSeq === reqSeq) lastList.res = msg;
     post("gr-list", msg);
   }
 

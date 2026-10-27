@@ -1,93 +1,13 @@
 "use strict";
-// Hook MAIN world (pos-hook.js, nw-hook.js) chạy trong node:vm với XMLHttpRequest / fetch giả: chỉ quan sát, báo đúng tin.
+// Hook MAIN world (pos-hook.js, nw-hook.js) chạy trong node:vm với XMLHttpRequest / fetch giả (helpers.loadHook): chỉ quan sát, báo đúng tin.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const vm = require("node:vm");
-const fs = require("node:fs");
-const path = require("node:path");
 const H = require("./helpers.js");
 const { pos } = H.lib();
+const { loadHook } = H;
 
-const SRC = path.join(__dirname, "..", "src");
 const GR_ID = "2de6c0ec-2ea8-4038-8616-659fa3f5820a";
 const SHIP = "34e67fb9-ea76-4606-ab65-4c515934c0e1";
-
-class FakeXHR {
-  constructor() {
-    this.listeners = {};
-    this.status = 0;
-    this.responseType = "";
-    this.responseText = "";
-    this.sent = null;
-    this.headers = {};
-  }
-  open(method, url) {
-    this.method = method;
-    this.url = url;
-  }
-  setRequestHeader(k, v) {
-    this.headers[k] = v;
-  }
-  send(body) {
-    this.sent = body === undefined ? null : body;
-  }
-  addEventListener(type, fn) {
-    (this.listeners[type] = this.listeners[type] || []).push(fn);
-  }
-  finish(status, text) {
-    this.status = status;
-    this.responseText = text;
-    for (const fn of this.listeners.loadend || []) fn();
-  }
-}
-
-function loadHook(origin, file, pagePath = "/") {
-  const posted = [];
-  const listeners = [];
-  const popListeners = [];
-  const fetchCalls = [];
-  const loc = { href: origin + pagePath, origin, pathname: pagePath };
-  const win = {
-    console,
-    URL,
-    location: loc,
-    // history giả: pushState đổi URL như SPA (không tải lại trang).
-    history: {
-      pushState: (_s, _t, url) => {
-        const u = new URL(url, loc.href);
-        loc.href = u.href;
-        loc.pathname = u.pathname;
-      },
-      replaceState: (_s, _t, url) => {
-        const u = new URL(url, loc.href);
-        loc.href = u.href;
-        loc.pathname = u.pathname;
-      },
-    },
-    XMLHttpRequest: FakeXHR,
-    postMessage: (data) => posted.push(JSON.parse(JSON.stringify(data))),
-    addEventListener: (type, fn) => (type === "message" ? listeners.push(fn) : type === "popstate" ? popListeners.push(fn) : null),
-    fetch: async (input, init) => {
-      fetchCalls.push({ input, init });
-      const res = win.__nextFetch || { status: 200, text: "{}" };
-      return { status: res.status, clone: () => ({ text: async () => res.text }) };
-    },
-  };
-  win.window = win;
-  vm.createContext(win);
-  const g = vm.runInContext("globalThis", win);
-  // Đúng danh sách file MAIN world trong manifest cho trang này (env + hook).
-  const manifest = JSON.parse(fs.readFileSync(path.join(SRC, "manifest.json"), "utf8"));
-  const entry = manifest.content_scripts.find((c) => c.world === "MAIN" && c.js.includes(file) && c.matches.some((m) => m.startsWith(origin)));
-  assert.ok(entry, `manifest không có mục MAIN cho ${file} trên ${origin}`);
-  for (const f of entry.js) vm.runInContext(fs.readFileSync(path.join(SRC, f), "utf8"), win, { filename: f });
-  const xhr = () => vm.runInContext("new XMLHttpRequest()", win);
-  const fetch = (url, init) => vm.runInContext("fetch", win)(url, init);
-  const hello = (mark) => listeners.forEach((fn) => fn({ source: g, data: { mark, type: "hello" } }));
-  const history = () => vm.runInContext("window.history", win);
-  const popstate = () => popListeners.forEach((fn) => fn({}));
-  return { win, posted, xhr, fetch, hello, fetchCalls, history, popstate, loc };
-}
 
 const flush = () => new Promise((r) => setImmediate(r));
 
@@ -190,6 +110,33 @@ test("pos-hook v0.2: A gửi → B gửi → B về → A về: response A mang 
   sendList(h).finish(200, "x".repeat(2 * 1024 * 1024 + 1));
   // 500 · không phải JSON · 200 dòng · 201 dòng · > 2 MB
   assert.deepEqual(typed(h, "gr-list").slice(2).map((r) => r.ok), [false, false, true, false, false]);
+});
+
+// PM audit v0.2.0 P2.1: content nạp muộn chỉ được nhận lượt MỚI NHẤT đã gửi — kết quả của nó, hoặc "đang chờ" nếu chưa về.
+test("pos-hook v0.2: chào lại chỉ gửi lượt mới nhất — A/B về ngược thứ tự → request B + kết quả B; B đang chờ → chỉ request B", () => {
+  const h = loadHook(POS_ORIGIN, "pos/pos-hook.js", LIST_PATH);
+  const a = sendList(h);
+  const b = sendList(h, LIST_URL.replace("page=1", "page=2"));
+  b.finish(200, LIST_BODY);
+  a.finish(200, JSON.stringify({ data: { goods_receipts: [], total: 0, page: 1, limit: 20 } }));
+  const listReplay = (from) => h.posted.slice(from).filter((m) => m.type.startsWith("gr-list"));
+  let n = h.posted.length;
+  h.hello("cgn/pos-content");
+  let replay = listReplay(n);
+  assert.deepEqual(replay.map((m) => [m.type, m.payload.reqSeq]), [["gr-list-request", 2], ["gr-list", 2]], "không gửi lại A về muộn");
+  assert.deepEqual(replay[1].payload.rows.map((r) => r.code), ["GR03878"]);
+  assert.equal(replay[0].payload.queryKey, replay[1].payload.queryKey);
+  // Lượt C gửi sau khi B đã về: replay là "đang chờ C", không còn B như dữ liệu hiện hành.
+  const c = sendList(h, LIST_URL.replace("page=1", "page=3"));
+  n = h.posted.length;
+  h.hello("cgn/pos-content");
+  replay = listReplay(n);
+  assert.deepEqual(replay.map((m) => [m.type, m.payload.reqSeq]), [["gr-list-request", 3]]);
+  c.finish(500, "{}");
+  n = h.posted.length;
+  h.hello("cgn/pos-content");
+  replay = listReplay(n);
+  assert.deepEqual(replay.map((m) => [m.type, m.payload.reqSeq, m.payload.ok]), [["gr-list-request", 3, undefined], ["gr-list", 3, false]], "lượt mới nhất lỗi → replay lỗi (content xoá nút)");
 });
 
 test("pos-hook v0.2: không bắt danh sách ngoài trang danh sách / tìm theo SO / API khác; fetch cũng bắt (clone)", async () => {
