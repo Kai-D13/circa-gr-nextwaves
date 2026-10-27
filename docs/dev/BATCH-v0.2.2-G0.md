@@ -132,11 +132,39 @@
 - DIFF đầy đủ: `dist/circa-gr-nextwaves-v0.2.2-vs-cbac491.diff` + `.stat.txt` (ngoài git).
 - Commit `8cae041` (trace CDP) nằm giữa và đã báo ở lượt trước.
 
+## 3b. Sau review tạm của PM (`docs/pm/REVIEW-G0-v0.2.2-PRELIM-20261027.md`)
+
+- **Ngân sách PM giữ nguyên:**
+  - mỗi lượt quét danh sách < 2 ms **tính cả bước lấy dòng**;
+  - không tác vụ extension nào ≥ 50 ms, kể cả nạp script.
+
+  Không đặt < 2 ms cho mọi callback. Hai lời gọi một lần mỗi lượt danh sách (§1 G0.4) thuộc mục "≥ 50 ms", nên dev **không làm v0.2.3 tách task**.
+- **`scripts/edge-check.js` (chỉ script, commit `3218cae`, gói `AB96179D` không đổi):**
+  - đo bước lấy dòng (`querySelectorAll('tr')` + `Array.from`, 50 lần) trong chính world của extension;
+  - mục "mỗi lượt quét" giờ kiểm **lát dài nhất + lấy dòng dài nhất < 2 ms**: chặn trên cho một lượt tính cả bước lấy dòng.
+- **Gói giải nén × 3:**
+  - lúc tải danh sách: 1,0–1,2 + 0,1–0,2 = **1,1–1,3 ms**;
+  - bão DOM: lát ≤ 0,2 ms + lấy dòng;
+  - tác vụ extension dài nhất **5,4–14,2 ms** (nạp `pos-content.js`), < 50 ms;
+  - trang bán hàng: lời gọi ≤ 1,0 ms, CPU ≈ 0, 0 request.
+  - 25/25 cả ba lượt.
+- **G0.3 bằng chứng UI trên Chrome thật với v0.2.2 cài:** làm sau gate cuối của PM, theo điều kiện PM. Xem §4.1.
+
 ## 4. Còn lại / đề nghị PM
 
-1. **Ảnh khung trên trang thật** (POS GR03878 và Nextwaves) với extension cài thật: chưa có.
-   - Đề nghị PM chấp nhận Edge trên cấu trúc thật ở trên làm bằng chứng giao diện tương đương, theo audit v0.2.0 ("bộ ảnh hoặc bằng chứng tương đương").
-   - Nếu PM vẫn cần ảnh: operator cài v0.2.2 (hoặc v0.1.6) trên Chrome đã đăng nhập, khi Claude in Chrome kết nối được, rồi dev chụp chỉ đọc.
+1. **Bằng chứng UI trên Chrome thật với v0.2.2 cài (PM review tạm: bắt buộc trước nghiệm thu G0.3).** Làm **sau gate cuối** của PM.
+   - **Điều kiện PM:**
+     - chọn Staging, không cấp phép điền;
+     - không bấm "Xác nhận nhận hàng" / HOÀN THÀNH, không PUT POS;
+     - được bấm "Nhận hàng bằng RFID" để hiện khung Nextwaves: chỉ tạo phiên trong extension + GET;
+     - trước khi thay bản, kiểm không còn phiên `received` / `applying` / `apply_stopped` dở.
+   - **Cần ghi** (ảnh hoặc quan sát trực tiếp kèm kích thước / trạng thái):
+     - POS GR03878: khung không che HỦY / HOÀN THÀNH;
+     - màn quét Nextwaves: sau khi cuộn, khung không che "Xác nhận nhận hàng";
+     - danh sách: nút đúng dòng / đúng ô, dòng không cao thêm.
+   - **Cách làm:**
+     - Claude in Chrome kết nối được: dev quan sát / chụp chỉ đọc.
+     - Không kết nối được: operator chụp theo checklist này. Pane của app không nạp được extension.
 2. **Ngân sách theo toàn bộ tác vụ:** đề nghị PM chốt định nghĩa (số đo §1 G0.4).
    - "Mỗi lời gọi extension < 2 ms ở trạng thái thường": đạt, kể cả lúc máy bận.
    - "Lời gọi một lần mỗi lượt tải danh sách" (hook parse 76 KB; content xử lý tin danh sách): 1,5 ms lúc máy yên, tới 3,6 ms lúc máy bận. Nếu PM giữ < 2 ms cho cả hai lời gọi này, dev làm hai việc tách task nêu ở G0.4 (v0.2.3).
