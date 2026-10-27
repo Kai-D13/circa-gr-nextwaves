@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **27/10/2026 (lần 34, dev giao v0.2.0 để PM audit)**. Giai đoạn: **`main` có v0.1.5. v0.2.0 (nút "Nhận hàng bằng RFID" trên danh sách GR, chỉ tạo phiên khi bấm) đã code / test / đóng gói trên nhánh `batch/v0.2-rfid` (đầu `ef67a7b`, gói `096D97D9`), chờ PM audit G1 / G2; G0 ảnh / response / DOM thật vẫn là gate chốt tích hợp, merge và cài. Chưa merge v0.1.6 / v0.2, chưa cài v0.2; mọi lượt nhận / ghi cần phép riêng. Production chỉ đọc; O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **27/10/2026 (lần 36, dev giao v0.2.1 sửa PM audit v0.2.0)**. Giai đoạn: **`main` có v0.1.5. v0.2.1 (nút "Nhận hàng bằng RFID" trên danh sách GR, chỉ tạo phiên khi bấm; sửa P2.1 / P2.2) trên nhánh `batch/v0.2-rfid` (`cbac491`, gói `E34FF7C5`), chờ PM audit lại; G0 ảnh / response / DOM thật vẫn là gate chốt tích hợp, merge và cài — operator đã cho dev lấy chỉ đọc bằng Claude in Chrome. Chưa merge v0.1.6 / v0.2, chưa cài v0.2; mọi lượt nhận / ghi cần phép riêng. Production chỉ đọc; O1 và mã QR POS sau HOÀN THÀNH còn mở.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -175,6 +175,15 @@ Cập nhật: **27/10/2026 (lần 34, dev giao v0.2.0 để PM audit)**. Giai đ
     - trang bán hàng: 0,0 ms, 0 request.
     Chưa có baseline trên POS thật.
   - G0 còn thiếu: ảnh UI v0.1.6, Copy response danh sách GR, outerHTML dòng danh sách / vùng nút HOÀN THÀNH. Selector `gr-list.js` dựa trên giả định theo extension Nextwaves.
+
+- **Lần 36 (27/10, dev giao v0.2.1 theo PM audit v0.2.0 — mục 35):** `docs/dev/BATCH-v0.2.1.md`.
+  - Nhánh `batch/v0.2-rfid` `cbac491` (đã push). Gói `E34FF7C5`, giải nén `C:\circa-gr-nextwaves-v0.2.1`, tái lập cùng SHA từ checkout sạch. **Chưa cài.**
+  - P2.1: hook chỉ gửi lại lượt danh sách **mới nhất đã gửi** (kết quả, hoặc đang chờ); response lượt cũ về muộn không ghi vào. Test hook + hook thật → content nạp muộn; cả hai hỏng trên hook cũ.
+  - P2.2: ngưỡng < 2 ms áp cho cả lượt lúc tải trang (mục Edge riêng, 17 mục). `gr-list.js`: một bộ nghe capture ở document, nút clone từ mẫu, chia lát ~1 ms, làm ấm phần chỉ tốn lần đầu trong hai task riêng.
+    - Lượt tải trang tối đa 1,0–1,3 ms (v0.2.0 cùng buổi: 3,7–7,0 ms, hỏng mục mới).
+    - Danh sách 200 dòng: tối đa ≤ 1,4 ms mỗi lát (v0.2.0: 2–9,5 ms một lượt).
+  - `npm test` 133/133 × 3; đột biến 96/96; đột biến DOM trên Edge 3/3; Edge 17/17 (src × 5, gói × 2).
+  - G0: operator cho phép dev dùng Claude in Chrome **chỉ đọc** trên Chrome đã đăng nhập staging, và sẽ cài v0.1.6 để kiểm khung. Lúc giao, Claude in Chrome chưa kết nối.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -550,7 +559,17 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-35. **Hiện hành (sau PM audit v0.2.0, 27/10):**
+36. **Hiện hành (sau dev giao v0.2.1, 27/10):**
+    - **PM:** audit lại P2.1 / P2.2 trên nhánh `batch/v0.2-rfid` `cbac491` và gói `E34FF7C5` theo `docs/dev/BATCH-v0.2.1.md`.
+    - **Dev:** lấy G0 chỉ đọc bằng Claude in Chrome (operator cho phép 27/10):
+      - Copy response danh sách GR (chỉ body);
+      - outerHTML một dòng chờ nhận và vùng HOÀN THÀNH / Hủy;
+      - ảnh khung v0.1.6 trên POS GR03878 và màn quét Nextwaves;
+      - đo hiệu năng trên DOM danh sách thật (phát lại trong edge-check, có / không extension).
+      Đối chiếu với giả định `gr-list.js` / hook; khác thì sửa, ra gói mới.
+    - **Operator:** giữ Chrome đăng nhập POS / Nextwaves staging, kết nối Claude in Chrome, cài v0.1.6 (`C:\circa-gr-nextwaves-v0.1.6`, chọn Staging, không cấp phép điền).
+    - Chưa Go merge / cài v0.2 để vận hành, chưa Go nhận / ghi staging. Production chỉ đọc; Đợt 2 có gate riêng.
+35. (cũ, thay bằng mục 36) **Sau PM audit v0.2.0, 27/10:**
     - PM đã kiểm độc lập `batch/v0.2-rfid` tại `682c509` và gói `096D97D9`: `npm test` 131/131; dựng lại ZIP cùng SHA, 19/19 file khớp source và bản giải nén; Edge trên trang giả 16/16 hai lượt. Xem `docs/pm/AUDIT-v0.2.0-SOURCE-PACK-20261027.md`.
     - **Dev:** sửa P2.1 replay response danh sách cũ khi content nạp muộn; làm rõ/sửa P2.2 phép kiểm lượt quét lúc tải trang (<2 ms theo ngân sách PM, nhưng test hiện cho <16 ms). Runtime sửa phải tăng version/gói/hash; bàn giao diff, test và số đo.
     - **G0 tích hợp trang thật:** dev/PM lấy chỉ đọc trên phiên staging đã đăng nhập: response danh sách GR, outerHTML một dòng và vùng HOÀN THÀNH/Hủy, kiểm khung POS/Nextwaves và hiệu năng thật. Bộ 5 ảnh v0.1.6 là checklist đề xuất; PM chấp nhận bằng chứng UI tương đương vì phần khung và Nextwaves không đổi trong v0.2. Operator hỗ trợ mở phiên hoặc chuyển mục thiếu nếu dev/PM không truy cập được; không bắt operator tự thu đủ bộ trước khi dev làm việc.
