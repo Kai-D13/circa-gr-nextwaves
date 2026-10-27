@@ -1164,3 +1164,79 @@ test("P2: lượt đánh giá cũ về muộn sau khi đổi route (tra QR GR038
     b.close();
   }
 });
+
+for (const [where, path] of [["danh sách phiếu nhận", "/danh-sach-phieu-nhan-hang"], ["trang không liên quan (bán hàng)", "/ban-hang"]]) {
+  test(`P2 (PM audit sơ bộ): lượt đánh giá GR03878 về muộn sau khi SPA sang ${where} → 0 khung (nổi / trong luồng), 0 nút Điền, 0 PUT; danh sách không khung nổi (F4)`, async () => {
+    let releaseQr;
+    const qrHold = new Promise((r) => (releaseQr = r));
+    const { b, srv, pos } = await openToReceived({ server: { qrHold } });
+    try {
+      await grant(b);
+      await until(() => viewTitle(pos) === "Đang tra 12 UID trên POS…");
+      const float0 = pos.floatViews.length;
+      const to = `${POS}${path}`;
+      pos.url = to;
+      pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: to } });
+      await until(() => pos.view === null);
+      releaseQr(); // lượt cũ (GR03878, đã có cấp phép) tra xong, lập kế hoạch, vẽ — trong khi trang đã đổi
+      await until(() => srv.st.log.filter((r) => new URL(r.url).pathname === "/thuocsi-warehouse/qrcode").length >= 12);
+      await settle(200);
+      assert.equal(pos.view, null, "không khung nào trên trang mới");
+      assert.equal(pos.floatViews.length, float0, "không vẽ khung nổi");
+      assert.ok(!pos.views.some((v, i) => i >= pos.views.length - 3 && isFill(v)));
+      assert.equal(srv.st.puts.length, 0);
+      assert.equal(await grantCount(b), 1, "cấp phép còn");
+    } finally {
+      releaseQr();
+      b.close();
+    }
+  });
+}
+
+test("P2 (PM audit sơ bộ): lỗi của phiếu cũ về muộn (GET phiếu A còn chờ, SPA sang phiếu GR03878) → không vẽ lên trang GR03878", async () => {
+  const OTHER = "0f0f0f0f-1111-4222-8333-444455556666";
+  let release;
+  const hold = new Promise((r) => (release = r));
+  const srv = makeServer({ grHolds: { [OTHER]: hold } });
+  const b = createBrowser(srv.handle);
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${OTHER}`);
+    pos.post(POS_AUTH);
+    await until(() => srv.st.log.some((r) => r.url.endsWith(`/goods-receipt/${OTHER}`)));
+    const to = `${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`;
+    pos.url = to;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: to } });
+    await settle(30);
+    release(); // GET phiếu A về 404 → lượt cũ báo "Không đọc được phiếu nhận" — trong khi trang đã là GR03878
+    await until(() => startBtn(pos));
+    assert.ok(!pos.views.some((v) => v && v.title === "Không đọc được phiếu nhận"), "lỗi của phiếu cũ không hiện trên trang phiếu mới");
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("P2 (PM audit sơ bộ): đang điền (PUT treo) mà SPA sang danh sách → tiến trình điền không vẽ khung nổi trên danh sách; vẫn điền đủ", async () => {
+  let release;
+  const hold = new Promise((r) => (release = r));
+  const { b, srv, pos } = await openToReceived({ server: { putHolds: { 1: hold } } });
+  try {
+    await grant(b);
+    (await until(() => fillButton(pos))).onClick();
+    await until(() => srv.st.puts.length === 1);
+    const float0 = pos.floatViews.length;
+    const LIST = `${POS}/danh-sach-phieu-nhan-hang`;
+    pos.url = LIST;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: LIST } });
+    await settle(30);
+    release();
+    await sessionState(b, "applied");
+    await settle(100);
+    assert.equal(pos.floatViews.length, float0, "không khung nổi trên danh sách (F4)");
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    release();
+    b.close();
+  }
+});

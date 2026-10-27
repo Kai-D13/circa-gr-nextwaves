@@ -1,7 +1,7 @@
 // Đột biến phần DOM (pos/gr-list.js, ui/panel.js, chỗ gắn khung trong pos/pos-content.js) — bộ test Node dùng bộ giả grList / panel
 // nên chỉ Edge thật bắt được. Mỗi ca: chép src/ sang thư mục tạm, gỡ đúng MỘT hàng rào, chạy script Edge của ca trên bản đó; script
 // phải thoát khác 0 (có mục HỎNG, hoặc treo quá giờ) = KILLED.
-//   node scripts/mutate-edge-v0.2.4.js          # mọi ca (9 ca v0.2.3 trên edge-check.js + 12 ca P2 trên edge-gr-page.js)
+//   node scripts/mutate-edge-v0.2.4.js          # mọi ca (9 ca v0.2.3 trên edge-check.js + 12 ca P2 + 2 ca PM audit sơ bộ trên edge-gr-page.js)
 //   node scripts/mutate-edge-v0.2.4.js 9        # chỉ ca P2
 "use strict";
 const { spawnSync } = require("node:child_process");
@@ -28,15 +28,18 @@ const MUTS = [
   [GP, "ui/panel.js", "    :host { all: initial; display: block; }\n    .box { position: static;", "    :host { all: initial; display: block; position: fixed; right: 16px; bottom: 16px; width: 460px; z-index: 2147483646; }\n    .box { position: static;", "P2 khung trang phiếu nổi góc dưới phải (che SL nhận như v0.2.3)"],
   [GP, "ui/panel.js", "      a.parentNode.insertBefore(host, a);", "      a.parentNode.appendChild(host);", "P2 khung gắn cuối cột nội dung (không ngay trước #all-receipt)"],
   [GP, "ui/panel.js", "        observer = new MutationObserver(check);", "        observer = { observe() {}, disconnect() {} };", "P2 trang vẽ lại gỡ khung → không gắn lại"],
-  [GP, "ui/panel.js", "    if (placed()) return stopWait();", "    if (false) return stopWait();", "P2 khung đã đúng chỗ vẫn gắn lại (vòng observer)"],
+  [GP, "ui/panel.js", "    if (valid()) return stopWait();", "    if (false) return stopWait();", "P2 khung đã đúng chỗ vẫn gắn lại (vòng observer)"],
   [GP, "ui/panel.js", '      if (places.length > o.maxPlaces) return fail("unstable");', "", "P2 bỏ giới hạn gắn lại (trang tranh giành → vòng vô hạn)"],
   [GP, "ui/panel.js", "      if (minimized && needsAttention(v) && viewSig(v) !== minSig) {", "      if (false) {", "P2 đang thu nhỏ không tự mở lại khi cần thao tác"],
-  [GP, "ui/panel.js", '        if (!placed()) fail("missing");', "", "P2 thiếu chỗ gắn không bao giờ báo lỗi giao diện"],
+  [GP, "ui/panel.js", '        if (!valid()) fail("missing");', "", "P2 thiếu chỗ gắn không bao giờ báo lỗi giao diện"],
   [GP, "ui/panel.js", "subtree: true, characterData: true }", "subtree: true }", "P2 không nghe đổi chữ (mã phiếu trở lại sau khi đã báo thiếu chỗ gắn)"],
   [GP, "ui/panel.js", "        if (wasMissing && failed === null) o.onFound();", "", "P2 có lại chỗ gắn không gỡ khung nổi báo lỗi"],
   [GP, "pos/pos-content.js", '      if (n.hasAttribute("data-cgn-panel")) continue;', "", "P2 kiểm mã phiếu tính cả chữ của chính khung"],
   [GP, "pos/pos-content.js", "    if (!code) return a;", "    return a;", "P2 không kiểm mã phiếu trên thẻ thông tin"],
   [GP, "pos/pos-content.js", '    const a = document.getElementById("all-receipt");', '    const a = document.querySelector("table");', "P2 chỗ gắn = bảng đầu tiên của trang (bảng thông tin phiếu)"],
+  // PM audit sơ bộ v0.2.4 (docs/pm/AUDIT-PRELIM-v0.2.4-P2-20261027.md)
+  [GP, "ui/panel.js", "    const anchoredFor = (c) => !failed && !!view && !!c && code === c && valid();", "    const anchoredFor = (c) => !failed && !!view && !!c && code === c && placed();", "PM P1 bấm Điền ngay sau khi trang đổi mã phiếu (trước observer) vẫn ghi"],
+  [GP, "ui/panel.js", '    JSON.stringify([v.tone || "info", v.title || "", v.lines || [], ', '    JSON.stringify([v.tone || "info", v.title || "", ', "PM P2 thu nhỏ: cảnh báo đổi nội dung không mở lại"],
 ];
 
 const start = Number(process.argv[2] || 0);

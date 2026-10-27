@@ -1,6 +1,7 @@
-"""Đột biến có chủ đích cho các hàng rào của v0.2.4 = 102 ca của v0.2.3 + 12 ca P2 (PM review 27/10 §2: khung trang phiếu trong
+"""Đột biến có chủ đích cho các hàng rào của v0.2.4 = 102 ca của v0.2.3 + 12 ca P2 + 8 ca PM audit sơ bộ (PM review 27/10 §2: khung trang phiếu trong
 luồng trang, view phiếu mang mã phiếu, W1 fail closed khi khung không gắn đúng trang, thiếu chỗ gắn → lỗi giao diện ở khung nổi
-không nút Điền + chẩn đoán nhật ký phiên, /chi-tiet-so chỉ nút mở phiếu, đổi route gỡ khung cũ, bỏ view phiếu cũ về muộn). Phần DOM của khung trong luồng
+không nút Điền + chẩn đoán nhật ký phiên, /chi-tiet-so chỉ nút mở phiếu, đổi route gỡ khung cũ, bỏ view phiếu cũ về muộn; audit sơ bộ 27/10: kiểm lại mã phiếu ngay lúc hỏi, view lượt cũ về muộn không vẽ trên trang
+mới / danh sách, thu nhỏ mở lại khi nội dung cảnh báo đổi — ui/panel.js chạy thật trên tests/fake-dom.js). Phần DOM của khung trong luồng
 (gắn / gắn lại / kiểm mã / chống vòng / tự mở lại / thiếu chỗ gắn) kiểm bằng scripts/mutate-edge-v0.2.4.js trên Edge thật.
 v0.2.3 = 96 ca của v0.2.2 + 6 ca F3 / F4 (PM review G3a 27/10: nhãn ngắn + tên đầy
 đủ theo trạng thái phiên; thông báo danh sách trong luồng trang, không khung nổi). Phần DOM (vị trí thông báo, đồng bộ title /
@@ -18,7 +19,7 @@ Mỗi ca gỡ đúng MỘT hàng rào trong src/, chạy `node --test "tests/*.t
 Chạy trên BẢN SAO trong thư mục tạm — không sửa src/ của repo. Cần Node (node --test) trên PATH.
 
   python -I scripts/mutate-v0.2.4.py            # mọi ca
-  python -I scripts/mutate-v0.2.4.py 102        # chỉ 12 ca P2 (bắt đầu từ ca thứ 103)
+  python -I scripts/mutate-v0.2.4.py 102        # chỉ 20 ca P2 + PM (bắt đầu từ ca thứ 103)
 
 Đột biến trên src/lib/env.js được áp lên cả src/main/env.js (bản sao y hệt) để không bị bắt chỉ vì hai bản lệch nhau.
 """
@@ -165,7 +166,7 @@ muts = [
     ("src/pos/pos-content.js", "    listCtx = null;\n    listNote = null;\n    if (listSessionsTimer)", "    listCtx = null;\n    if (listSessionsTimer)", "F4 rời danh sách không dọn thông báo (quay lại hiện thông báo cũ)"),
     ("src/pos/pos-content.js", "    listNote = null; // đang kiểm: nút của dòng thành \"Đang kiểm…\" (vô hiệu), không có khung / thông báo\n    showListNote();\n", "", "F4 bấm lại không dọn thông báo cũ"),
     # v0.2.4 — PM P2 (docs/pm/REVIEW-A1-RUNBOOK-P2-v0.2.4-20261027.md §2)
-    ("src/pos/pos-content.js", '      if (!page || page.kind !== "gr") {\n        grPanel.hide();', '      if (true) {\n        grPanel.hide();', "P2 trang phiếu dùng khung nổi (như v0.2.3)"),
+    ("src/pos/pos-content.js", '      if (page.kind !== "gr") {\n        grPanel.hide();', '      if (true) {\n        grPanel.hide();', "P2 trang phiếu dùng khung nổi (như v0.2.3)"),
     ("src/pos/pos-content.js", "    if (!onGrPageOf(gr) || !grPanel.anchoredFor(gr.code)) {", "    if (false) {", "P2 bỏ chặn W1 khi khung không gắn đúng trang"),
     ("src/pos/pos-content.js", "    if (!onGrPageOf(gr) || !grPanel.anchoredFor(gr.code)) {", "    if (!onGrPageOf(gr)) {", "P2 chặn W1 chỉ theo URL (bỏ kiểm khung đang gắn)"),
     ("src/pos/pos-content.js", "    if (!onGrPageOf(gr) || !grPanel.anchoredFor(gr.code)) {", "    if (!grPanel.anchoredFor(gr.code)) {", "P2 chặn W1 chỉ theo khung (bỏ kiểm URL)"),
@@ -173,10 +174,19 @@ muts = [
     ("src/pos/pos-content.js", "    uiMissing = reason;\n    if (watched.key) logTo(", "    return;\n    if (watched.key) logTo(", "P2 thiếu chỗ gắn không báo lỗi giao diện"),
     ("src/pos/pos-content.js", '    if (watched.key) logTo(watched.key, { type: "ui_anchor_missing", reason });\n', "", "P2 không ghi chẩn đoán thiếu chỗ gắn vào nhật ký phiên"),
     ("src/pos/pos-content.js", "      if (!uiMissing) floatPanel.hide();", "      floatPanel.hide();", "P2 view mới xoá lỗi giao diện khi chỗ gắn vẫn thiếu"),
-    ("src/pos/pos-content.js", "  const showGr = (gr, view) => panel.show(Object.assign({}, view, { grCode: gr.code }));", "  const showGr = (gr, view) => panel.show(view);", "P2 view của phiếu không mang mã phiếu"),
+    ("src/pos/pos-content.js", "    return panel.show(Object.assign({}, view, { grCode: gr.code }));", "    return panel.show(view);", "P2 view của phiếu không mang mã phiếu"),
     ("src/pos/pos-content.js", "      grPanel.show(view, view.grCode || null);", "      grPanel.show(view, null);", "P2 khung trang phiếu không kiểm mã phiếu"),
     ("src/pos/pos-content.js", "    if (!applying) panel.hide(); // v0.2.4", "    // v0.2.4", "P2 đổi route không gỡ khung phiếu cũ"),
     ("src/pos/pos-content.js", '    if (page && page.kind === "gr" && page.grId !== String(gr.id).toLowerCase()) return;\n', "", "P2 lượt đánh giá cũ về muộn vẽ view phiếu cũ lên trang phiếu khác"),
+    # v0.2.4 — PM audit sơ bộ (docs/pm/AUDIT-PRELIM-v0.2.4-P2-20261027.md); ui/panel.js chạy thật trên tests/fake-dom.js
+    ("src/ui/panel.js", "    const valid = () => placed() && o.find(code) === anchor;", "    const valid = () => placed();", "PM P1 khung đúng chỗ không kiểm lại mã phiếu trên trang"),
+    ("src/ui/panel.js", "    const anchoredFor = (c) => !failed && !!view && !!c && code === c && valid();", "    const anchoredFor = (c) => !failed && !!view && !!c && code === c && placed();", "PM P1 anchoredFor không đọc lại mã phiếu lúc gọi"),
+    ("src/ui/panel.js", "      if (valid()) return stopWait();", "      if (placed()) return stopWait();", "PM P1 observer không gỡ khung khi trang đổi mã phiếu"),
+    ("src/ui/panel.js", '    JSON.stringify([v.tone || "info", v.title || "", v.lines || [], ', '    JSON.stringify([v.tone || "info", v.title || "", ', "PM P2 thu nhỏ: cảnh báo đổi dòng chữ không mở lại"),
+    ("src/ui/panel.js", "v.table ? [v.table.head || [], v.table.rows || []] : null, ", "", "PM P2 thu nhỏ: bảng đổi không mở lại"),
+    ("src/pos/pos-content.js", "      if (evalHref !== null && location.href !== evalHref) return;\n", "", "PM P2 kết quả lượt đánh giá cũ về muộn vẽ trên trang mới"),
+    ("src/pos/pos-content.js", '      if (!page || page.kind === "gr_list") return;', "      if (!page) return;", "PM P2 vẽ khung nổi trên danh sách (F4)"),
+    ("src/pos/pos-content.js", "    evalHref = location.href;\n", "", "PM P2 không ghi URL của lượt đánh giá"),
 ]
 
 

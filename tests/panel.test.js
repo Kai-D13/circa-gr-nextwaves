@@ -73,10 +73,13 @@ test("needsAttention: cảnh báo / lỗi / có nút hành động chính → c�
   assert.equal(needsAttention({ tone: "busy" }), false);
 });
 
-test("viewSig: đổi tone / tiêu đề / nhãn nút → khác; đổi dòng chữ / bảng → giống (không mở lại vì số liệu nhỏ đổi)", () => {
+test("viewSig (PM audit sơ bộ P2): đổi tone / tiêu đề / dòng chữ / bảng / nhãn nút → khác; cùng nội dung (object mới, hàm onClick mới) → giống", () => {
   const { viewSig } = require("../src/ui/panel.js");
-  const v = { tone: "info", title: "Chỉ xem kế hoạch", lines: ["a"], table: { rows: [["1"]] }, buttons: [{ label: "Huỷ phiên", secondary: true }] };
-  assert.equal(viewSig(v), viewSig(Object.assign({}, v, { lines: ["b"], table: { rows: [["2"]] } })));
+  const v = { tone: "info", title: "Chỉ xem kế hoạch", lines: ["a"], table: { head: ["Lô"], rows: [["1"]] }, buttons: [{ label: "Huỷ phiên", secondary: true, onClick: () => 1 }] };
+  assert.equal(viewSig(v), viewSig(JSON.parse(JSON.stringify(v))), "vẽ lại cùng nội dung");
+  assert.notEqual(viewSig(v), viewSig(Object.assign({}, v, { lines: ["b"] })));
+  assert.notEqual(viewSig(v), viewSig(Object.assign({}, v, { table: { head: ["Lô"], rows: [["2"]] } })));
+  assert.notEqual(viewSig(v), viewSig(Object.assign({}, v, { table: null })));
   assert.notEqual(viewSig(v), viewSig(Object.assign({}, v, { tone: "warn" })));
   assert.notEqual(viewSig(v), viewSig(Object.assign({}, v, { title: "Đã có cấp phép điền GR03878 (1 lần)" })));
   assert.notEqual(viewSig(v), viewSig(Object.assign({}, v, { buttons: [{ label: "Điền" }, { label: "Huỷ phiên", secondary: true }] })));

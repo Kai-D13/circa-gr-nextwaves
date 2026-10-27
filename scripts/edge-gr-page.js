@@ -11,11 +11,13 @@
 //     phiếu, đã điền) ở 1095×756, 1366×768, 1440×900: đúng MỘT khung, ngay trước #all-receipt, position static (không nổi / không
 //     dính), nằm dưới thẻ thông tin; mọi điều khiển của vùng sản phẩm (ô tìm, −, ô số, +, 2 icon, "+ Thêm lot-date", …), HỦY,
 //     HOÀN THÀNH và mọi nút trong khung: cuộn tới giữa khung nhìn rồi điểm giữa trúng chính nó.
-//  2. Thu nhỏ tay → dải tiêu đề; có cấp phép (cần thao tác) → tự mở lại.
+//  2. Thu nhỏ tay → dải tiêu đề; có cấp phép (cần thao tác) → tự mở lại; đang thu nhỏ mà cảnh báo đổi nội dung (lý do dừng khác,
+//     cùng tiêu đề + nút) → tự mở lại (PM audit sơ bộ P2).
 //  3. Vẽ lại: lọc (gỡ / thêm dòng), thay cả thẻ sản phẩm (khung bị gỡ theo), thay cả cột nội dung; đổi route SPA sang phiếu khác rồi
 //     quay lại → luôn ≤ 1 khung, đúng chỗ, không nút Điền trên phiếu khác; nghỉ 2 s không gắn lại lần nào (không vòng observer).
-//     Thẻ thông tin đổi mã (không đổi route) + thẻ sản phẩm vẽ lại → khung gỡ, mã đúng trở lại → gắn lại. Trang liên tục gỡ khung
-//     → bỏ gắn (không vòng vô hạn), khung nổi báo lỗi, không nút Điền; hết tranh giành → "Kiểm tra lại" → khung trong luồng.
+//     PM audit sơ bộ P1: chỉ đổi CHỮ mã phiếu trên thẻ thông tin / breadcrumb (giữ #all-receipt, không đổi route) và bấm Điền trong
+//     CÙNG tác vụ (trước observer) → 0 PUT, cấp phép còn; observer gỡ khung; quá 10 s → khung nổi báo lỗi; mã đúng trở lại → gắn lại.
+//     Trang liên tục gỡ khung → bỏ gắn (không vòng vô hạn), khung nổi báo lỗi, không nút Điền; hết tranh giành → "Kiểm tra lại".
 //  4. W1 bằng BÀN PHÍM: focus nút "Điền" + Enter → 5 PUT đúng kế hoạch #E33C777A của lượt thật → tải lại → "đã điền 11 UID".
 //  5. Trace CDP từ lúc mở trang: không tác vụ nào của extension ≥ 50 ms.
 //  6. Trang không có #all-receipt → sau 10 s: khung nổi báo lỗi giao diện, không nút Điền, 0 PUT, cấp phép còn.
@@ -375,6 +377,15 @@ function extensionTasks(events) {
     const d1 = await waitText(/Lần điền trước dừng: POS từ chối ghi \(HTTP 500\)/);
     check("apply_stopped + cấp phép: cảnh báo lần trước dừng + nút Điền", !!d1 && /Điền vào phiếu/.test(d1), (d1 || "").slice(0, 160));
     await layoutAt("lần trước dừng");
+    // PM audit sơ bộ P2: đang thu nhỏ, cảnh báo đổi nội dung (lý do dừng khác) mà tiêu đề + nút giữ nguyên → tự mở lại.
+    await clickPanelButton(pg, "–");
+    await sleep(300);
+    const gMin2 = await geo();
+    await setSession({ state: "apply_stopped", applyError: { reason: "gr_changed", status: null, detailId: null, hash: PLAN_HASH } });
+    const d2 = await waitText(/Lần điền trước dừng: Phiếu vừa bị thay đổi/);
+    await sleep(200);
+    const gExp2 = await geo();
+    check("đang thu nhỏ, cảnh báo đổi nội dung (lý do dừng khác), tiêu đề + nút giữ nguyên → khung tự mở lại", gMin2.hostH > 0 && gMin2.hostH <= 48 && !!d2 && gExp2.hostH > 120, `thu nhỏ ${gMin2.hostH}px → ${gExp2.hostH}px`);
 
     await setSession({ state: "applying", lease: { token: "tab-khac", expiresAt: now() + 10 * 60 * 1000 } });
     const e1 = await waitText(/Đang điền phiếu ở tab khác/);
@@ -424,13 +435,24 @@ function extensionTasks(events) {
     gm = await geo();
     check("quay lại GR03880: một khung đúng chỗ, nút Điền", !!back && gm.hosts === 1 && gm.beforeAnchor, JSON.stringify(gm));
 
-    // Trang hiển thị phiếu khác mà không đổi route (thẻ thông tin / breadcrumb đổi mã) + thẻ sản phẩm vẽ lại, khung vẫn nằm đó:
-    // khung không được gắn cạnh bảng của phiếu khác (chữ của chính khung có mã GR03880 không được tính); mã đúng trở lại → gắn lại.
-    const swapCode = (from, to) => `(() => { for (const n of document.querySelectorAll("#__next *")) for (const c of n.childNodes) if (c.nodeType === 3 && c.nodeValue.includes(${JSON.stringify(from)})) c.nodeValue = c.nodeValue.replaceAll(${JSON.stringify(from)}, ${JSON.stringify(to)}); return true; })()`;
-    await evalIn(pg, swapCode(GR_CODE, "GR09999").replace("return true;", 'const a = document.getElementById("all-receipt"); a.replaceWith(a.cloneNode(true)); return true;'), ctxId());
-    await sleep(700);
+    // PM audit sơ bộ P1: React đổi mã trên thẻ thông tin / breadcrumb sang phiếu khác, GIỮ NGUYÊN node #all-receipt, không đổi route,
+    // và nút Điền bị bấm NGAY trong cùng tác vụ — trước khi MutationObserver kịp chạy → không giành quyền, không tiêu cấp phép, 0 PUT.
+    // Sau đó observer gỡ khung (chữ của chính khung có mã GR03880 không được tính).
+    const swapStmt = (from, to) => `for (const n of document.querySelectorAll("#__next *")) for (const c of n.childNodes) if (c.nodeType === 3 && c.nodeValue.includes(${JSON.stringify(from)})) c.nodeValue = c.nodeValue.replaceAll(${JSON.stringify(from)}, ${JSON.stringify(to)});`;
+    const swapCode = (from, to) => `(() => { ${swapStmt(from, to)} return true; })()`;
+    const putsP1 = st.puts.length;
+    const n1 = await panelNodes(pg);
+    const fill1 = n1 && all(n1.sr, (x) => x.nodeName === "BUTTON" && /^Điền vào phiếu/.test(textOf(x)))[0];
+    if (fill1) {
+      const o1 = await pg.send("DOM.resolveNode", { backendNodeId: fill1.backendNodeId });
+      await pg.send("Runtime.callFunctionOn", { objectId: o1.result.object.objectId, functionDeclaration: `function () { ${swapStmt(GR_CODE, "GR09999")} this.click(); return true; }`, returnByValue: true });
+    }
+    await sleep(800);
+    const sP1 = JSON.parse(await evalIn(sw, `chrome.storage.local.get("sessions").then((x) => JSON.stringify(x.sessions[${JSON.stringify(KEY)}]))`));
+    const grP1 = (await grants()).length;
+    check("thẻ thông tin đổi mã (giữ #all-receipt, không đổi route) + bấm Điền cùng tác vụ, trước observer → 0 PUT, cấp phép còn, phiên vẫn received", !!fill1 && st.puts.length === putsP1 && grP1 === 1 && sP1.state === "received", `PUT ${st.puts.length - putsP1} · cấp phép ${grP1} · phiên ${sP1.state}`);
     gm = await geo();
-    check("thẻ thông tin đổi sang phiếu khác (không đổi route) + thẻ sản phẩm vẽ lại → khung gỡ, không gắn cạnh bảng phiếu khác", gm.hosts === 0, JSON.stringify(gm));
+    check("… observer chạy → khung gỡ, không nằm cạnh bảng của phiếu khác", gm.hosts === 0, JSON.stringify(gm));
     await sleep(10500);
     const missText = await panelText(pg);
     gm = await geo();

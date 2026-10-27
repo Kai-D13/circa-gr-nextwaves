@@ -259,8 +259,10 @@
     .min .bd, .min .ft { display: none; }
   `;
 
-  // Nhận dạng view để quyết định tự mở lại khi đang thu nhỏ (tone + tiêu đề + nhãn nút).
-  const viewSig = (v) => JSON.stringify([v.tone || "info", v.title || "", (v.buttons || []).map((b) => b.label)]);
+  // Nhận dạng view để quyết định tự mở lại khi đang thu nhỏ: tone + tiêu đề + nội dung (dòng chữ, bảng) + nhãn nút (PM audit sơ bộ
+  // v0.2.4: cảnh báo đổi nội dung mà giữ tiêu đề cũng phải mở lại). Vẽ lại cùng nội dung → cùng nhận dạng → giữ thu nhỏ.
+  const viewSig = (v) =>
+    JSON.stringify([v.tone || "info", v.title || "", v.lines || [], v.table ? [v.table.head || [], v.table.rows || []] : null, (v.buttons || []).map((b) => b.label)]);
   // View cần người dùng chú ý: cảnh báo / lỗi, hoặc có nút hành động chính (không phụ, không tắt).
   const needsAttention = (v) => v.tone === "warn" || v.tone === "err" || (v.buttons || []).some((b) => !b.secondary && !b.disabled);
 
@@ -304,6 +306,9 @@
     }
 
     const placed = () => !!host && host.isConnected && !!anchor && anchor.isConnected && host.nextElementSibling === anchor;
+    // Đúng chỗ VÀ trang vẫn là của đúng phiếu: find(code) đọc lại DOM ngay lúc gọi (PM audit sơ bộ P1 — React đổi mã trên thẻ
+    // thông tin mà giữ nguyên #all-receipt).
+    const valid = () => placed() && o.find(code) === anchor;
 
     function stopWait() {
       if (waitTimer) clearTimeout(waitTimer);
@@ -330,7 +335,7 @@
       if (waitTimer || failed) return;
       waitTimer = setTimeout(() => {
         waitTimer = null;
-        if (!placed()) fail("missing");
+        if (!valid()) fail("missing");
       }, o.waitMs);
       pollTimer = setInterval(check, o.pollMs);
     }
@@ -346,10 +351,10 @@
       render();
     }
 
-    // Gọi từ MutationObserver / kiểm định kỳ / show: khung đúng chỗ thì không làm gì.
+    // Gọi từ MutationObserver / kiểm định kỳ / show: khung đúng chỗ, đúng phiếu thì không làm gì.
     function check() {
       if (!view || failed === "unstable") return;
-      if (placed()) return stopWait();
+      if (valid()) return stopWait();
       const a = o.find(code);
       if (a && a.parentNode) {
         stopWait();
@@ -382,7 +387,7 @@
         // characterData: React đổi chữ (vd. mã phiếu trên thẻ thông tin) bằng sửa nút chữ, không thêm / gỡ nút.
         observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
       }
-      if (placed()) render();
+      if (valid()) render();
       else check();
     }
 
@@ -396,8 +401,9 @@
       minSig = null;
     }
 
-    // Khung đang gắn đúng chỗ, cho đúng phiếu `c` (nút ghi phải nằm trong khung này mới được chạy).
-    const anchoredFor = (c) => !failed && !!view && code === (c || null) && placed();
+    // Khung đang gắn đúng chỗ, cho đúng phiếu `c`, và trang LÚC NÀY vẫn hiện phiếu đó (nút ghi phải nằm trong khung này mới được
+    // chạy; kiểm cả khi observer chưa kịp chạy sau một thay đổi của trang).
+    const anchoredFor = (c) => !failed && !!view && !!c && code === c && valid();
 
     return { show, hide, anchoredFor };
   }

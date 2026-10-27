@@ -217,11 +217,18 @@
     refresh();
   }
 
-  // Một chỗ vẽ: trang phiếu → khung trong luồng (view mang grCode thì chỉ gắn cạnh bảng của đúng phiếu đó); trang khác → khung nổi.
+  // URL lúc bắt đầu lượt đánh giá (evaluate) gần nhất. View đến khi trang đã khác URL đó = kết quả của lượt cũ về muộn sau khi đổi
+  // route (SPA) → bỏ (PM audit sơ bộ v0.2.4 P2).
+  let evalHref = null;
+
+  // Một chỗ vẽ: trang phiếu → khung trong luồng (view mang grCode thì chỉ gắn cạnh bảng của đúng phiếu đó); /chi-tiet-so → khung
+  // nổi. Danh sách dùng vùng thông báo của chính nó (F4), trang không liên quan không có khung → không vẽ gì.
   const panel = {
     show(view) {
+      if (evalHref !== null && location.href !== evalHref) return;
       const page = pageNow();
-      if (!page || page.kind !== "gr") {
+      if (!page || page.kind === "gr_list") return;
+      if (page.kind !== "gr") {
         grPanel.hide();
         return floatPanel.show(view);
       }
@@ -380,6 +387,7 @@
   }
 
   async function evaluate() {
+    evalHref = location.href;
     if (applying || reloading) return;
     const env = E.envFromConfig(config);
     const page = env ? E.classifyPosPage(location.href, env) : null;
