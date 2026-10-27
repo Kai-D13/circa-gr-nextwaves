@@ -17,6 +17,9 @@
 //     CDP Profiler (lọc chrome-extension://), thời gian từng lượt quét nút đo trong gr-list; 0 request của extension.
 //     Ngân sách: mỗi lượt quét < 2 ms — cùng ngưỡng cho lượt lúc tải trang (kể cả lượt đầu "lạnh") và lượt trong bão DOM;
 //     tổng CPU extension trong cả đợt < 50 ms (⇒ không có task > 50 ms do extension).
+//     Trace CDP (devtools.timeline) từ lúc mở trang danh sách / bán hàng: in TOÀN BỘ tác vụ của extension (dòng "ĐO": mỗi lời gọi
+//     cấp cao nhất vào script extension + mỗi lần nạp script, có tên file / hàm / dòng); kiểm không tác vụ nào ≥ 50 ms.
+//     CGN_TRACE_OUT=<file> ghi trace trang danh sách ra file để phân tích thêm.
 //  7. (v0.2) Trang bán hàng giả: không khung, không nút, không request của extension.
 // In "ĐẠT" / "HỎNG" từng mục; mã thoát 0 nếu tất cả đạt.
 "use strict";
@@ -132,11 +135,16 @@ async function serviceWorker() {
 }
 
 // Mở trang, theo dõi execution context; fetchHandler (tuỳ chọn) trả response cho URL khớp mẫu.
-async function openPage(url, fetchPattern, fetchHandler) {
+// opts.trace: ghi trace CDP (devtools.timeline) từ TRƯỚC khi điều hướng; stopTrace() trả mọi sự kiện.
+async function openPage(url, fetchPattern, fetchHandler, opts = {}) {
   const tgt = await newPage();
   const ctxs = [];
+  const traceEvents = [];
+  let traceDone = null;
   let page = null;
   page = await cdp(tgt.webSocketDebuggerUrl, async (m) => {
+    if (m.method === "Tracing.dataCollected") for (const e of m.params.value) traceEvents.push(e);
+    if (m.method === "Tracing.tracingComplete" && traceDone) traceDone();
     if (m.method === "Runtime.executionContextCreated") ctxs.push(m.params.context);
     if (m.method === "Runtime.executionContextDestroyed") {
       const i = ctxs.findIndex((c) => c.id === m.params.executionContextId);
@@ -151,8 +159,15 @@ async function openPage(url, fetchPattern, fetchHandler) {
   await page.send("Runtime.enable", {});
   if (fetchPattern) await page.send("Fetch.enable", { patterns: [{ urlPattern: fetchPattern }] });
   await page.send("Page.enable", {});
+  if (opts.trace) await page.send("Tracing.start", { categories: "devtools.timeline,disabled-by-default-devtools.timeline,v8.execute", transferMode: "ReportEvents" });
   await page.send("Page.navigate", { url });
-  return { page, ctxs, targetId: tgt.id };
+  const stopTrace = async () => {
+    const done = new Promise((r) => (traceDone = r));
+    await page.send("Tracing.end", {});
+    await done;
+    return traceEvents;
+  };
+  return { page, ctxs, targetId: tgt.id, stopTrace };
 }
 const isolatedCtx = (ctxs) => ctxs.filter((c) => c.auxData && c.auxData.type === "isolated" && /Circa GR/.test(c.name)).pop();
 const mainCtx = (ctxs) => ctxs.filter((c) => c.auxData && c.auxData.isDefault).pop();
@@ -227,6 +242,28 @@ function extensionCpuMs(profile) {
   }
   return { ext, total };
 }
+
+// TOÀN BỘ tác vụ của extension từ trace CDP (devtools.timeline), không phụ thuộc số đo tự báo của gr-list (PM audit v0.2.1 G0.4):
+// mỗi lời gọi JS cấp cao nhất từ trình duyệt vào script extension (FunctionCall: bộ nghe sự kiện / message, timer, MutationObserver)
+// và mỗi lần nạp script (EvaluateScript), kể cả việc nằm ngoài lát quét như querySelectorAll('tr').
+function extensionTasks(events) {
+  const dataOf = (e) => (e.args && e.args.data) || {};
+  return events
+    .filter((e) => e.ph === "X" && typeof e.dur === "number" && (e.name === "FunctionCall" || e.name === "EvaluateScript") && String(dataOf(e).url || "").startsWith("chrome-extension://"))
+    .map((e) => ({ load: e.name === "EvaluateScript", file: String(dataOf(e).url).replace(/^chrome-extension:\/\/[^/]+\//, ""), fn: dataOf(e).functionName || "", line: dataOf(e).lineNumber, ms: e.dur / 1000 }));
+}
+function taskSummary(tasks) {
+  const calls = tasks.filter((t) => !t.load).sort((a, b) => b.ms - a.ms);
+  const loads = tasks.filter((t) => t.load).sort((a, b) => b.ms - a.ms);
+  const fmt = (t) => `${t.ms.toFixed(2)} ms ${t.file}${t.fn ? ":" + t.fn : ""}${t.line !== undefined ? " L" + (t.line + 1) : ""}`;
+  return {
+    callMax: calls.length ? calls[0].ms : 0,
+    loadMax: loads.length ? loads[0].ms : 0,
+    all: tasks.length ? Math.max(...tasks.map((t) => t.ms)) : 0,
+    text: `gọi ${calls.length} lần, dài nhất ${calls.slice(0, 3).map(fmt).join("; ") || "—"} · nạp script ${loads.length} file, tổng ${loads.reduce((s, t) => s + t.ms, 0).toFixed(1)} ms, dài nhất ${loads[0] ? fmt(loads[0]) : "—"}`,
+  };
+}
+const info = (name, detail) => console.log(`ĐO    ${name}  — ${detail}`);
 
 // 300 thay đổi DOM trên bảng (đổi chữ, thêm / gỡ phần tử) theo 30 lượt, mỗi lượt cách nhau 50 ms (~1,5 s liên tục).
 const STORM_JS = `(async () => {
@@ -349,7 +386,7 @@ const STORM_JS = `(async () => {
     for (const id of await nwTabIds()) await closeTarget(id);
     await sleep(500);
     reqs.length = 0;
-    const lst = await openPage(`${POS}/danh-sach-phieu-nhan-hang`, `${POS}/*`, handler);
+    const lst = await openPage(`${POS}/danh-sach-phieu-nhan-hang`, `${POS}/*`, handler, { trace: true });
     await sleep(4000);
     const lMain = mainCtx(lst.ctxs);
     const lIso = isolatedCtx(lst.ctxs);
@@ -371,6 +408,11 @@ const STORM_JS = `(async () => {
     const prof1 = (await lst.page.send("Profiler.stop", {})).result.profile;
     const stats1 = JSON.parse((await evalIn(lst.page, "JSON.stringify(globalThis.__CGN__.grList.stats())", lIso && lIso.id)) || "{}");
     const cpuList = extensionCpuMs(prof1);
+    const listTrace = await lst.stopTrace();
+    if (process.env.CGN_TRACE_OUT) fs.writeFileSync(process.env.CGN_TRACE_OUT, JSON.stringify(listTrace));
+    const listTasks = taskSummary(extensionTasks(listTrace));
+    info("Toàn bộ tác vụ extension · danh sách từ lúc mở trang tới hết bão DOM (trace CDP)", listTasks.text);
+    check("Hiệu năng · không tác vụ extension nào ≥ 50 ms trên danh sách (long task)", listTasks.all < 50, `dài nhất ${listTasks.all.toFixed(2)} ms`);
     // Cùng một ngưỡng cho mọi lượt (PM audit v0.2.0 P2.2): lượt lúc tải trang (kể cả lượt đầu "lạnh") và lượt trong bão DOM.
     check(
       `Hiệu năng · lúc tải danh sách (tạo ${EXPECTED_BUTTONS.length} nút): mỗi lượt quét < ${PASS_BUDGET_MS} ms`,
@@ -401,7 +443,7 @@ const STORM_JS = `(async () => {
 
     // 7) Trang bán hàng giả: extension không làm gì; bão DOM để so CPU.
     reqs.length = 0;
-    const sale = await openPage(`${POS}/ban-hang`, `${POS}/*`, handler);
+    const sale = await openPage(`${POS}/ban-hang`, `${POS}/*`, handler, { trace: true });
     await sleep(3000);
     const sMain = mainCtx(sale.ctxs);
     await sale.page.send("Profiler.enable", {});
@@ -411,6 +453,8 @@ const STORM_JS = `(async () => {
     await sleep(800);
     const cpuSale = extensionCpuMs((await sale.page.send("Profiler.stop", {})).result.profile);
     const ours = await evalIn(sale.page, 'document.querySelectorAll("button.cgn-rfid-btn").length', sMain && sMain.id);
+    const saleTasks = taskSummary(extensionTasks(await sale.stopTrace()));
+    info("Toàn bộ tác vụ extension · trang bán hàng từ lúc mở trang tới hết bão DOM (trace CDP)", saleTasks.text);
     check(
       "Trang bán hàng · không khung, không nút, 0 request của extension; CPU extension trong bão DOM ≈ 0",
       !(await panelShadow(sale.page)) && ours === 0 && extReqs().length === 0 && cpuSale.ext < 5,
