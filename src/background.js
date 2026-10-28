@@ -165,6 +165,10 @@ async function armAuto(msg, sender) {
   if (!isCurrent(s)) throw new Error("Phiên của bản cũ — mở lại phiếu trên POS");
   if (!env || !env.writeEnabled) throw new Error(`${env ? env.label : s.envId}: chỉ đọc, không cho phép tự động`);
   if (s.state !== "nw_ready") throw new Error("Chỉ cho phép khi phiên đã khớp đơn Nextwaves và CHƯA xác nhận nhận hàng");
+  // Audit v0.3.0 F1: lượt "Xác nhận nhận hàng" 2xx đã được ghi nhận (dù đọc lại kết quả lỗi, phiên còn nw_ready) → quá muộn.
+  if (s.scanOk) throw new Error("Nextwaves đã ghi nhận lượt xác nhận nhận hàng — không cho phép tự động cho lượt này");
+  // Audit v0.3.0 F2: PO đã có biên nhận từ trước → tập EPC lúc nhận có thể gồm cả biên nhận cũ; tự động chỉ cho PO chưa nhận gì.
+  if ((s.receiptIdsBefore || []).length) throw new Error("PO Nextwaves đã có biên nhận từ trước — không cho phép tự động");
   if (!E.storeAllowed(env, s.posId)) throw new Error("Cửa hàng không thuộc danh sách chạy thử");
   const blockers = writeBlockers(s);
   if (blockers.length) throw new Error(`Phiên đang bị khoá điền: ${blockers.join(", ")}`);
@@ -217,7 +221,7 @@ async function revokeAuto(key, sender) {
   delete all[key];
   await chrome.storage.local.set({ autoGrants: all });
   if (had) await updateSession(key, null, { type: "auto_revoked" });
-  return true;
+  return had; // audit F6: false = không còn quyền (lượt tự động đã bắt đầu / đã dừng / hết hạn)
 }
 
 // Tab POS hỏi: có được TỰ chạy phiên này không (chưa tiêu quyền — claim tự động mới tiêu).
@@ -376,6 +380,7 @@ async function startSession(msg, sender) {
   const cur = all[key];
   if (cur && ACTIVE.has(cur.state) && isCurrent(cur)) return cur; // không mở thêm tab khi tải lại trang
   const replaced = cur && !isCurrent(cur) ? { type: "replaced_outdated", oldState: cur.state, oldCreatedBy: cur.createdBy || null } : null;
+  await dropAutoGrant(key); // audit F3: quyền tự động gắn phiên cũ không được hiển thị / dùng cho phiên mới
   const s = {
     schema: SESSION_SCHEMA,
     createdBy: appVersion(),
@@ -597,7 +602,8 @@ async function received(key, payload, sender) {
     let reason = null;
     if (!autoGrantFits(g, s)) reason = "grant_invalid";
     else if (got.length !== units.length || got.length !== g.epcs.length || got.some((e, i) => e !== g.epcs[i])) reason = "epc_set";
-    else if (fresh.length !== 1) reason = "receipts";
+    else if (fresh.length !== 1 || ((payload && payload.receiptIds) || []).length !== 1) reason = "receipts"; // F2: PO chỉ có đúng biên nhận của lượt này
+    else if (!(cur.scanOkAt >= g.createdAt)) reason = "armed_after_scan"; // F1: quyền phải có TRƯỚC lượt xác nhận nhận hàng (cấp quyền sau đó đã bị auto:arm chặn)
     if (reason) {
       log = { type: "auto_skipped", reason };
       await dropAutoGrant(key); // P2.5: lượt nhận này không tự chạy → thu hồi quyền
@@ -652,6 +658,16 @@ if (chrome.runtime.onInstalled) {
   });
 }
 
+async function onTabRemoved(tabId) {
+  const all = await getSessions();
+  for (const s of Object.values(all)) {
+    if (!s.autoRun || s.autoRun.skipped || s.autoRun.tabId !== tabId || s.state !== "received" || s.authorization) continue;
+    await dropAutoGrant(s.key);
+    await updateSession(s.key, { autoRun: Object.assign({}, s.autoRun, { skipped: { at: Date.now(), reason: "tab_closed" } }) }, { type: "auto_skipped", reason: "tab_closed" });
+  }
+}
+if (chrome.tabs && chrome.tabs.onRemoved) chrome.tabs.onRemoved.addListener((tabId) => serial(() => onTabRemoved(tabId)));
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   serial(async () => {
     switch (msg && msg.type) {
@@ -701,7 +717,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         if (!(scan.httpStatus >= 200 && scan.httpStatus < 300)) throw new Error("session:scanOk: không phải lượt 2xx");
         // Nhật ký: `at` của mục log luôn là giờ ISO lúc ghi; giờ của lượt nhận ghi riêng `scanAt` (PM P3 26/10: `scan.at` dạng số từng đè `at`).
         const scanAt = Number.isFinite(scan.at) ? new Date(scan.at).toISOString() : null;
-        return updateSession(msg.key, { scanOk: scan }, { type: "scan_ok", shipmentId: scan.shipmentId, httpStatus: scan.httpStatus, sentEpcs: scan.sentEpcs === undefined ? null : scan.sentEpcs, scanAt });
+        return updateSession(msg.key, { scanOk: scan, scanOkAt: Date.now() }, { type: "scan_ok", shipmentId: scan.shipmentId, httpStatus: scan.httpStatus, sentEpcs: scan.sentEpcs === undefined ? null : scan.sentEpcs, scanAt });
       }
       case "session:received":
         return received(msg.key, msg.payload, sender);
@@ -734,6 +750,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         const s = all[msg.key];
         if (s && s.state === "applying" && s.lease && s.lease.expiresAt > Date.now()) throw new Error("Phiên đang ghi — chờ xong mới huỷ");
         if (s && s.state === "auto_completing" && !(s.completeClaim && Date.now() - s.completeClaim.at > T.completeStaleMs)) throw new Error("Phiên đang tự HOÀN THÀNH — chờ xong mới huỷ");
+        await dropAutoGrant(msg.key); // audit F3: huỷ phiên thì bỏ luôn quyền tự động của phiên đó
         delete all[msg.key];
         await saveSessions(all);
         return true;

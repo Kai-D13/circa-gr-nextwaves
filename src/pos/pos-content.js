@@ -24,7 +24,7 @@
   const PL = C.plan;
   const A = C.apply;
   const L = C.grList;
-  const T = Object.assign({ pollMs: 3000, qrConcurrency: 4, reloadDelayMs: 800, httpTimeoutMs: 30000, leaseRenewMs: 15000, qrTtlMs: 10 * 60 * 1000, listSessionsDebounceMs: 300, autoAnchorWaitMs: 8000 }, C.tuning || {});
+  const T = Object.assign({ pollMs: 3000, qrConcurrency: 4, reloadDelayMs: 800, httpTimeoutMs: 30000, leaseRenewMs: 15000, qrTtlMs: 10 * 60 * 1000, listSessionsDebounceMs: 300, autoAnchorWaitMs: 8000, autoCompleteGraceMs: 2 * 60 * 1000 }, C.tuning || {});
   const HOOK = "cgn/pos-hook";
   const ME = "cgn/pos-content";
   // Khung nổi: trang /chi-tiet-so và báo lỗi giao diện khi trang phiếu không có chỗ gắn khung. Không che nút thao tác của phiếu
@@ -792,12 +792,21 @@
       case "auto_complete_unknown":
         // v0.3.0 (PM §2.3 / §2.4): lệnh HOÀN THÀNH tự động đã giữ chỗ / đã gửi mà chưa xác nhận (tab chủ đã tải lại / đóng, hoặc kết
         // quả không rõ). Chỉ đọc lại phiếu — KHÔNG bao giờ gửi lại.
+        if (s.state === "auto_completing" && s.completeClaim && Date.now() - s.completeClaim.at < T.autoCompleteGraceMs) {
+          // audit F5: tab chủ có thể đang gửi — không để dược sĩ gửi HOÀN THÀNH lần hai.
+          return showGr(gr, {
+            tone: "busy",
+            title: `${gr.code}: đang gửi HOÀN THÀNH tự động — KHÔNG bấm HOÀN THÀNH`,
+            lines: sessionLines(s).concat(["Tab POS khác đang gửi lệnh HOÀN THÀNH một lần. Chờ rồi bấm “Đọc lại”."]),
+            buttons: [{ label: "Đọc lại", onClick: refresh }],
+          });
+        }
         return showGr(gr, {
           tone: "warn",
           title: `${gr.code}: chưa rõ POS đã HOÀN THÀNH chưa — extension KHÔNG gửi lại`,
           lines: sessionLines(s).concat([
             `Phiếu đọc lại: ${gr.status}. Extension đã giữ / gửi lệnh HOÀN THÀNH tự động một lần.`,
-            "Bấm “Đọc lại”: phiếu đã Hoàn thành thì xong. Vẫn chờ nhận / đang nhận thì dược sĩ kiểm tra số lượng từng lô rồi tự bấm HOÀN THÀNH; sai thì báo dev.",
+            "POS có thể vẫn đang xử lý: chờ 1–2 phút rồi bấm “Đọc lại”. Đã Hoàn thành thì xong. Vẫn chờ nhận / đang nhận thì dược sĩ kiểm tra số lượng từng lô rồi mới tự bấm HOÀN THÀNH; sai thì báo dev.",
           ]),
           buttons: [{ label: "Đọc lại", onClick: refresh }],
         });
@@ -828,6 +837,16 @@
           `Lệch: ${(vf.diffs || []).slice(0, 6).map((d) => d.why + (d.detailId ? " " + String(d.detailId).slice(0, 8) : "")).join(", ")}.`,
           "Dược sĩ kiểm tra số lượng / mã từng lô trên phiếu; đúng thì tự bấm HOÀN THÀNH, sai thì báo dev.",
         ]),
+      });
+    }
+    const stoppedAfter = (s.log || []).some((l) => l.type === "auto_skipped"); // tab chủ đã dừng sau khi điền (khung / giữ lượt)
+    if (auto && !vf && !stoppedAfter && !s.completeClaim && !missing.length && s.applyResult && Date.now() - s.applyResult.at < T.autoCompleteGraceMs) {
+      // audit F5: tab chủ vừa điền xong, đang đọc lại / sắp gửi HOÀN THÀNH — tab này không khuyên bấm.
+      return showGr(gr, {
+        tone: "busy",
+        title: `${gr.code}: đang tự HOÀN THÀNH ở tab POS khác — KHÔNG bấm HOÀN THÀNH`,
+        lines: sessionLines(s).concat(["Chờ rồi bấm “Đọc lại”."]),
+        buttons: [{ label: "Đọc lại", onClick: refresh }],
       });
     }
     const autoNote = auto ? ["Chế độ tự động đã dừng trước HOÀN THÀNH — extension không tự tiếp tục."] : [];
@@ -898,6 +917,7 @@
 
     if (plan.complete && s.state !== "applying") {
       // Mọi UID đã nằm đúng lô, lượng nhất quán: không ghi gì, chỉ đóng bước điền.
+      if (s.state === "received" && s.autoRun && !s.autoRun.skipped) await autoSkip(s, "uid_already_on_gr"); // audit F4: thu hồi quyền
       const s2 = await bg("session:update", { key: s.key, patch: { state: "applied" }, log: { type: "applied_already", hash: plan.hash } });
       return renderApplied(env, gr, s2 || s);
     }
@@ -1020,7 +1040,10 @@
       st = null;
     }
     if (!st) return "status_failed";
-    if (!st.eligible) return st.reason;
+    if (!st.eligible) {
+      if (st.reason === "grant_invalid") await autoSkip(s, "grant_invalid"); // audit F4 (background chỉ nhận từ tab được giao)
+      return st.reason;
+    }
     const skip = async (reason) => {
       await autoSkip(s, reason);
       return reason;
@@ -1035,7 +1058,7 @@
     }
     if (!p || !p.ok) return skip("po_read_failed");
     const link = P.resolveDelivery(gr, P.normalizePo(p.json), currentStore(env));
-    if (!link.ok || link.deliveryCode !== s.deliveryCode || link.soBase !== s.soBase || gr.posId !== s.posId || gr.id !== s.grId) return skip("link_changed");
+    if (!link.ok || link.deliveryCode !== s.deliveryCode || link.soBase !== s.soBase || gr.posId !== s.posId || gr.id !== s.grId || gr.poId !== s.poPosId) return skip("link_changed");
     const blockers = await bg("session:writeBlockers", { key: s.key });
     if (blockers.length) return skip(`blocked_${blockers[0]}`);
     if (!(await waitAnchored(gr, T.autoAnchorWaitMs))) return skip("ui_not_anchored");
@@ -1056,8 +1079,11 @@
       }
     };
     view("busy", `Đang đọc lại ${gr.code} trước khi tự HOÀN THÀNH…`, []);
+    const epoch0 = statusEpoch; // audit F5: trang (nút HOÀN THÀNH của POS) vừa hoàn thành trong lúc đọc lại → không gửi lệnh của extension
     const fresh = await readGr();
-    const v = fresh ? PL.verifyFinal(plan, fresh, units) : { ok: false, diffs: [{ why: "read_failed", detailId: null }] };
+    const v0 = fresh ? PL.verifyFinal(plan, fresh, units) : { ok: false, diffs: [{ why: "read_failed", detailId: null }] };
+    // audit F7: phiếu đọc lại phải còn của đúng cửa hàng phiên.
+    const v = fresh && fresh.posId !== s.posId ? { ok: false, diffs: v0.diffs.concat([{ why: "store", detailId: null }]) } : v0;
     if (!v.ok) {
       logTo(s.key, { type: "auto_verify_failed", diffs: v.diffs.slice(0, 10) });
       return view(
@@ -1077,6 +1103,7 @@
     } catch (err) {
       c = { ok: false, reason: String((err && err.message) || err) };
     }
+    if (!c || !c.ok) logTo(s.key, { type: "auto_skipped", reason: `complete_claim_${(c && c.reason) || "unknown"}` });
     if (!c || !c.ok) return view("warn", `${gr.code}: đã điền đủ — không tự HOÀN THÀNH`, [CLAIM_MSG[c && c.reason] || (c && c.reason) || "?", "Dược sĩ kiểm tra rồi tự bấm HOÀN THÀNH."]);
     const report = async (result) => {
       try {
@@ -1092,7 +1119,8 @@
     } catch (_) {
       cur = null;
     }
-    if (!cur || cur.state !== "auto_completing" || cur.autoToken !== tabToken || !onGrPageOf(gr) || !grPanel.anchoredFor(gr.code)) {
+    const env2 = E.envFromConfig(config);
+    if (!cur || cur.state !== "auto_completing" || cur.autoToken !== tabToken || !onGrPageOf(gr) || !grPanel.anchoredFor(gr.code) || statusEpoch !== epoch0 || !env2 || env2.id !== s.envId || currentStore(env2) !== s.posId) {
       await report({ done: false, httpStatus: null, grStatus: "not_sent" });
       return view("warn", `${gr.code}: không gửi HOÀN THÀNH (trang / phiên vừa đổi)`, ["Extension đã giữ lượt nhưng KHÔNG gửi. Dược sĩ kiểm tra rồi tự bấm HOÀN THÀNH."], [{ label: "Đọc lại", onClick: refresh }]);
     }
@@ -1118,7 +1146,7 @@
     return view(
       "warn",
       `${gr.code}: chưa rõ POS đã HOÀN THÀNH chưa — extension KHÔNG gửi lại`,
-      [`HOÀN THÀNH: HTTP ${httpStatus === null ? "không rõ" : httpStatus}; phiếu đọc lại: ${after ? after.status : "không đọc được"}.`, "Bấm “Đọc lại”: đã Hoàn thành thì xong. Vẫn chưa thì dược sĩ kiểm tra rồi tự bấm HOÀN THÀNH."],
+      [`HOÀN THÀNH: HTTP ${httpStatus === null ? "không rõ" : httpStatus}; phiếu đọc lại: ${after ? after.status : "không đọc được"}.`, "POS có thể vẫn đang xử lý: KHÔNG bấm HOÀN THÀNH ngay. Chờ 1–2 phút rồi bấm “Đọc lại”: đã Hoàn thành thì xong; vẫn chưa thì dược sĩ kiểm tra số lượng từng lô rồi mới tự bấm HOÀN THÀNH."],
       [{ label: "Đọc lại", onClick: refresh }]
     );
   }
@@ -1134,7 +1162,7 @@
     // v0.2.4 (PM P2): chỉ ghi khi nút nằm trong khung đang gắn đúng chỗ trên trang của đúng phiếu (fail closed, chưa dùng cấp phép).
     if (!onGrPageOf(gr) || !grPanel.anchoredFor(gr.code)) {
       if (auto) await autoSkip(s, "ui_not_anchored");
-      showError("Không điền được", [`Khung extension chưa gắn đúng trang phiếu ${gr.code} — không ghi gì, cấp phép vẫn giữ.`], [{ label: "Kiểm tra lại", onClick: retryUi }], gr);
+      showError("Không điền được", [`Khung extension chưa gắn đúng trang phiếu ${gr.code} — không ghi gì, ${auto ? "quyền tự động đã thu hồi, phiếu đi đường thủ công" : "cấp phép vẫn giữ"}.`], [{ label: "Kiểm tra lại", onClick: retryUi }], gr);
       return;
     }
     applying = true; // chặn vòng đánh giá vẽ lại panel trong lúc giành quyền / ghi

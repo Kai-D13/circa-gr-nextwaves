@@ -47,6 +47,7 @@ function createBrowser(server, opts = {}) {
   let nextTabId = 1;
   let bgListener = null;
   const installedListeners = [];
+  const removedListeners = []; // chrome.tabs.onRemoved (v0.3.0: tab POS được giao bị đóng)
   // Sau close(): không mở tab / nạp trang, không tạo timer, không chuyển message hay sự kiện storage.
   // (Một message background đang dở lúc test kết thúc có thể mở tab mới → timer mới không ai dọn → tiến trình test sống mãi.)
   let closed = false;
@@ -124,6 +125,7 @@ function createBrowser(server, opts = {}) {
         return { id };
       },
       create: async (props) => ({ id: openTab(props.url).id }),
+      onRemoved: { addListener: (l) => removedListeners.push(l) },
     },
     windows: { update: async () => ({}) },
   };
@@ -355,6 +357,7 @@ function createBrowser(server, opts = {}) {
     closeTab: (t) => {
       t.closed = true;
       kill(t.ctx);
+      if (!closed) for (const l of removedListeners) setImmediate(() => !closed && l(t.id, {}));
     },
     setConfig: (cfg) => storage.set({ config: cfg }),
     session: (key) => clone((store.sessions || {})[key] || null),

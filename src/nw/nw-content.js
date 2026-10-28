@@ -46,6 +46,7 @@
   let ctx = null; // {env, key, po, nwPoId, nwPoNumber, shipmentIds, expected, grCode, soBase, fingerprint, receiptIdsBefore, warehouseId}
   let note = null; // thông báo gần nhất của lượt nhận (giữ khi vẽ lại)
   let autoGrant = null; // v0.3.0: quyền tự động một lần của phiên đang mở — CHỈ để hiện (background mới là nơi kiểm)
+  let ctxCreatedAt = null; // giờ tạo phiên đang mở — quyền tự động chỉ hiện khi gắn đúng phiên này (audit F3)
   let pendingScan = null; // lượt "Xác nhận nhận hàng" đến trước khi khớp xong đơn → xử lý ngay sau khi khớp
 
   async function bg(type, extra) {
@@ -128,14 +129,7 @@
       return panel.show({
         tone: "ok",
         title: `${s.grCode}: Nextwaves đã nhận xong`,
-        lines: ["Phiếu nhận trên POS đang được điền / đã điền."].concat(
-          // v0.3.0 P2.5: trạng thái tự động sau lượt nhận — đã dừng thì nói rõ, không để hiểu là vẫn tự HOÀN THÀNH.
-          (s.autoRun && s.autoRun.skipped) || (s.log || []).some((l) => l.type === "auto_skipped")
-            ? ["Tự động đã dừng — POS xử lý theo luồng thủ công."]
-            : s.autoRun
-              ? ["Tự động: POS tự điền và tự HOÀN THÀNH khi đọc lại phiếu khớp hoàn toàn."]
-              : []
-        ),
+        lines: ["Phiếu nhận trên POS đang được điền / đã điền."].concat(autoLineAfter(s)),
         buttons: [{ label: "Về POS", onClick: () => bg("session:focusPos", { key: s.key }) }],
       });
     }
@@ -154,6 +148,7 @@
       pendingScan = null;
       return onReceiveScan(p);
     }
+    ctxCreatedAt = s.createdAt;
     await loadAutoGrant();
     if (!note) {
       if (s.scanOk) await collect({}); // tải lại trang giữa lúc đọc kết quả của lượt 2xx đã ghi nhận
@@ -261,10 +256,25 @@
     try {
       const { autoGrants } = await chrome.storage.local.get("autoGrants");
       const g = ctx ? (autoGrants || {})[ctx.key] : null;
-      autoGrant = g && g.expiresAt > Date.now() ? g : null;
+      // audit v0.3.0 F3: chỉ quyền gắn ĐÚNG phiên đang mở (phiên tạo lại cùng GR không thừa hưởng).
+      autoGrant = g && g.expiresAt > Date.now() && g.sessionCreatedAt === ctxCreatedAt ? g : null;
     } catch (_) {
       autoGrant = null;
     }
+  }
+
+  // v0.3.0 (P2.5, audit F4): dòng trạng thái tự động sau lượt nhận — theo trạng thái THẬT của phiên, không để hiểu nhầm là vẫn tự
+  // HOÀN THÀNH khi lượt tự động đã dừng / chưa rõ.
+  function autoLineAfter(s) {
+    const log = s.log || [];
+    const auto = !!s.autoRun || !!(s.authorization && s.authorization.auto);
+    const stopped = (s.autoRun && s.autoRun.skipped) || log.some((l) => l.type === "auto_skipped" || l.type === "auto_verify_failed");
+    if (!auto) return stopped ? ["Tự động đã dừng — POS xử lý theo luồng thủ công."] : [];
+    if (s.state === "done") return [s.completeResult ? "Tự động: POS đã tự HOÀN THÀNH." : "POS đã HOÀN THÀNH."];
+    if (s.state === "auto_completing") return ["Tự động: đang gửi HOÀN THÀNH trên POS — không bấm HOÀN THÀNH."];
+    if (s.state === "auto_complete_unknown") return ["Tự động: chưa rõ POS đã HOÀN THÀNH chưa — kiểm tra trên POS, extension không gửi lại."];
+    if (stopped || s.state === "apply_stopped") return ["Tự động đã dừng — POS xử lý theo luồng thủ công."];
+    return ["Tự động: POS tự điền và tự HOÀN THÀNH khi đọc lại phiếu khớp hoàn toàn."];
   }
 
   function renderReady() {

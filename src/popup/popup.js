@@ -82,13 +82,15 @@
   // khi dược sĩ xác nhận nhận hàng. Bấm nút chỉ MỞ khung xác nhận ghi rõ phạm vi; phải bấm "Xác nhận cho phép" mới gửi auto:arm.
   function autoBlock(env, s, autoGrant) {
     const wrap = el("div", undefined, "auto");
-    if (autoGrant) {
+    // audit v0.3.0 F3: chỉ hiện quyền gắn ĐÚNG phiên này (phiên tạo lại cùng GR không thừa hưởng quyền cũ).
+    if (autoGrant && autoGrant.sessionCreatedAt === s.createdAt) {
       wrap.appendChild(el("span", `Tự động: ĐÃ CHO PHÉP 1 lần · hết hạn ${hhmm(autoGrant.expiresAt)}`));
       const revoke = el("button", "Thu hồi tự động", "sec");
       revoke.addEventListener("click", async () => {
         try {
-          await bg("auto:revoke", { key: s.key });
-          say("msg", `Đã thu hồi quyền tự động ${s.grCode}.`);
+          const had = await bg("auto:revoke", { key: s.key });
+          // audit F6: không còn quyền để thu hồi = lượt tự động đã bắt đầu / đã dừng / hết hạn.
+          say("msg", had ? `Đã thu hồi quyền tự động ${s.grCode}.` : `Không còn quyền tự động để thu hồi (${s.grCode}): lượt tự động có thể đã bắt đầu hoặc đã dừng.`, !had);
         } catch (err) {
           say("msg", String((err && err.message) || err), true);
         }
@@ -109,6 +111,15 @@
       return wrap;
     }
     if (!env || !env.writeEnabled || s.envId !== env.id || s.state !== "nw_ready") return null;
+    // audit v0.3.0 F1 / F2 (background cũng chặn): quá muộn hoặc PO đã có biên nhận → không có nút, nói rõ lý do.
+    if (s.scanOk) {
+      wrap.appendChild(el("span", "Không cho phép tự động: Nextwaves đã ghi nhận lượt xác nhận nhận hàng."));
+      return wrap;
+    }
+    if ((s.receiptIdsBefore || []).length) {
+      wrap.appendChild(el("span", "Không cho phép tự động: PO Nextwaves đã có biên nhận từ trước."));
+      return wrap;
+    }
     const epcs = expectedEpcCount(s);
     const open = el("button", "Cho phép tự điền và HOÀN THÀNH 1 lần", "sec");
     open.addEventListener("click", () => {

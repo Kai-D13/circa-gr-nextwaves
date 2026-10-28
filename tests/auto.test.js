@@ -226,21 +226,26 @@ test("G1 quyền: hết hạn trước khi nhận → không kích hoạt, đư�
   }
 });
 
-test("G1 quyền: phiên bị xoá rồi tạo lại (cùng GR) → quyền cũ không thừa hưởng: auto_skipped grant_invalid, 0 PUT / 0 COMPLETED", async () => {
+test("G1 quyền: phiên bị xoá rồi tạo lại (cùng GR) → huỷ phiên thu hồi quyền ngay (audit F3); quyền còn sót gắn phiên cũ → auto_skipped grant_invalid; 0 PUT / 0 COMPLETED", async () => {
   const ctx = await setup();
   const { b, srv, pos, nw } = ctx;
   try {
     assert.equal((await arm(b)).ok, true);
+    const stale = H.clone(b.store.autoGrants[KEY]);
     assert.equal((await b.sendFromPopup({ type: "session:cancel", key: KEY })).ok, true);
+    assert.deepEqual(autoGrants(b), [], "huỷ phiên → thu hồi quyền tự động");
     pos.reload();
     pos.post(POS_AUTH);
     (await until(() => startBtn(pos))).onClick();
     await sessionState(b, "waiting_nw");
     assert.equal((await b.sendFromTab(nw, { type: "session:nwMatched", key: KEY, match: matchFromA1() })).ok, true);
     await sessionState(b, "nw_ready");
+    // Lớp thứ hai: quyền của phiên cũ còn sót trong kho (vd. ghi trước khi có F3) → không khớp giờ tạo phiên → không tự chạy.
+    b.store.autoGrants = { [KEY]: stale };
     await receive(ctx);
     await until(() => logTypes(b).includes("auto_skipped"));
     assert.equal(session(b).log.find((l) => l.type === "auto_skipped").reason, "grant_invalid");
+    assert.deepEqual(autoGrants(b), [], "quyền sót bị thu hồi");
     await settle(300);
     assert.equal(srv.st.puts.length, 0);
     noComplete(srv, "phiên tạo lại");
