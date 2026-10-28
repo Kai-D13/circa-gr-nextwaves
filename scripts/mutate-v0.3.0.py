@@ -1,11 +1,11 @@
-"""Đột biến có chủ đích cho các hàng rào của v0.3.0 = 146 ca của v0.2.5 + 44 ca chế độ tự động (PM DECISION-ONE-STG-AUTO-FLOW-20261028
+"""Đột biến có chủ đích cho các hàng rào của v0.3.0 = 146 ca của v0.2.5 + 47 ca chế độ tự động (PM DECISION-ONE-STG-AUTO-FLOW-20261028
 §2: quyền một lần chỉ từ popup / nw_ready / STG / xác nhận khớp / gắn đúng phiên và hết hạn; điểm kích hoạt duy nhất kiểm tập EPC +
 một biên nhận mới; một tab được giao; claim tự động một lần, đủ UID, tiêu quyền; autoPlanCheck / đọc lại PO-SO / khung gắn đúng trang;
 verifyFinal toàn phiếu; claimComplete một lần đúng tab; done chỉ khi GET thấy COMPLETED; hook / huỷ không đóng phiên đang gửi; dọn
 quyền bản cũ; popup phải qua bước xác nhận).
 
   python -I scripts/mutate-v0.3.0.py            # mọi ca
-  python -I scripts/mutate-v0.3.0.py 146        # chỉ 44 ca v0.3.0
+  python -I scripts/mutate-v0.3.0.py 146        # chỉ 47 ca v0.3.0
 
 v0.2.5 = 130 ca của v0.2.4 (neo "lượt đánh giá cũ về muộn" đổi theo hàm fresh()) + 16 ca
 PM AUDIT-A1-GR03887 (P2: phiếu kết thúc không vẽ / không chờ chỗ gắn, hook HOÀN THÀNH 2xx gỡ khung ngay + bỏ view lượt đánh giá cũ,
@@ -281,6 +281,10 @@ muts = [
     ("src/background.js", "  } else if (armedEarlier(s)) {", "  } else if (false) {", "v0.3.0 không ghi grant_expired"),
     ("src/pos/pos-content.js", "    const skip = async (reason) => {\n      await autoSkip(s, reason);\n      return reason;\n    };", "    const skip = async (reason) => reason;", "v0.3.0 không lưu quyết định bỏ qua (tự chạy lại khi Kiểm tra lại)"),
     ("src/pos/pos-content.js", 'const autoPending = s && (s.state === "auto_completing" || s.state === "auto_complete_unknown");', 'const autoPending = s && s.state === "auto_completing";', "v0.3.0 hook đóng phiên HOÀN THÀNH chưa rõ"),
+    # v0.3.0 P2.5 (PM Codex AUDIT-G0-v0.2.5-G1-PRELIM §2): bỏ qua → thu hồi quyền, popup / Nextwaves báo đã dừng
+    ("src/background.js", "  await dropAutoGrant(s.key); // P2.5: quyết định cuối cho lượt nhận này — quyền không còn hiển thị / dùng được\n", "", "v0.3.0 P2.5 bỏ qua ở POS không thu hồi quyền"),
+    ("src/background.js", "      await dropAutoGrant(key); // P2.5: lượt nhận này không tự chạy → thu hồi quyền\n", "", "v0.3.0 P2.5 bỏ qua ở điểm kích hoạt không thu hồi quyền"),
+    ("src/popup/popup.js", "    if (skipped) {", "    if (false) {", "v0.3.0 P2.5 popup không báo tự động đã dừng"),
 ]
 
 
