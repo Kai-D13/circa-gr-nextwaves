@@ -111,6 +111,7 @@ Edge 156.0.4314.50, máy dev, cùng buổi 28/10. Kết quả gốc ở scratchp
 - Năm lượt sau ≤ 16,62 ms, hai lượt 27/10 là 9,75 / 5,19 ms.
 - Đây là lượt trang phiếu đầu tiên sau khi Edge tự cập nhật; nguyên nhân chưa rõ, chưa tái hiện lại.
 - Trên Chrome staging thật chưa đo.
+- **Cập nhật chiều 28/10:** chẩn đoán theo pha / hàm + baseline không extension — `docs/dev/PERF-75MS-v0.2.4-20261028.md`.
 
 ## 7. Việc PM / operator
 

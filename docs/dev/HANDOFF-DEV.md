@@ -146,11 +146,12 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 
 ## 8. Trạng thái và việc tiếp theo
 
-0. **Hiện hành (28/10):** PM đạt gate source / gói v0.2.4 `0BB73E2D`, A1 chạy trên v0.2.4 (`docs/pm/AUDIT-POST-REVERT-v0.2.4-20261028.md`).
-   - Dev xong bước 1: gói giao `C:\circa-gr-nextwaves-release\`, script nâng cùng thư mục + diễn tập, runbook A1 §0, đoạn kiểm khung trang thật — `docs/dev/A1-CHUAN-BI-v0.2.4-20261028.md`. Chờ PM kiểm runbook.
-   - Kế tiếp: operator nâng thật + kiểm sau nâng + khung ~1095px (runbook §0b–§0d) → PM xác nhận UI → operator xác nhận 15 tem + cho phép một lượt GR03887.
-   - **Hạn phiên GR03887:** cập nhật lần cuối 20:24:25 27/10 → có thể bị xoá từ ~20:24 28/10 ở lần ghi phiên kế tiếp. Mất phiên → dừng, không tạo lại.
-   - Đợt 2 (O1 / QR / reader, chỉ đọc) chưa bắt đầu.
+0. **Hiện hành (28/10, chiều):** PM đạt gate chuẩn bị A1 (`docs/pm/AUDIT-A1-PREP-v0.2.4-20261028.md`): operator được nâng v0.2.3 → v0.2.4 cùng thư mục / Extension ID và kiểm staging **chỉ đọc** (runbook §0b–§0d). Chưa phép nhận / ghi.
+   - Gói giao `C:\circa-gr-nextwaves-release\`, script nâng + diễn tập 17/17 — `docs/dev/A1-CHUAN-BI-v0.2.4-20261028.md`. Runbook §0b thêm bước 0: bấm "Mở tab Nextwaves" trên v0.2.3 để làm mới giờ phiên GR03887 (PM cho phép); "Tải từ" khác `C:\circa-gr-nextwaves-v0.2.3` → dừng, dev gửi lệnh `-Target` điền sẵn.
+   - Kế tiếp: operator gửi một bộ bằng chứng §0d → dev đối chiếu → PM xác nhận UI + phân loại hiệu năng → operator xác nhận 15 tem + cho phép một lượt GR03887.
+   - **Hạn phiên GR03887:** 24 giờ từ lần cập nhật cuối (bấm "Mở tab Nextwaves" làm mới). Mất phiên → dừng, không tạo lại.
+   - **P2 hiệu năng (lượt Edge 75,18 ms):** `docs/dev/PERF-75MS-v0.2.4-20261028.md` — không tái hiện. `edge-gr-page.js` nay in dòng / cột, CPU, phần con, bước của tác vụ dài và có `--baseline` (không extension). Hàm ẩn danh của `ui/panel.js` là callback 10 s nhánh lỗi (`:336`), ≤ 10,47 ms; trang tự có tác vụ layout 60–78 ms không extension.
+   - **Đợt 2:** bước đầu chỉ đọc `docs/dev/DOT2-KHAO-SAT-20261028.md` (API ứng viên O1 từ mã web Nextwaves, QR sau HOÀN THÀNH là mã sinh 08–12/10, reader Web Serial). Còn D1 / D4 / B0 — đề xuất lấy một lần sau A1.
    - Phiên 27/10 dưới đây là lịch sử.
    - v0.2.0 (`096D97D9`) PM audit 27/10 (`docs/pm/AUDIT-v0.2.0-SOURCE-PACK-20261027.md`): P2.1 replay danh sách, P2.2 ngưỡng lúc tải trang. Dev sửa → **v0.2.1** (gói `E34FF7C5`, `cbac491`, giải nén `C:\circa-gr-nextwaves-v0.2.1`), báo cáo `docs/dev/BATCH-v0.2.1.md`. **Chưa cài**, chưa nhận / ghi staging bằng v0.2.
    - PM audit v0.2.1 (`docs/pm/AUDIT-v0.2.1-SOURCE-PACK-20261027.md`): G1 / G2 đạt, G0 còn chờ.
