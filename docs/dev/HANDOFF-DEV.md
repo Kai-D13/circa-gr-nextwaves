@@ -149,7 +149,14 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 0. **Hiện hành (28/10, chiều):** PM đạt gate chuẩn bị A1 (`docs/pm/AUDIT-A1-PREP-v0.2.4-20261028.md`): operator được nâng v0.2.3 → v0.2.4 cùng thư mục / Extension ID và kiểm staging **chỉ đọc** (runbook §0b–§0d). Chưa phép nhận / ghi.
    - Gói giao `C:\circa-gr-nextwaves-release\`, script nâng + diễn tập 17/17 — `docs/dev/A1-CHUAN-BI-v0.2.4-20261028.md`. Runbook §0b thêm bước 0: bấm "Mở tab Nextwaves" trên v0.2.3 để làm mới giờ phiên GR03887 (PM cho phép); "Tải từ" khác `C:\circa-gr-nextwaves-v0.2.3` → dừng, dev gửi lệnh `-Target` điền sẵn.
    - **§0 xong 28/10 13:42 — stakeholder chốt ĐẠT** (`docs/dev/A1-S0-KET-QUA-v0.2.4-20261028.md`): v0.2.4 cùng ID `bkpbpknngkmmaclhkpnnlblofcaihadd`, GR03887 `nw_ready` (13:39:57 28/10), 0 cấp phép, preflight ĐẠT ở vw 1216 (bỏ 1095 theo stakeholder). Khác runbook: thêm phiên GR03878 `waiting_nw` (23:49:46 27/10, không chạm GR03887, tự hết sau 23:49 28/10 — để yên); Errors: cảnh báo `pushState` trang prerender (pos-hook.js:113) + "Extension context invalidated" (tab cũ trước F5).
-   - **28/10 chiều:** operator xác nhận đúng 15 tem + **cho phép một lượt A1** GR03887 (nhận → điền → HOÀN THÀNH); PM chưa ghi gate, stakeholder quyết chạy. Dev rà lại đường A1 trên v0.2.4, không thấy lỗi chặn (`A1-S0-KET-QUA` §4). Đang chạy runbook §2 capture → §3 ba chặng, hai điểm dừng.
+   - **28/10 chiều:** operator xác nhận đúng 15 tem + **cho phép một lượt A1** GR03887 (nhận → điền → HOÀN THÀNH); PM chưa ghi gate, stakeholder quyết chạy. Dev rà lại đường A1 trên v0.2.4, không thấy lỗi chặn (`A1-S0-KET-QUA` §4).
+   - **28/10 21:32–21:54 A1 chạy xong, dev đánh giá ĐẠT đủ ba chặng** — `docs/dev/A1-KET-QUA-GR03887-20261028.md`, chờ PM audit:
+     - nhận 15/15 EPC đúng runbook;
+     - kế hoạch #EF0E020C 5 lô / 15 UID;
+     - 5 PUT 200, 0 UID sai lô;
+     - HOÀN THÀNH do trang gọi, 200, COMPLETED.
+   - Khác runbook: phiên GR03887 tạo lại 21:32:57 (phiên cũ + GR03878 không còn, nhiều khả năng xoá tay); kiểm GR03879 lúc 21:32:43; cấp phép gõ nhầm "GR3887"; không capture tab Nextwaves.
+   - Finding: khung nổi đỏ sai sau COMPLETED (`ui_anchor_missing`). Mã POS thêm sau HOÀN THÀNH = mã QR của lô, dùng lại giữa GR03880 / GR03887.
    - **Yêu cầu stakeholder chờ PM:** xác nhận trên Nextwaves thì POS hoàn thành luôn (tự điền + tự HOÀN THÀNH). Trái quyết định 24/10; không làm trong A1. Đề xuất dev ở `A1-S0-KET-QUA` §4.
    - **Hạn phiên GR03887:** 24 giờ từ lần cập nhật cuối (13:39:57 28/10 → ~13:39 29/10; bấm "Mở tab Nextwaves" làm mới). Mất phiên → dừng, không tạo lại.
    - **P2 hiệu năng (lượt Edge 75,18 ms):** `docs/dev/PERF-75MS-v0.2.4-20261028.md` — không tái hiện. `edge-gr-page.js` nay in dòng / cột, CPU, phần con, bước của tác vụ dài và có `--baseline` (không extension). Hàm ẩn danh của `ui/panel.js` là callback 10 s nhánh lỗi (`:336`), ≤ 10,47 ms; trang tự có tác vụ layout 60–78 ms không extension.
