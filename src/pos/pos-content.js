@@ -213,12 +213,17 @@
   // URL lúc bắt đầu lượt đánh giá (evaluate) gần nhất. View đến khi trang đã khác URL đó = kết quả của lượt cũ về muộn sau khi đổi
   // route (SPA) → bỏ (PM audit sơ bộ v0.2.4 P2).
   let evalHref = null;
+  // v0.2.5 (PM AUDIT-A1 P2): tăng khi phiếu đang xem vừa HOÀN THÀNH (hook báo 2xx). Lượt đánh giá bắt đầu trước đó (GET cũ về muộn,
+  // phiếu còn "đang nhận") không được vẽ nữa.
+  let statusEpoch = 0;
+  let evalEpoch = 0;
+  const fresh = () => (evalHref === null || location.href === evalHref) && evalEpoch === statusEpoch;
 
   // Một chỗ vẽ: trang phiếu → khung trong luồng (view mang grCode thì chỉ gắn cạnh bảng của đúng phiếu đó); /chi-tiet-so → khung
   // nổi. Danh sách dùng vùng thông báo của chính nó (F4), trang không liên quan không có khung → không vẽ gì.
   const panel = {
     show(view) {
-      if (evalHref !== null && location.href !== evalHref) return;
+      if (!fresh()) return;
       const page = pageNow();
       if (!page || page.kind === "gr_list") return;
       if (page.kind !== "gr") {
@@ -387,6 +392,7 @@
 
   async function evaluate() {
     evalHref = location.href;
+    evalEpoch = statusEpoch;
     if (applying || reloading) return;
     const env = E.envFromConfig(config);
     const page = env ? E.classifyPosPage(location.href, env) : null;
@@ -486,12 +492,15 @@
     let s = await bg("session:get", { envId: env.id, grId: gr.id });
     if (!P.isReceivable(gr)) {
       if (s && gr.status === "COMPLETED" && s.state !== "done" && s.state !== "applying") s = await bg("session:update", { key: s.key, patch: { state: "done" }, log: { type: "gr_completed_seen" } });
-      if (s) return renderSession(env, gr, s);
+      // v0.2.5 (PM AUDIT-A1 P2): phiếu đã kết thúc. Trang phiếu COMPLETED không còn #all-receipt và không còn gì để điền → không vẽ,
+      // huỷ chờ chỗ gắn, không báo lỗi giao diện (A1 28/10: khung đỏ sai sau HOÀN THÀNH). /chi-tiet-so vẫn hiện phiên ở khung nổi.
+      if (s && !onGrPageOf(gr)) return renderSession(env, gr, s);
       unwatch();
-      return panel.hide();
+      if (fresh()) panel.hide(); // lượt cũ về muộn sau khi đổi route không gỡ khung của trang mới
+      return;
     }
 
-    if (!s || s.state === "done") {
+    if (!s) {
       unwatch();
       const p = await posGet(env, E.api.poDetail(env, gr.posId, gr.poId));
       if (!p.ok) return showError("Không đọc được PO của phiếu nhận", httpError("GET PO", p), [{ label: "Thử lại", onClick: refresh }]);
@@ -514,6 +523,17 @@
       });
     }
     if (s.posId && s.posId !== storeId) return showError("Phiên này thuộc cửa hàng khác cửa hàng đang đăng nhập", s.grCode);
+    if (s.state === "done") {
+      // v0.2.5 (PM AUDIT-A1 P2): phiên ghi "đã HOÀN THÀNH" mà POS đọc lại vẫn chờ nhận / đang nhận → phiên không phải bằng chứng POS
+      // đã hoàn thành: chỉ cảnh báo + đọc lại; không nút điền, không tạo phiên mới.
+      watched = { key: s.key, sig: sessionSig(s), envId: env.id, grCode: s.grCode };
+      return showGr(gr, {
+        tone: "warn",
+        title: `${gr.code}: POS chưa ở trạng thái hoàn thành`,
+        lines: sessionLines(s).concat([`Extension đã thấy lệnh HOÀN THÀNH, nhưng đọc lại phiếu vẫn là ${gr.status}. Không điền gì.`, "Bấm “Đọc lại”; vẫn vậy thì kiểm tra phiếu trên POS và báo dev."]),
+        buttons: [{ label: "Đọc lại", onClick: refresh }, cancelButton(env, s)],
+      });
+    }
     return renderSession(env, gr, s);
   }
 
@@ -1017,6 +1037,13 @@
 
   async function onGrStatus(p) {
     if (p.status !== "COMPLETED" || !(p.httpStatus >= 200 && p.httpStatus < 300)) return;
+    // v0.2.5 (PM AUDIT-A1 P2): phiếu ĐANG XEM vừa HOÀN THÀNH → trang sắp bỏ vùng sản phẩm. Gỡ ngay khung, dừng chờ chỗ gắn, bỏ lỗi
+    // giao diện cũ, bỏ view của lượt đánh giá đang dở. GET lại phiếu (refresh bên dưới) mới là nguồn trạng thái cuối.
+    const page = pageNow();
+    if (page && page.kind === "gr" && page.grId === lower(p.grId)) {
+      statusEpoch += 1;
+      panel.hide();
+    }
     try {
       const s = await bg("session:get", { envId: p.envId, grId: p.grId });
       if (s && s.state !== "done") await bg("session:update", { key: s.key, patch: { state: "done" }, log: { type: "gr_completed" } });

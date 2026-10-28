@@ -53,6 +53,15 @@ function makeServer(opts = {}) {
       if (req.headers.authorization !== "Bearer pos-test") return { status: 401, json: { message: "unauthorized" } };
       let m = /^\/backend\/v1\/order\/goods-receipt\/([0-9a-f-]{36})$/.exec(u.pathname);
       if (m && req.method === "GET" && opts.grHolds && opts.grHolds[m[1]]) await opts.grHolds[m[1]]; // treo tới khi test cho chạy tiếp
+      if (m && req.method === "GET" && st.grHoldOnce && m[1] === st.gr.data.id) {
+        // v0.2.5: treo MỘT lần GET phiếu, trả ảnh chụp lúc nhận request (response cũ về muộn).
+        const h = st.grHoldOnce;
+        st.grHoldOnce = null;
+        st.grHeld = true;
+        const snap = H.clone(st.gr);
+        await h;
+        return { status: 200, json: snap };
+      }
       if (m && req.method === "GET") return m[1] === st.gr.data.id ? { status: 200, json: H.clone(st.gr) } : { status: 404, json: {} };
       m = /^\/backend\/v1\/pos\/([0-9a-f-]{36})\/po\/([0-9a-f-]{36})$/.exec(u.pathname);
       if (m && req.method === "GET") {
@@ -230,7 +239,7 @@ test("E2E STG GR03878: GR → Nextwaves ?po=SOBD1593858 → khớp PO28237814 �
     srv.st.gr.data.status = "COMPLETED";
     pos.post({ mark: "cgn/pos-hook", type: "gr-status", payload: { envId: "STG", grId: GR_ID, status: "COMPLETED", httpStatus: 200 } });
     await sessionState(b, "done");
-    await until(() => viewTitle(pos) === "GR03878: đã HOÀN THÀNH");
+    await until(() => pos.view === null); // v0.2.5 (PM AUDIT-A1 P2): phiếu đã HOÀN THÀNH → không còn khung trên trang phiếu
 
     // Bất biến.
     const nwCalls = srv.st.log.filter((r) => r.url.startsWith(NWAPI));
@@ -987,7 +996,7 @@ test("Không tạo phiên lặp: background không trả lại phiên vừa tạ
 const isFill = (v) => !!v && (v.buttons || []).some((x) => /^Điền vào phiếu/.test(x.label));
 const grantCount = async (b) => (await b.sendFromPopup({ type: "grant:list" })).data.length;
 
-test("P2: trang phiếu — mọi trạng thái (nút bắt đầu, đang kiểm, đã khớp Nextwaves, tra UID, kế hoạch chỉ xem, có cấp phép, đang điền, đã điền, HOÀN THÀNH) vẽ vào khung TRONG LUỒNG mang mã GR03878; không khung nổi", async () => {
+test("P2: trang phiếu — mọi trạng thái (nút bắt đầu, đang kiểm, đã khớp Nextwaves, tra UID, kế hoạch chỉ xem, có cấp phép, đang điền, đã điền) vẽ vào khung TRONG LUỒNG mang mã GR03878; không khung nổi; HOÀN THÀNH → gỡ khung (v0.2.5)", async () => {
   const { b, srv, pos } = await openToReceived();
   try {
     await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền");
@@ -999,10 +1008,11 @@ test("P2: trang phiếu — mọi trạng thái (nút bắt đầu, đang kiểm
     await until(() => viewTitle(pos) === "GR03878: đã điền 12 UID từ Nextwaves");
     srv.st.gr.data.status = "COMPLETED";
     pos.post({ mark: "cgn/pos-hook", type: "gr-status", payload: { envId: "STG", grId: GR_ID, status: "COMPLETED", httpStatus: 200 } });
-    await until(() => viewTitle(pos) === "GR03878: đã HOÀN THÀNH");
+    await sessionState(b, "done");
+    await until(() => pos.view === null);
     assert.equal(pos.floatViews.length, 0, "trang phiếu không dùng khung nổi");
     const titles = pos.inlineViews.map((v) => v.title);
-    for (const t of ["GR03878 · SOBD1593858-F", "Đang kiểm GR03878…", "Đã khớp đơn Nextwaves — chờ nhận hàng", "Đang tra 12 UID trên POS…", "Chỉ xem kế hoạch — chưa có cấp phép điền", "Đã có cấp phép điền GR03878 (1 lần)", "GR03878: đã điền 12 UID từ Nextwaves", "GR03878: đã HOÀN THÀNH"]) {
+    for (const t of ["GR03878 · SOBD1593858-F", "Đang kiểm GR03878…", "Đã khớp đơn Nextwaves — chờ nhận hàng", "Đang tra 12 UID trên POS…", "Chỉ xem kế hoạch — chưa có cấp phép điền", "Đã có cấp phép điền GR03878 (1 lần)", "GR03878: đã điền 12 UID từ Nextwaves"]) {
       assert.ok(titles.includes(t), `thiếu trạng thái "${t}" trong khung trong luồng`);
     }
     assert.ok(titles.some((t) => /^Đang điền 1\/6 · kế hoạch #[0-9A-F]{8}$/.test(t)), "đang điền");
@@ -1350,6 +1360,240 @@ test("P2: đang điền GR03878 (PUT treo) mà SPA sang trang phiếu KHÁC → 
     const shown = pos.views.slice(n0).filter((v) => v && v.grCode === "GR03878");
     assert.deepEqual(shown.map((v) => v.title), [], "không view nào của GR03878 trên trang phiếu khác");
     assert.equal(srv.st.puts.length, 6);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+// ---------- v0.2.5 (PM AUDIT-A1-GR03887 P2): khung sau khi phiếu kết thúc ----------
+// Panel thật chờ chỗ gắn 10 giây; trình duyệt giả thu còn tuning.uiWaitMs (WAIT). A1 thật 28/10: HOÀN THÀNH 200 → trang COMPLETED không còn #all-receipt → v0.2.4 chờ chỗ gắn 10 giây rồi hiện khung nổi đỏ
+// "Giao diện phiếu nhận đã đổi" + nhật ký ui_anchor_missing. Test đợi quá WAIT rồi mới kiểm.
+const WAIT = { tuning: { uiWaitMs: 300 } };
+const PAST_WAIT = 450;
+const COMPLETED_OK = { mark: "cgn/pos-hook", type: "gr-status", payload: { envId: "STG", grId: GR_ID, status: "COMPLETED", httpStatus: 200 } };
+const isUiError = (v) => !!v && /^Giao diện phiếu nhận đã đổi/.test(v.title || "");
+const anchorLogs = (b) => (b.session(KEY) || { log: [] }).log.filter((l) => l.type === "ui_anchor_missing").length;
+const doneSession = (extra) =>
+  Object.assign(
+    { schema: 1, createdBy: APP_VERSION, key: KEY, envId: "STG", grId: GR_ID, grCode: "GR03878", poPosId: "f7678788-28e2-47bf-b5c6-a8e10a223f7d", poPosCode: "PO00006750", posId: STORE, deliveryCode: "SOBD1593858-F", soBase: "SOBD1593858", writeLocks: [], nwWriteLocks: [], returnUrl: `${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`, state: "done", createdAt: Date.now(), updatedAt: Date.now(), log: [] },
+    extra || {},
+  );
+
+// Nhận → cấp phép → điền 6 lô → trang tải lại → khung "đã điền". Trả {b, srv, pos}.
+async function openToApplied(opts) {
+  const ctx = await openToReceived(opts);
+  const { b, pos } = ctx;
+  await grant(b);
+  (await until(() => fillButton(pos))).onClick();
+  await sessionState(b, "applied");
+  await until(() => pos.reloads >= 1 && pos.loads >= 2);
+  pos.post(POS_AUTH);
+  await until(() => viewTitle(pos) === "GR03878: đã điền 12 UID từ Nextwaves");
+  return ctx;
+}
+
+test("v0.2.5 P2: HOÀN THÀNH 200 → trang COMPLETED mất #all-receipt → khung ẩn, KHÔNG khung đỏ, KHÔNG ui_anchor_missing; phiên done; anchor đổi sau đó không vẽ lại", async () => {
+  const { b, srv, pos } = await openToApplied(WAIT);
+  try {
+    assert.equal(anchorLogs(b), 0);
+    const n0 = pos.views.length;
+    srv.st.gr.data.status = "COMPLETED";
+    pos.post(COMPLETED_OK);
+    pos.setAnchor(false); // trang POS vẽ lại phiếu đã hoàn thành: không còn vùng sản phẩm có id
+    await sessionState(b, "done");
+    await settle(PAST_WAIT);
+    assert.equal(pos.view, null, "không còn khung trên phiếu đã hoàn thành");
+    assert.deepEqual(pos.views.slice(n0).map((v) => v.title), [], "không vẽ view nào sau HOÀN THÀNH");
+    assert.ok(!pos.floatViews.some(isUiError), "không có khung đỏ lỗi giao diện");
+    assert.equal(anchorLogs(b), 0, "không ghi ui_anchor_missing cho trang kết thúc bình thường");
+    // Trang vẽ lại (anchor có / mất) sau đó: không vẽ lại khung, không lỗi.
+    pos.setAnchor(true);
+    pos.setAnchor(false);
+    await settle(PAST_WAIT);
+    assert.equal(pos.view, null);
+    assert.equal(anchorLogs(b), 0);
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.2.5 P2: mở / F5 phiếu đã COMPLETED không có #all-receipt — phiên done hoặc không có phiên → không khung, không lỗi giao diện, chỉ đọc", async () => {
+  for (const withSession of [true, false]) {
+    const srv = makeServer();
+    srv.st.gr.data.status = "COMPLETED";
+    const b = createBrowser(srv.handle, WAIT);
+    try {
+      await b.setConfig({ mode: "STG", url: "" });
+      if (withSession) await b.patchSession(KEY, doneSession());
+      const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+      pos.setAnchor(false);
+      pos.post(POS_AUTH);
+      await until(() => srv.st.log.some((r) => new URL(r.url).pathname.endsWith(GR_ID)));
+      await settle(PAST_WAIT);
+      assert.equal(pos.view, null, `phiên: ${withSession}`);
+      assert.ok(!pos.floatViews.some(isUiError), `không khung đỏ (phiên: ${withSession})`);
+      assert.equal(anchorLogs(b), 0);
+      assert.ok(srv.st.log.every((r) => r.method === "GET"), "chỉ đọc");
+    } finally {
+      b.close();
+    }
+  }
+});
+
+test("v0.2.5 P2: phiếu CÒN nhận được mà mất #all-receipt vẫn báo lỗi giao diện + khoá điền (0 PUT, cấp phép giữ) như v0.2.4", async () => {
+  const { b, srv, pos } = await openToReceived();
+  try {
+    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền");
+    await grant(b);
+    await until(() => fillButton(pos));
+    pos.setAnchor(false);
+    await until(() => pos.viewKind === "float" && isUiError(pos.view));
+    await settle(150);
+    assert.ok(!pos.floatViews.some(isFill));
+    assert.equal(srv.st.puts.length, 0);
+    assert.equal(await grantCount(b), 1);
+    assert.ok(anchorLogs(b) >= 1, "trang đang nhận mất chỗ gắn vẫn ghi chẩn đoán");
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.2.5 P2: báo COMPLETED nhưng HTTP lỗi (500) hoặc của phiếu khác → không coi là hoàn thành: phiên giữ applied, khung giữ nguyên", async () => {
+  const { b, srv, pos } = await openToApplied();
+  let release;
+  const hold = new Promise((r) => (release = r));
+  try {
+    pos.post({ mark: "cgn/pos-hook", type: "gr-status", payload: { envId: "STG", grId: GR_ID, status: "COMPLETED", httpStatus: 500 } });
+    await settle(150);
+    assert.equal(viewTitle(pos), "GR03878: đã điền 12 UID từ Nextwaves", "HTTP lỗi: khung giữ nguyên");
+    // Phiếu khác báo HOÀN THÀNH 200: GET phiếu đang xem treo → khung KHÔNG được gỡ (kể cả thoáng qua).
+    srv.st.grHoldOnce = hold;
+    srv.st.grHeld = false;
+    pos.post({ mark: "cgn/pos-hook", type: "gr-status", payload: { envId: "STG", grId: "0f0f0f0f-1111-4222-8333-444455556666", status: "COMPLETED", httpStatus: 200 } });
+    await until(() => srv.st.grHeld);
+    await settle(50);
+    assert.equal(viewTitle(pos), "GR03878: đã điền 12 UID từ Nextwaves", "HOÀN THÀNH của phiếu khác không gỡ khung phiếu đang xem");
+    release();
+    await settle(200);
+    assert.equal(b.session(KEY).state, "applied");
+    assert.equal(viewTitle(pos), "GR03878: đã điền 12 UID từ Nextwaves");
+    assert.equal(pos.viewKind, "inline");
+    assert.equal(anchorLogs(b), 0);
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("v0.2.5 P2: phiên done nhưng GET phiếu vẫn chờ nhận → không tin phiên: cảnh báo + 'Đọc lại', không nút Điền / Nhận hàng, 0 PUT", async () => {
+  const srv = makeServer();
+  const b = createBrowser(srv.handle);
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    await b.patchSession(KEY, doneSession());
+    await grant(b);
+    const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    pos.post(POS_AUTH);
+    const v = await until(() => pos.view && pos.view.tone === "warn" && pos.view);
+    assert.equal(v.grCode, "GR03878");
+    assert.match(v.title, /^GR03878: POS chưa ở trạng thái hoàn thành$/);
+    assert.deepEqual(Array.from(v.buttons, (x) => x.label), ["Đọc lại", "Huỷ phiên"]);
+    assert.ok(!startBtn(pos) && !isFill(pos.view));
+    // "Đọc lại" khi phiếu vẫn vậy → vẫn cảnh báo, vẫn không ghi.
+    v.buttons[0].onClick();
+    await settle(150);
+    assert.match(viewTitle(pos), /POS chưa ở trạng thái hoàn thành/);
+    assert.equal(srv.st.puts.length, 0);
+    assert.equal(b.session(KEY).state, "done");
+    // POS đọc lại thấy COMPLETED → khung ẩn.
+    srv.st.gr.data.status = "COMPLETED";
+    pos.view.buttons[0].onClick();
+    await until(() => pos.view === null);
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.2.5 P2: lượt đánh giá chạy dở trước HOÀN THÀNH (GET cũ về muộn, phiếu còn RECEIVING) → không vẽ view cũ, không khung đỏ; ẩn sau khi GET mới thấy COMPLETED", async () => {
+  const { b, srv, pos } = await openToApplied(WAIT);
+  let release;
+  const hold = new Promise((r) => (release = r));
+  try {
+    srv.st.grHoldOnce = hold;
+    srv.st.grHeld = false;
+    await grant(b); // cấp phép của đúng phiếu đổi → khung đánh giá lại (GET phiếu treo)
+    await until(() => srv.st.grHeld);
+    const n0 = pos.views.length;
+    srv.st.gr.data.status = "COMPLETED";
+    pos.post(COMPLETED_OK);
+    await sessionState(b, "done");
+    await settle(50);
+    release(); // GET cũ (RECEIVING) về sau khi đã HOÀN THÀNH; trang chưa vẽ lại (còn chỗ gắn) → view cũ lọt là hiện ngay
+    await settle(PAST_WAIT);
+    assert.equal(pos.view, null);
+    assert.deepEqual(pos.views.slice(n0).map((v) => v.title), [], "không vẽ view của lượt đánh giá cũ");
+    pos.setAnchor(false);
+    await settle(PAST_WAIT);
+    assert.equal(pos.view, null);
+    assert.ok(!pos.floatViews.some(isUiError));
+    assert.equal(anchorLogs(b), 0);
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("v0.2.5 P2: HOÀN THÀNH rồi SPA sang phiếu khác khi GET GR03878 còn treo → không view GR03878 trên trang mới; trang mới vẫn có view của nó", async () => {
+  const OTHER = "0f0f0f0f-1111-4222-8333-444455556666";
+  const { b, srv, pos } = await openToApplied();
+  let release;
+  const hold = new Promise((r) => (release = r));
+  try {
+    srv.st.gr.data.status = "COMPLETED";
+    srv.st.grHoldOnce = hold;
+    srv.st.grHeld = false;
+    pos.post(COMPLETED_OK);
+    await until(() => srv.st.grHeld);
+    const n0 = pos.views.length;
+    const to = `${POS}/danh-sach-phieu-nhan-hang/${OTHER}`;
+    pos.url = to;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: to } });
+    await settle(30);
+    release();
+    await until(() => viewTitle(pos) === "Không đọc được phiếu nhận");
+    await settle(100);
+    assert.deepEqual(pos.views.slice(n0).filter((v) => v.grCode === "GR03878").map((v) => v.title), [], "không view GR03878 sau khi đổi trang");
+    assert.equal(viewTitle(pos), "Không đọc được phiếu nhận", "lượt cũ không ẩn view của trang mới");
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("v0.2.5 P2: hook báo HOÀN THÀNH 2xx → gỡ khung + dừng chờ chỗ gắn NGAY, không đợi GET phiếu (GET treo quá thời gian chờ vẫn không khung đỏ)", async () => {
+  const { b, srv, pos } = await openToApplied(WAIT);
+  let release;
+  const hold = new Promise((r) => (release = r));
+  try {
+    srv.st.gr.data.status = "COMPLETED";
+    srv.st.grHoldOnce = hold;
+    srv.st.grHeld = false;
+    pos.post(COMPLETED_OK);
+    await until(() => srv.st.grHeld); // GET phiếu sau HOÀN THÀNH còn treo
+    assert.equal(pos.view, null, "khung gỡ ngay khi hook báo, trước khi GET về");
+    pos.setAnchor(false);
+    await settle(PAST_WAIT);
+    assert.ok(!pos.floatViews.some(isUiError), "không khung đỏ dù GET treo quá thời gian chờ chỗ gắn");
+    assert.equal(anchorLogs(b), 0);
+    release();
+    await settle(PAST_WAIT);
+    assert.equal(pos.view, null);
+    assert.equal(b.session(KEY).state, "done");
   } finally {
     release();
     b.close();

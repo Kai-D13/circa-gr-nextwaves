@@ -22,6 +22,9 @@
 //  4. W1 bằng BÀN PHÍM: focus nút "Điền" + Enter → 5 PUT đúng kế hoạch #E33C777A của lượt thật → tải lại → "đã điền 11 UID".
 //  5. Trace CDP từ lúc mở trang: không tác vụ nào của extension ≥ 50 ms.
 //  6. Trang không có #all-receipt → sau 10 s: khung nổi báo lỗi giao diện, không nút Điền, 0 PUT, cấp phép còn.
+//  7. v0.2.5 (PM AUDIT-A1-GR03887 P2): trang "đã điền" → trang tự gửi PUT status/COMPLETED qua hook thật → bỏ #all-receipt → quá
+//     10 s: không khung nào (không khung đỏ), phiên done, không ui_anchor_missing; mở lại phiếu COMPLETED thật → không khung, không lỗi.
+//     Trace có tên cho trang mục 6 (nhánh thiếu chỗ gắn) và mục 7: không tác vụ extension ≥ 50 ms.
 // Đối chứng: chạy với gói v0.2.3 phải HỎNG mục "điều khiển SL nhận bấm được" ở 1095×756.
 //
 // Chẩn đoán hiệu năng (PM AUDIT-A1-PREP P2, 28/10): mỗi mục kiểm đặt một mốc console.timeStamp vào trace → mỗi tác vụ extension
@@ -82,6 +85,8 @@ const REAL_CSS = sample("pos-stg-gr-page-GR03887-20261027.css");
 const page = (title, body) => `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>${REAL_CSS}\n.Toastify{display:none}</style></head><body>${body}</body></html>`;
 const GR_PAGE = page("POS giả — trang phiếu (DOM thật)", REAL_HTML);
 const GR_PAGE_NO_ANCHOR = page("POS giả — trang phiếu không có #all-receipt", REAL_HTML.replace('id="all-receipt"', 'id="x-receipt"'));
+// Đoạn kiểm chỉ đọc giao operator cho v0.2.5 (đếm khung extension trên trang phiếu).
+const KIEM_KHUNG_JS = fs.readFileSync(path.join(__dirname, "kiem-khung-gr.js"), "utf8");
 const VIEWPORTS = [
   [1095, 756],
   [1366, 768],
@@ -425,7 +430,7 @@ async function runBaseline() {
     if (!sw) throw new Error("dừng");
 
     // ---- server giả (GR03880 thật, PUT áp vào GR) ----
-    const st = { gr: JSON.parse(JSON.stringify(GR0)), puts: [], grDown: false, noAnchor: false };
+    const st = { gr: JSON.parse(JSON.stringify(GR0)), puts: [], grDown: false, noAnchor: false, completed: 0 };
     const handler = async (r) => {
       const u = new URL(r.url);
       if (/^\/danh-sach-phieu-nhan-hang\/[0-9a-f-]{36}\/?$/.test(u.pathname)) return { status: 200, type: "text/html; charset=utf-8", body: st.noAnchor ? GR_PAGE_NO_ANCHOR : GR_PAGE };
@@ -446,6 +451,12 @@ async function runBaseline() {
         if (!d) return { status: 404, type: "application/json", body: "{}" };
         Object.assign(d, { received_quantity: body.detail.received_quantity, lot_id: body.detail.lot_id, thuocsi_qr_codes: body.detail.thuocsi_qr_codes });
         st.gr.data.status = "RECEIVING";
+        return { status: 200, type: "application/json", body: '{"success":true}' };
+      }
+      // HOÀN THÀNH (do trang gọi, mục 7): server giả nhận, phiếu sang COMPLETED.
+      if (/^\/backend\/v1\/order\/goods-receipt\/[0-9a-f-]{36}\/status\/COMPLETED$/.test(u.pathname) && r.method === "PUT") {
+        st.completed += 1;
+        st.gr.data.status = "COMPLETED";
         return { status: 200, type: "application/json", body: '{"success":true}' };
       }
       return { status: 404, type: "application/json", body: "{}" };
@@ -508,6 +519,8 @@ async function runBaseline() {
       await sleep(300);
       const pf = JSON.parse((await evalIn(pg, src, ctxId())) || "{}");
       check("đoạn preflight operator (scripts/preflight-gr-page.js) · nw_ready 1095×756: KET_QUA ĐẠT", pf.KET_QUA === "ĐẠT", JSON.stringify(pf).slice(0, 240));
+      const kk = JSON.parse((await evalIn(pg, KIEM_KHUNG_JS, ctxId())) || "{}");
+      check("đoạn kiểm v0.2.5 operator (scripts/kiem-khung-gr.js) · phiếu đang nhận: khung 1, trong luồng 1, nổi 0, có #all-receipt", kk.khung === 1 && kk.trongLuong === 1 && kk.noi === 0 && kk.allReceipt === true, JSON.stringify(kk));
       await pg.send("Emulation.clearDeviceMetricsOverride", {});
       phaseMark("cgn#so-sanh"); // hết nw_ready: cửa sổ so với --baseline
       await sleep(200);
@@ -708,7 +721,7 @@ async function runBaseline() {
     st.gr = JSON.parse(JSON.stringify(GR0));
     await setSession({ state: "received" });
     await setGrant(true);
-    const h = await openPage(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`, handler);
+    const h = await openPage(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`, handler, { trace: true });
     await sleep(2500);
     await evalIn(h.page, `window.postMessage({mark:"cgn/pos-hook", type:"auth", payload:{envId:"STG", headers:${JSON.stringify(AUTH)}}}, location.origin), true`, (mainCtx(h.ctxs) || {}).id);
     await sleep(11500);
@@ -719,8 +732,66 @@ async function runBaseline() {
       !!hn && !hn.inline && /Giao diện phiếu nhận đã đổi/.test(ht) && /Kiểm tra lại/.test(ht) && !/Điền vào phiếu/.test(ht) && st.puts.length === putsBefore && (await grants()).length === 1,
       ht.slice(0, 160)
     );
+    const budget = async (x, label) => {
+      const ts = extensionTasks(await x.stopTrace()).sort((a, b) => b.ms - a.ms);
+      ts.slice(0, 3).forEach((t, i) => info(`  ${label} — tác vụ dài #${i + 1}`, fmtTask(t)));
+      check(`${label}: không tác vụ nào của extension ≥ 50 ms`, ts.length > 0 && ts[0].ms < 50, ts[0] ? `${ts[0].ms.toFixed(2)} ms ${ts[0].file}:${ts[0].line}:${ts[0].col}` : "");
+    };
+    await budget(h, "nhánh thiếu chỗ gắn (trang mới, chờ 10 s → khung nổi)");
     h.page.close();
     await closeTarget(h.targetId);
+
+    // 7) v0.2.5 (PM AUDIT-A1-GR03887 P2): phiếu kết thúc. A1 thật 28/10: HOÀN THÀNH 200 → trang COMPLETED không còn #all-receipt
+    // → v0.2.4 hiện khung nổi đỏ sau 10 s. Ở đây trang "đã điền" (GR03880 sau W1 thật) tự gửi PUT status/COMPLETED qua hook THẬT
+    // (server giả trả 200) rồi bỏ #all-receipt; quá 10 s phải: không khung nào, phiên done, không ui_anchor_missing, 0 PUT điền mới.
+    const sessionNow = async () => JSON.parse(await evalIn(sw, `chrome.storage.local.get("sessions").then((x) => JSON.stringify((x.sessions || {})[${JSON.stringify(KEY)}] || null))`));
+    st.noAnchor = false;
+    st.gr = json("pos-stg-gr-GR03880-W1-sau-20261026.json");
+    await setGrant(false);
+    await setSession({ state: "applied", applyResult: { at: now(), hash: PLAN_HASH, steps: 5, uids: 11 } });
+    const putsDone = st.puts.length;
+    const k = await openPage(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`, handler, { trace: true });
+    const kctx = () => (mainCtx(k.ctxs) || {}).id;
+    await sleep(2500);
+    await evalIn(k.page, `window.postMessage({mark:"cgn/pos-hook", type:"auth", payload:{envId:"STG", headers:${JSON.stringify(AUTH)}}}, location.origin), true`, kctx());
+    const k1 = await until(async () => /đã điền 11 UID/.test(await panelText(k.page)) && (await panelNodes(k.page)));
+    check("trang phiếu đã điền (GR03880 sau W1 thật): khung trong luồng 'đã điền 11 UID'", !!k1 && k1.inline, (await panelText(k.page)).slice(0, 120));
+    const sc = await evalIn(k.page, `fetch(${JSON.stringify(`${POS}/backend/v1/order/goods-receipt/${GR_ID}/status/COMPLETED`)}, { method: "PUT", headers: ${JSON.stringify(AUTH)} }).then((r) => r.status)`, kctx());
+    await evalIn(k.page, `(() => { const a = document.getElementById("all-receipt"); if (a) a.id = "x-receipt"; return true; })()`, kctx());
+    await sleep(11500);
+    const kn = await panelNodes(k.page);
+    const ks = await sessionNow();
+    const klog = ks ? ks.log.map((l) => l.type) : [];
+    check(
+      "HOÀN THÀNH do trang gọi (PUT status/COMPLETED 200 qua hook thật) → trang bỏ #all-receipt → quá 10 s: KHÔNG khung (không khung đỏ), phiên done, không ui_anchor_missing, 0 PUT điền mới",
+      sc === 200 && st.completed === 1 && !kn && !!ks && ks.state === "done" && !klog.includes("ui_anchor_missing") && st.puts.length === putsDone,
+      `HTTP ${sc} · khung ${kn ? (await panelText(k.page)).slice(0, 100) : "không"} · phiên ${ks && ks.state} · nhật ký ${klog.join(",")}`
+    );
+    const kk2 = JSON.parse((await evalIn(k.page, KIEM_KHUNG_JS, kctx())) || "{}");
+    check("đoạn kiểm v0.2.5 operator (scripts/kiem-khung-gr.js) · phiếu đã HOÀN THÀNH: khung 0, không #all-receipt", kk2.khung === 0 && kk2.allReceipt === false, JSON.stringify(kk2));
+    await budget(k, "trang đã điền → HOÀN THÀNH → bỏ #all-receipt");
+    k.page.close();
+    await closeTarget(k.targetId);
+
+    // 7b) Mở lại (F5) phiếu COMPLETED thật (không có #all-receipt), phiên done → quá 10 s: không khung, không lỗi, chỉ đọc.
+    st.noAnchor = true;
+    st.gr = json("pos-stg-gr-GR03880-completed-20261026.json");
+    await setSession({ state: "done" });
+    const completedBefore = st.completed;
+    const q = await openPage(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`, handler, { trace: true });
+    await sleep(2500);
+    await evalIn(q.page, `window.postMessage({mark:"cgn/pos-hook", type:"auth", payload:{envId:"STG", headers:${JSON.stringify(AUTH)}}}, location.origin), true`, (mainCtx(q.ctxs) || {}).id);
+    await sleep(11500);
+    const qn = await panelNodes(q.page);
+    const qs = await sessionNow();
+    check(
+      "mở lại phiếu COMPLETED (GR03880 thật, không #all-receipt, phiên done) → quá 10 s: không khung, không ui_anchor_missing, không ghi",
+      !qn && !!qs && !qs.log.some((l) => l.type === "ui_anchor_missing") && st.puts.length === putsDone && st.completed === completedBefore,
+      qn ? (await panelText(q.page)).slice(0, 120) : "không khung"
+    );
+    await budget(q, "mở lại phiếu COMPLETED");
+    q.page.close();
+    await closeTarget(q.targetId);
   } catch (err) {
     check("chạy hết kịch bản", false, String((err && err.stack) || err).slice(0, 300));
   } finally {

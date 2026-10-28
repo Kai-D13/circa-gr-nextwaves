@@ -213,9 +213,29 @@ function createBrowser(server, opts = {}) {
       },
     };
     // Khung trong luồng trang phiếu (v0.2.4): anchor có / không do test đặt bằng t.setAnchor(bool) (mặc định có).
-    // Không có anchor → view giữ chờ, gọi onMissing("missing") một lần (đến khi hide); anchor xuất hiện lại → onFound().
-    const inline = { opts: null, view: null, code: null, missing: false };
+    // Không có anchor → view chờ chỗ gắn; hết `tuning.uiWaitMs` (mặc định 0 = lượt sự kiện kế tiếp; panel thật 10 giây) mà VẪN chờ
+    // (chưa hide, anchor chưa có lại) → onMissing("missing") một lần. hide huỷ lượt chờ như panel thật (v0.2.5). Anchor có lại sau
+    // khi đã báo thiếu → onFound(); trước khi báo → chỉ gắn khung.
+    const inline = { opts: null, view: null, code: null, waiting: false, failed: false, timer: null };
     c.inline = inline;
+    inline.arm = () => {
+      if (inline.waiting || inline.failed) return;
+      inline.waiting = true;
+      const fire = () => {
+        inline.timer = null;
+        if (c.dead || !inline.waiting || !inline.view || t.anchor) return;
+        inline.waiting = false;
+        inline.failed = true;
+        inline.opts.onMissing("missing");
+      };
+      if (tuning.uiWaitMs) inline.timer = setTimeout(fire, tuning.uiWaitMs);
+      else setImmediate(fire);
+    };
+    inline.disarm = () => {
+      if (inline.timer) clearTimeout(inline.timer);
+      inline.timer = null;
+      inline.waiting = inline.failed = false;
+    };
     win.__CGN__ = {
       tuning,
       ui: {
@@ -239,13 +259,7 @@ function createBrowser(server, opts = {}) {
               if (c.dead) return;
               inline.view = v;
               inline.code = code || null;
-              if (!t.anchor) {
-                if (!inline.missing) {
-                  inline.missing = true;
-                  setImmediate(() => !c.dead && o.onMissing("missing"));
-                }
-                return;
-              }
+              if (!t.anchor) return inline.arm();
               t.view = v;
               t.viewKind = "inline";
               t.views.push(v);
@@ -253,7 +267,7 @@ function createBrowser(server, opts = {}) {
             },
             hide: () => {
               inline.view = inline.code = null;
-              inline.missing = false;
+              inline.disarm();
               if (!c.dead && t.viewKind === "inline") t.view = null;
             },
             anchoredFor: (code) => !c.dead && t.anchor && !!inline.view && inline.code === (code || null) && t.viewKind === "inline",
@@ -318,17 +332,15 @@ function createBrowser(server, opts = {}) {
       if (!inl || !inl.opts) return;
       if (!on && t.viewKind === "inline") {
         t.view = null;
-        if (inl.view && !inl.missing) {
-          inl.missing = true;
-          setImmediate(() => !t.ctx.dead && inl.opts.onMissing("missing"));
-        }
-      } else if (on && inl.missing && inl.view) {
-        inl.missing = false;
+        if (inl.view) inl.arm();
+      } else if (on && inl.view && (inl.waiting || inl.failed)) {
+        const wasFailed = inl.failed;
+        inl.disarm();
         t.view = inl.view;
         t.viewKind = "inline";
         t.views.push(inl.view);
         t.inlineViews.push(inl.view);
-        setImmediate(() => !t.ctx.dead && inl.opts.onFound());
+        if (wasFailed) setImmediate(() => !t.ctx.dead && inl.opts.onFound());
       }
     };
     tabs.set(t.id, t);

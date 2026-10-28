@@ -12,6 +12,8 @@
     apply_stopped: "Điền phiếu bị dừng",
     done: "Đã HOÀN THÀNH",
   };
+  // Phiên còn hoạt động (như background / trang POS): chỉ các phiên này mới được cấp phép điền.
+  const ACTIVE = new Set(["waiting_nw", "nw_ready", "received", "applying", "applied", "apply_stopped"]);
 
   async function bg(type, extra) {
     const r = await chrome.runtime.sendMessage(Object.assign({ type }, extra || {}));
@@ -131,6 +133,22 @@
       const c = await bg("config:get");
       const env = E.envFromConfig(c);
       if (!env) throw new Error("Chưa lưu môi trường");
+      // v0.2.5 (PM AUDIT-A1 P3): chỉ cấp phép khi mã khớp CHÍNH XÁC một phiên còn hoạt động của môi trường đang chọn (A1 28/10: "GR3887"
+      // gõ thiếu số 0 vẫn tạo được cấp phép). So như background (bỏ khoảng trắng hai đầu, chữ hoa); không sửa ô nhập.
+      // Không đọc được phiên → không cấp.
+      const code = String($("grCode").value || "").trim().toUpperCase();
+      let list;
+      try {
+        list = await bg("session:list");
+      } catch (err) {
+        throw new Error(`Không đọc được danh sách phiên — chưa cấp phép (${String((err && err.message) || err)}).`);
+      }
+      const open = (list || []).filter((s) => s && s.schema && s.envId === env.id && ACTIVE.has(s.state));
+      if (!open.some((s) => String(s.grCode || "").toUpperCase() === code)) {
+        const codes = [...new Set(open.map((s) => s.grCode))];
+        const odd = /[^A-Z0-9]/.test(code) ? " Mã có ký tự lạ (khoảng trắng / ký tự ẩn, thường do dán) — hãy gõ tay." : "";
+        throw new Error(`Mã phiếu không khớp phiên đang có — chưa cấp phép.${odd} ${codes.length ? `Phiên đang mở (${env.label}): ${codes.join(", ")}.` : `Không có phiên đang mở ở ${env.label}.`}`);
+      }
       const g = await bg("grant:create", { envId: env.id, grCode: $("grCode").value });
       say("grantMsg", `Đã cho phép điền 1 lần: ${g.grCode} (${env.label}).`);
       $("grCode").value = "";
