@@ -100,8 +100,8 @@ Edge 156.0.4314.50, máy dev, cùng buổi 28/10. Kết quả gốc ở scratchp
 | Lượt | Kết quả | Tác vụ extension dài nhất | Edge sót sau lượt |
 |---|---|---|---|
 | `edge-upgrade-v024.js` | **17/17** | — | 0 |
-| `edge-gr-page.js` gói v0.2.4 `C:circa-gr-nextwaves-v0.2.4` × 5 | **95/95 × 5** | 16,62 / 14,32 / 16,46 / 15,14 / 14,36 ms — đều ở `pos/pos-content.js`; 3 lượt sau có log chi tiết: đều là lúc nạp script | 0 |
-| `edge-gr-page.js` đối chứng v0.2.3 `C:circa-gr-nextwaves-v0.2.3` | **hỏng 52/92**: gồm "điều khiển SL nhận bấm được" (khung nổi phủ ô lô, −, +, "+ Thêm lot-date", "In tem…") và đoạn preflight XEM LẠI | 24,02 ms | 0 |
+| `edge-gr-page.js` gói v0.2.4 `C:\circa-gr-nextwaves-v0.2.4` × 5 | **95/95 × 5** | 16,62 / 14,32 / 16,46 / 15,14 / 14,36 ms — đều ở `pos/pos-content.js`; 3 lượt sau có log chi tiết: đều là lúc nạp script | 0 |
+| `edge-gr-page.js` đối chứng v0.2.3 `C:\circa-gr-nextwaves-v0.2.3` | **hỏng 52/92**: gồm "điều khiển SL nhận bấm được" (khung nổi phủ ô lô, −, +, "+ Thêm lot-date", "In tem…") và đoạn preflight XEM LẠI | 24,02 ms | 0 |
 | `edge-check.js` gói v0.2.4 | **42/42** | danh sách 3,36 ms; trang bán hàng 1,06 ms | 0 |
 | `npm test` trên đầu nhánh | **160/160** | — | — |
 

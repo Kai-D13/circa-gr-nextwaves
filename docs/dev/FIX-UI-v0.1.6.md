@@ -1,7 +1,7 @@
 # v0.1.6 — khung extension không che nút thao tác của trang (26/10/2026)
 
 **Nhánh:** `batch/v0.1.6-ui`, tách từ `main` `aa42dcc`, tức sau khi merge `batch/v0.1-staging` theo PM audit `docs/pm/AUDIT-T3-W1-FULL-STG-20261026.md`.
-**Commit mã:** `b4017d7`. **Gói: v0.1.6 `34B4AE1A`** (sha256 `34b4ae1a1cd38f2c713eeed28aaf874e571a7b9ad6323a7a745e6fea42bf077c`, 18 file), giải nén `C:circa-gr-nextwaves-v0.1.6`.
+**Commit mã:** `b4017d7`. **Gói: v0.1.6 `34B4AE1A`** (sha256 `34b4ae1a1cd38f2c713eeed28aaf874e571a7b9ad6323a7a745e6fea42bf077c`, 18 file), giải nén `C:\circa-gr-nextwaves-v0.1.6`.
 
 ## 1. Vấn đề (operator 26/10)
 
