@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **28/10/2026 (lần 52, operator chốt một lượt staging cho tự điền + tự HOÀN THÀNH)**. Giai đoạn: **A1 trên v0.2.4 đạt gate chức năng, nhưng chưa staging done/merge. Operator muốn gộp tự điền và tự HOÀN THÀNH trước pilot production, chỉ dùng một đơn staging chưa nhận để QC gói cuối vì nguồn đơn test ít. v0.2.5 P2/P3 hiện là ứng viên nội bộ, không cài/tiêu đơn staging riêng; dev hoàn tất gate local rồi làm batch tự động. Một quyền rõ ràng trước xác nhận Nextwaves cho đúng GR/PO/SO, dùng một lần; POS tự điền, GET kiểm toàn GR rồi mới gửi HOÀN THÀNH đúng một lần; lỗi/không rõ thì dừng, không retry. PM audit gói cuối G0–G3 và một E2E staging thật trước staging done/merge. Production còn O1, QR lô, reader, T1-PRD và phép W1-PRD riêng.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **29/10/2026 (lần 53, PM audit G0 v0.2.5)**. Giai đoạn: **G0 v0.2.5 đạt ở phạm vi ứng viên nội bộ: PM kiểm SHA ZIP `792817B9…`, 19/19 file source=gói tại `02f2575`, Node 180/180; dev báo Edge 103/103 ×3, đột biến 146/146 và trace extension ≤21,71 ms. Không cài cho operator, chưa staging done/merge. G1 v0.3.0 đang sửa dở: dev báo 204/204 test nhưng worktree có hai phiên cùng ghi, chưa có SHA/gói để PM audit. PM yêu cầu một owner, giữ `autoRun.skipped` và sửa popup đang báo “ĐÃ CHO PHÉP” sau khi lượt tự động đã bỏ qua. Chỉ một E2E staging thật trên gói cuối; production vẫn chờ các gate riêng.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -587,7 +587,10 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-52. **Hiện hành (sau quyết định operator gộp luồng tự động, 28/10):**
+53. **Hiện hành (sau PM audit G0 v0.2.5, 29/10):**
+    - G0 nội bộ đạt: `batch/v0.2-rfid` `02f2575`, gói `792817B9…`, PM so source/ZIP 19/19, chạy Node 180/180, `background.js` không đổi. Edge 103/103 ×3, Edge tổng 42/42, đột biến 146/146, trace ≤21,71 ms là số dev báo; PM chưa chạy lại Edge/đột biến. Không cài v0.2.5 cho operator, chưa dùng đơn staging/merge. Xem `docs/pm/AUDIT-G0-v0.2.5-G1-PRELIM-20261029.md`.
+    - G1 v0.3.0 chưa đạt gate: dev báo 204/204 test trên mã chưa commit; hai phiên cùng sửa worktree v0.3.0. PM yêu cầu một owner (ưu tiên phiên đã viết luồng chính/test), rà nhận các phần `autoRun.skipped`/`auto:skip`/`grant_expired` rồi chốt SHA trước đột biến/Edge/gói. Finding P2.5: popup không được báo “ĐÃ CHO PHÉP” sau khi auto đã skip; vô hiệu quyền và hiển thị đường thủ công, test F5 không tự chạy lại. Operator chưa cần làm gì.
+52. (cũ, thay bằng mục 53) **Sau quyết định operator gộp luồng tự động, 28/10:**
     - Operator yêu cầu tự điền + tự HOÀN THÀNH trong một luồng trước pilot production, **một** E2E staging có tác động thật trên gói cuối; không dùng thêm đơn test cho mỗi bản trung gian. Chưa có phép ghi cho GR mới. PM spec/gate tại `docs/pm/DECISION-ONE-STG-AUTO-FLOW-20261028.md`.
     - v0.2.5 sửa P2/P3 đang chạy test/đột biến/Edge; dev hoàn tất để PM audit nội bộ, chưa yêu cầu operator cài/kiểm riêng và chưa merge. Batch sau có quyền một lần cho đúng GR/PO/SO trước Nextwaves; tự W1 chỉ khi receipt/UID/kế hoạch đầy đủ; GET toàn GR sau W1 phải trùng kế hoạch trước một PUT COMPLETED; GET cuối xác nhận. Lỗi/không rõ dừng, không tự retry. Test âm dùng fixture A1/server giả, chỉ một lượt staging thật trên gói cuối.
     - Manual mode vẫn giữ. Quyết định 24/10 “dược sĩ bấm HOÀN THÀNH” được thay **chỉ trong chế độ tự động được cấp phép riêng**; dev đồng bộ `agent.md` sau khi commit spec PM. Production vẫn chỉ đọc tới gate PRD và phép operator riêng.
