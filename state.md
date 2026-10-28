@@ -1,10 +1,10 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **29/10/2026 (lần 54, operator đổi cấu trúc dự án)**. Giai đoạn: **Từ 29/10 chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), không còn PM Codex, áp quy tắc một người ghi (`agent.md` §2.1). G0 v0.2.5 đạt (PM Codex audit cuối `docs/pm/AUDIT-G0-v0.2.5-G1-PRELIM-20261029.md`). G1 v0.3.0 tự điền + tự HOÀN THÀNH đang làm trên `batch/v0.2-rfid` (chưa commit SHA cố định), còn finding P2.5 (popup báo "ĐÃ CHO PHÉP" sau khi tự động đã bị bỏ qua), đột biến / Edge / gói chưa xong. Operator chưa cần cài hay cho phép lượt nhận mới. Production chỉ đọc.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **29/10/2026 (lần 55, G1 v0.3.0 đạt)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). v0.3.0 tự điền + tự HOÀN THÀNH một lần: **G1 đạt** (`docs/dev/BATCH-v0.3.0.md`), gói `45E07F60`, đã chép vào thư mục giao, **chưa cài**. Chờ operator cho phép G2 (cài gói cuối, kiểm chỉ đọc, chọn một phiếu chưa nhận) rồi G3 (một E2E staging thật, cho phép bằng chữ đúng mã phiếu) — `docs/dev/RUNBOOK-G2-G3-v0.3.0.md`. Production chỉ đọc.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
-**Phiên giữ quyền ghi (`agent.md` §2.1):** Claude Code — phiên "QR code scan log project (fork)" do operator chỉ định 29/10 (chat: "bạn sẽ đảm nhận cả PM, senior Software Engineer, QC, tester, audit, review"). Mọi phiên khác (gốc, resume như `qr-code-b2`, fork mới, Codex) **chỉ đọc**. Worktree mã: `C:QR_codecirca-gr-nextwaves-dev` (chuyển từ thư mục tạm của phiên sau khi đột biến v0.3.0 chạy xong).
+**Phiên giữ quyền ghi (`agent.md` §2.1):** Claude Code — phiên "QR code scan log project (fork)" do operator chỉ định 29/10 (chat: "bạn sẽ đảm nhận cả PM, senior Software Engineer, QC, tester, audit, review"). Mọi phiên khác (gốc, resume như `qr-code-b2`, fork mới, Codex) **chỉ đọc**. Worktree mã: `C:\QR_code\circa-gr-nextwaves-dev` (chuyển từ thư mục tạm của phiên sau khi đột biến v0.3.0 chạy xong).
 
 - Đã hiểu luồng nhận hàng trên POS hiện tại (capture production 19/10, §1).
 - Đã kiểm chuỗi khoá ba bên trên SO 38468903 (§2). Mã SO là khoá chung **ở production**. GR không có SO, nhưng PO của GR có SO.
@@ -589,7 +589,14 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-54. **Hiện hành (operator đổi cấu trúc dự án, 29/10):**
+55. **Hiện hành (G1 v0.3.0 đạt, 29/10):**
+    - Gói `45E07F60…` (src `4b79c58`, đóng từ `b37c509`; đầu nhánh `batch/v0.2-rfid` `0ebfa81` chỉ thêm test). Báo cáo `docs/dev/BATCH-v0.3.0.md`.
+    - Kiểm: `npm test` 222/222; đột biến lượt đủ 202/205 → 3 ca sống là lớp chặn thứ hai trong background, thêm test, chạy lại 3/3 → 205/205; Edge trang phiếu 108/108 ×3 (đối chứng v0.2.5 104/108), edge-check 42/42; tác vụ extension dài nhất 11,40 ms, 0 tác vụ ≥ 50 ms; P2.5 đã sửa (bỏ qua → thu hồi quyền, popup / Nextwaves báo "Tự động đã dừng").
+    - Audit độc lập bằng sub-agent: 0 P1, 5 P2, 3 P3 — đã sửa, test mới trượt 8 trên src trước sửa (`docs/dev/AUDIT-v0.3.0.md`).
+    - Thư mục giao `C:\circa-gr-nextwaves-release\`: `v0.3.0\` + `nang-cap-v0.3.0.ps1` + `kiem-khung-gr.js`, SHA256SUMS đạt. `-Check` (chỉ đọc) trên thư mục đang tải thật: đúng v0.2.4 `0BB73E2D` từng byte → KIỂM ĐẠT.
+    - **Chờ operator:** cho phép G2 (cài + kiểm chỉ đọc + chọn phiếu chưa nhận, gửi một ảnh khung Nextwaves + số tem), sau đó G3 (cho phép bằng chữ đúng GR / PO / SO / số tem). Staging done + merge chỉ khi G1–G3 đạt trên chính gói này.
+    - Thư mục thử cũ `C:\circa-gr-nextwaves-v0.3.0` (gói trung gian `08B31C6E`) không dùng; operator tự xoá được.
+54. (cũ, thay bằng mục 55) **Operator đổi cấu trúc dự án, 29/10:**
     - Chỉ còn operator + một phiên Claude Code giữ quyền ghi (kiêm PM / senior engineer / QC / tester / audit / review). PM Codex thôi vai trò; `docs/pm/*` là lịch sử, quyết định cũ vẫn hiệu lực trừ khi bị thay. Plan / audit mới ở `docs/dev/`. Ghi thật và cài / nâng gói vẫn cần operator cho phép từng lần.
     - Lý do: 29/10 00:05–00:08 phiên `qr-code-b2` (operator gõ "resume") sửa cùng worktree v0.3.0 với phiên dev; PM Codex cũng ghi tài liệu song song. Quy tắc mới: một người ghi, phiên mới / resume / fork mặc định chỉ đọc, commit từng bước, worktree ở đường dẫn cố định (`agent.md` §2.1, `CLAUDE.md`, `AGENTS.md`).
     - Việc kế tiếp: sửa P2.5 (quyền tự động bị bỏ qua → thu hồi + popup / Nextwaves báo "Tự động đã dừng"), commit SHA cố định v0.3.0, đột biến + Edge + trace + gói + script nâng v0.2.4 → v0.3.0, audit độc lập bằng sub-agent, báo cáo G1. Sau đó G2 (operator cài gói cuối, kiểm chỉ đọc) và G3 (một E2E staging thật có phép riêng).
