@@ -1,11 +1,11 @@
-"""Đột biến có chủ đích cho các hàng rào của v0.3.0 = 146 ca của v0.2.5 + 47 ca chế độ tự động (PM DECISION-ONE-STG-AUTO-FLOW-20261028
+"""Đột biến có chủ đích cho các hàng rào của v0.3.0 = 146 ca của v0.2.5 + 59 ca chế độ tự động (PM DECISION-ONE-STG-AUTO-FLOW-20261028
 §2: quyền một lần chỉ từ popup / nw_ready / STG / xác nhận khớp / gắn đúng phiên và hết hạn; điểm kích hoạt duy nhất kiểm tập EPC +
 một biên nhận mới; một tab được giao; claim tự động một lần, đủ UID, tiêu quyền; autoPlanCheck / đọc lại PO-SO / khung gắn đúng trang;
 verifyFinal toàn phiếu; claimComplete một lần đúng tab; done chỉ khi GET thấy COMPLETED; hook / huỷ không đóng phiên đang gửi; dọn
 quyền bản cũ; popup phải qua bước xác nhận).
 
   python -I scripts/mutate-v0.3.0.py            # mọi ca
-  python -I scripts/mutate-v0.3.0.py 146        # chỉ 47 ca v0.3.0
+  python -I scripts/mutate-v0.3.0.py 146        # chỉ 59 ca v0.3.0
 
 v0.2.5 = 130 ca của v0.2.4 (neo "lượt đánh giá cũ về muộn" đổi theo hàm fresh()) + 16 ca
 PM AUDIT-A1-GR03887 (P2: phiếu kết thúc không vẽ / không chờ chỗ gắn, hook HOÀN THÀNH 2xx gỡ khung ngay + bỏ view lượt đánh giá cũ,
@@ -285,6 +285,19 @@ muts = [
     ("src/background.js", "  await dropAutoGrant(s.key); // P2.5: quyết định cuối cho lượt nhận này — quyền không còn hiển thị / dùng được\n", "", "v0.3.0 P2.5 bỏ qua ở POS không thu hồi quyền"),
     ("src/background.js", "      await dropAutoGrant(key); // P2.5: lượt nhận này không tự chạy → thu hồi quyền\n", "", "v0.3.0 P2.5 bỏ qua ở điểm kích hoạt không thu hồi quyền"),
     ("src/popup/popup.js", "    if (skipped) {", "    if (false) {", "v0.3.0 P2.5 popup không báo tự động đã dừng"),
+    # v0.3.0 — audit độc lập (sub-agent, 29/10): F1–F6
+    ('src/background.js', '  if (s.scanOk) throw new Error("Nextwaves đã ghi nhận lượt xác nhận nhận hàng — không cho phép tự động cho lượt này");\n', '', 'audit F1 cho phép tự động sau lượt nhận 2xx'),
+    ('src/background.js', '    else if (!(cur.scanOkAt >= g.createdAt)) reason = "armed_after_scan"; // F1: quyền phải có TRƯỚC lượt xác nhận nhận hàng (cấp quyền sau đó đã bị auto:arm chặn)\n', '', 'audit F1 kích hoạt với quyền có sau lượt nhận'),
+    ('src/background.js', '  if ((s.receiptIdsBefore || []).length) throw new Error("PO Nextwaves đã có biên nhận từ trước — không cho phép tự động");\n', '', 'audit F2 cho phép tự động khi PO đã có biên nhận'),
+    ('src/background.js', '        await dropAutoGrant(msg.key); // audit F3: huỷ phiên thì bỏ luôn quyền tự động của phiên đó\n', '', 'audit F3 huỷ phiên không thu hồi quyền'),
+    ('src/popup/popup.js', '    if (autoGrant && autoGrant.sessionCreatedAt === s.createdAt) {', '    if (autoGrant) {', 'audit F3 popup hiện quyền của phiên cũ'),
+    ('src/background.js', 'if (chrome.tabs && chrome.tabs.onRemoved) chrome.tabs.onRemoved.addListener((tabId) => serial(() => onTabRemoved(tabId)));\n', '', 'audit F4 tab được giao đóng không bỏ qua'),
+    ('src/pos/pos-content.js', '      if (st.reason === "grant_invalid") await autoSkip(s, "grant_invalid"); // audit F4 (background chỉ nhận từ tab được giao)\n', '', 'audit F4 quyền hết hạn sau kích hoạt không bỏ qua'),
+    ('src/pos/pos-content.js', '      if (s.state === "received" && s.autoRun && !s.autoRun.skipped) await autoSkip(s, "uid_already_on_gr"); // audit F4: thu hồi quyền\n', '', 'audit F4 phiếu đã đủ UID không bỏ qua'),
+    ('src/nw/nw-content.js', '    if (stopped || s.state === "apply_stopped") return ["Tự động đã dừng — POS xử lý theo luồng thủ công."];\n', '', 'audit F4 Nextwaves vẫn báo tự động khi đã dừng'),
+    ('src/pos/pos-content.js', '        if (s.state === "auto_completing" && s.completeClaim && Date.now() - s.completeClaim.at < T.autoCompleteGraceMs) {', '        if (false) {', 'audit F5 tab khác khuyên bấm khi đang gửi'),
+    ('src/pos/pos-content.js', '    if (auto && !vf && !stoppedAfter && !s.completeClaim && !missing.length && s.applyResult && Date.now() - s.applyResult.at < T.autoCompleteGraceMs) {', '    if (false) {', 'audit F5 tab khác khuyên bấm khi tab chủ đang đọc lại'),
+    ('src/background.js', '  return had; // audit F6: false = không còn quyền (lượt tự động đã bắt đầu / đã dừng / hết hạn)', '  return true;', 'audit F6 thu hồi luôn báo thành công'),
 ]
 
 
