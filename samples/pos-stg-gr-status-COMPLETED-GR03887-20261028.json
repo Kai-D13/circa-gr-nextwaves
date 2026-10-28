@@ -1,0 +1,10 @@
+[
+  {
+    "capturedAt": "2026-10-28T14:54:25.306Z",
+    "method": "PUT",
+    "url": "https://pos.stg.circa-v2.buymed.tech/backend/v1/order/goods-receipt/f2ae6e25-64bc-497b-81db-2de87284ec80/status/COMPLETED",
+    "status": 200,
+    "request": null,
+    "response": null
+  }
+]

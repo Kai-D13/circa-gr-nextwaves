@@ -68,3 +68,23 @@ PO staging PO00006745 (của GR03877) chỉ ghi tóm tắt trong `state.md` §2.
 | `nw-stg-receive-modal-footer-20261027.html` | STG | DOM màn quét Nextwaves `/vi/purchases/receive?po=PO76149046` (đơn "Đã xác nhận", chỉ đọc) | Chân modal (Hủy + "Xác nhận nhận hàng") nằm cuối thân cuộn; kèm cấu trúc modal và số đo trước / sau khi cuộn |
 | `pos-stg-gr-page-GR03887-20261027.html` | STG | DOM trang phiếu `/danh-sach-phieu-nhan-hang/<grId>` (GR03887 Chờ nhận), 1095×756 | `#__next` outerHTML: thanh menu, khung `overflow-scroll` (không tự cuộn — cả trang cuộn), breadcrumb cố định, thẻ thông tin (bảng đầu tiên), `#all-receipt` (3 sản phẩm / 5 lô, mỗi lô −/ô số/+ và 2 icon, "+ Thêm lot-date"), thanh HỦY / HOÀN THÀNH. Ảnh bỏ `src`, `path` SVG rút gọn, tên nhân viên → `<nhân viên>`. Có một toast POS tự đóng lúc chụp ("Chức năng thông báo…") — trang dựng lại ẩn nó. Dùng cho `scripts/edge-gr-page.js`, `scripts/edge-check.js` |
 | `pos-stg-gr-page-GR03887-20261027.css` | STG | `document.styleSheets` của trang trên | Chỉ các luật CSS khớp phần tử trong `#__next` (Tailwind + MUI), 288 luật, kèm `@media` |
+
+**A1 (28/10 21:32–21:54, v0.2.4): GR03887 / PO00006767 / SO 1594095 ↔ Nextwaves PO13806459 (refId SOBD1594095-1056823).**
+Nguồn:
+- Net Capture tab POS: `net-capture-2026-10-28T14-37-35.zip` (danh sách → về GR, tra QR), `…14-51-28.zip` (điền), `…14-55-41.zip` (HOÀN THÀNH).
+- chrome.storage của extension (`extension-storage-2.json`).
+- **Không có capture tab Nextwaves.**
+
+Chỉ lấy body, kèm url / status / giờ. Tên nhân viên → `<nhân viên>`, email → `<email>`. Hash = 8 ký tự đầu sha256 của file trong repo. Test: `tests/a1-real.test.js`.
+
+| File | Môi trường | Nguồn API | Ghi chú |
+|---|---|---|---|
+| `pos-stg-gr-GR03887-truoc-20261028.json` | STG | `GET /backend/v1/order/goods-receipt/<id>` | 21:37:00, extension đọc lúc POS tự về sau nhận (dùng lập kế hoạch): WAITING_TO_RECEIVE, 3 dòng / 5 lô, chưa có mã. `0f4c4e63` |
+| `pos-stg-po-PO00006767-SOBD1594095-20261028.json` | STG | `GET /backend/v1/pos/<posId>/po/<poId>` | 21:32:57 (tạo phiên): `thuocsi_delivery_code` SOBD1594095-F. `5087979f` |
+| `pos-stg-gr-search-so-1594095-20261028.json` | STG | `GET …/goods-receipt/search?query=so_thuocsi=1594095,…` | 21:32:57: total 1, chỉ GR03887. `4118c72b` |
+| `pos-stg-qrcode-GR03887-15uid-20261028.json` | STG | `GET <POS>/thuocsi-warehouse/qrcode?code=<UID>` | **Tra QR thật 15/15 UID** (21:37:00–01): productId / lot / hạn / đơn vị vỉ, chai. `ba31a6f5` |
+| `pos-stg-gr-W1-GR03887-20261028.json` | STG | `GET` GR + `PUT …/item/<i>/detail/<d>` | **Lượt điền thật** 21:50:08–13: 10 GET + 5 PUT 200 theo đúng thứ tự, PUT kèm body gửi. `86a63989` |
+| `pos-stg-gr-GR03887-W1-sau-20261028.json` | STG | `GET …/goods-receipt/<id>` | 21:50:15 (trang tải lại sau điền): RECEIVING, 5 lô nhận 1, 15 mã. `e1f30533` |
+| `pos-stg-gr-status-COMPLETED-GR03887-20261028.json` | STG | `PUT …/goods-receipt/<id>/status/COMPLETED` | HOÀN THÀNH (trang POS gửi lúc 21:54:25): không body, 200, response rỗng. `4fdb8cdf` |
+| `pos-stg-gr-GR03887-completed-20261028.json` | STG | `GET …/goods-receipt/<id>` | 21:54:26: COMPLETED. **Mỗi lô thêm đúng một mã = mã QR của lô** (3 lô chung với GR03880 có cùng mã). `29b095ba` |
+| `ext-stg-storage-GR03887-20261028.json` | STG | `chrome.storage.local` (operator export 21:56) | Một phiên GR03887 (tạo 21:32:57 bởi 0.2.4, `done`, #EF0E020C, 5 apply_done, gr_completed, ui_anchor_missing) + cấp phép gõ nhầm `STG:GR3887`. Có `expected` + `nwResult.units`. Không có token. `bea04fff` |
