@@ -23,6 +23,12 @@
 //  5. Trace CDP từ lúc mở trang: không tác vụ nào của extension ≥ 50 ms.
 //  6. Trang không có #all-receipt → sau 10 s: khung nổi báo lỗi giao diện, không nút Điền, 0 PUT, cấp phép còn.
 // Đối chứng: chạy với gói v0.2.3 phải HỎNG mục "điều khiển SL nhận bấm được" ở 1095×756.
+//
+// Chẩn đoán hiệu năng (PM AUDIT-A1-PREP P2, 28/10): mỗi mục kiểm đặt một mốc console.timeStamp vào trace → mỗi tác vụ extension
+// in pha nạp / gọi hàm, file:dòng:cột, bước (mục kiểm kế tiếp), thời gian thực vs CPU luồng, phần con lớn nhất (Layout, GC…).
+//   node scripts/edge-gr-page.js --baseline     cùng trang phiếu, cùng 3 khung nhìn + đoạn hit-test, KHÔNG nạp extension → luồng
+//                                               chính của trang làm mốc so sánh với cửa sổ "mở trang → hết nw_ready" của lượt có extension.
+//   CGN_TRACE_OUT=<file.json>                   ghi phần trace liên quan (tác vụ extension, tác vụ luồng chính ≥ 5 ms, mốc) để phân tích lại.
 "use strict";
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
@@ -30,7 +36,10 @@ const os = require("node:os");
 const path = require("node:path");
 const { killProfile, portBusy } = require("./edge-proc.js");
 
-const EXT = path.resolve(process.argv[2] || path.join(__dirname, "..", "src"));
+const ARGS = process.argv.slice(2);
+const BASELINE = ARGS.includes("--baseline");
+const EXT = path.resolve(ARGS.find((a) => !a.startsWith("--")) || path.join(__dirname, "..", "src"));
+const TRACE_OUT = process.env.CGN_TRACE_OUT || "";
 const ROOT = path.join(__dirname, "..");
 const PORT = 9341;
 const POS = "https://pos.stg.circa-v2.buymed.tech";
@@ -43,8 +52,12 @@ const sample = (n) => fs.readFileSync(path.join(ROOT, "samples", n), "utf8");
 const json = (n) => JSON.parse(sample(n));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const results = [];
+const checkNames = [];
+let phaseMark = null; // (nhãn) → mốc console.timeStamp trên trang đang trace
 const check = (name, ok, detail) => {
   results.push(ok);
+  checkNames.push(name);
+  if (phaseMark) phaseMark(`cgn#${results.length}`);
   console.log(`${ok ? "ĐẠT " : "HỎNG"}  ${name}${detail ? "  — " + detail : ""}`);
 };
 const info = (name, detail) => console.log(`ĐO    ${name}  — ${detail}`);
@@ -253,11 +266,120 @@ async function clickPanelButton(p, label) {
   return true;
 }
 
+// ---------- trace ----------
+const dataOf = (e) => (e.args && e.args.data) || {};
+// Sự kiện bọc ngoài — không tính là "phần con" của một tác vụ.
+const WRAPPERS = new Set(["FunctionCall", "EvaluateScript", "EventDispatch", "TimerFire", "FireAnimationFrame", "FireIdleCallback", "RunTask", "ThreadControllerImpl::RunTask", "V8.Execute", "v8.callFunction", "v8.run", "RunMicrotasks", "ProfileCall"]);
+const traceMarks = (events) =>
+  events
+    .filter((e) => e.name === "TimeStamp" && /^cgn#/.test(String(dataOf(e).message || "")))
+    .map((e) => ({ ts: e.ts, label: String(dataOf(e).message) }))
+    .sort((a, b) => a.ts - b.ts);
+const stepName = (label) => {
+  const m = /^cgn#(\d+)$/.exec(label || "");
+  return m ? `mục ${m[1]} "${(checkNames[m[1] - 1] || "").slice(0, 70)}"` : label || "—";
+};
+// Phần con lớn nhất của một tác vụ (cùng luồng, nằm trọn trong tác vụ, bỏ sự kiện bọc ngoài).
+function kidsOf(e, threadEvents) {
+  const end = e.ts + e.dur;
+  const kids = {};
+  for (const k of threadEvents || []) if (k !== e && k.ts >= e.ts && k.ts + k.dur <= end && !WRAPPERS.has(k.name)) kids[k.name] = (kids[k.name] || 0) + k.dur / 1000;
+  return Object.entries(kids).sort((x, y) => y[1] - x[1]).slice(0, 4);
+}
 function extensionTasks(events) {
-  const dataOf = (e) => (e.args && e.args.data) || {};
+  const marks = traceMarks(events);
+  const byThread = new Map();
+  for (const e of events) {
+    if (e.ph !== "X" || typeof e.dur !== "number") continue;
+    const k = `${e.pid}:${e.tid}`;
+    if (!byThread.has(k)) byThread.set(k, []);
+    byThread.get(k).push(e);
+  }
   return events
     .filter((e) => e.ph === "X" && typeof e.dur === "number" && (e.name === "FunctionCall" || e.name === "EvaluateScript") && String(dataOf(e).url || "").startsWith("chrome-extension://"))
-    .map((e) => ({ load: e.name === "EvaluateScript", file: String(dataOf(e).url).replace(/^chrome-extension:\/\/[^/]+\//, ""), fn: dataOf(e).functionName || "", line: dataOf(e).lineNumber, ms: e.dur / 1000 }));
+    .map((e) => {
+      const d = dataOf(e);
+      const end = e.ts + e.dur;
+      const kids = kidsOf(e, byThread.get(`${e.pid}:${e.tid}`));
+      const m = marks.find((x) => x.ts >= end);
+      return {
+        load: e.name === "EvaluateScript",
+        file: String(d.url).replace(/^chrome-extension:\/\/[^/]+\//, ""),
+        fn: d.functionName || "",
+        line: d.lineNumber,
+        col: d.columnNumber,
+        ms: e.dur / 1000,
+        cpu: typeof e.tdur === "number" ? e.tdur / 1000 : null,
+        ts: e.ts,
+        step: m ? m.label : "sau mục cuối",
+        kids,
+      };
+    });
+}
+const fmtTask = (t) =>
+  `${t.ms.toFixed(2)} ms${t.cpu != null ? ` (CPU ${t.cpu.toFixed(2)})` : ""} ${t.load ? "nạp script" : "gọi hàm"} ${t.file}${t.load ? "" : `:${t.line}:${t.col} ${t.fn || "(ẩn danh)"}`} · bước ${stepName(t.step)}${t.kids.length ? " · trong đó " + t.kids.map(([n, ms]) => `${n} ${ms.toFixed(1)}`).join(", ") : ""}`;
+// Tác vụ luồng chính của trang POS (renderer đã parse trang POS) tới mốc `untilLabel`.
+function mainThreadTasks(events, untilLabel) {
+  const parse = events.find((e) => e.name === "ParseHTML" && String(((e.args || {}).beginData || {}).url || "").startsWith(POS));
+  if (!parse) return null;
+  const until = (traceMarks(events).find((m) => m.label === untilLabel) || {}).ts || Infinity;
+  const own = events.filter((e) => e.ph === "X" && typeof e.dur === "number" && e.pid === parse.pid && e.tid === parse.tid && e.ts <= until);
+  let tasks = own.filter((e) => e.name === "RunTask" || e.name === "ThreadControllerImpl::RunTask");
+  if (!tasks.length) tasks = own.filter((e) => !own.some((o) => o !== e && o.ts <= e.ts && o.ts + o.dur >= e.ts + e.dur && o.dur > e.dur)); // không có RunTask: lấy sự kiện ngoài cùng
+  const ext = (e) => own.some((o) => (o.name === "FunctionCall" || o.name === "EvaluateScript") && o.ts >= e.ts && o.ts + o.dur <= e.ts + e.dur && String(dataOf(o).url || "").startsWith("chrome-extension://"));
+  return tasks
+    .sort((a, b) => b.dur - a.dur)
+    .map((e, i) => ({ ms: e.dur / 1000, cpu: typeof e.tdur === "number" ? e.tdur / 1000 : null, ts: e.ts, ...(i < 10 ? { kids: kidsOf(e, own), ext: ext(e) } : {}) }));
+}
+const fmtMain = (mt) =>
+  !mt ? "không thấy luồng chính của trang POS trong trace" : `${mt.length} tác vụ, ≥ 50 ms: ${mt.filter((t) => t.ms >= 50).length}, 5 dài nhất: ${mt.slice(0, 5).map((t) => `${t.ms.toFixed(2)}${t.cpu != null ? ` (CPU ${t.cpu.toFixed(2)})` : ""}${t.ext ? " [có extension]" : ""}${t.kids && t.kids.length ? " [" + t.kids.slice(0, 3).map(([n, ms]) => `${n} ${ms.toFixed(1)}`).join(", ") + "]" : ""}`).join(" | ")} ms`;
+const browserVersion = async () => ((await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json()) || {}).Browser || "?";
+
+// --baseline: cùng trang phiếu DOM + CSS thật, cùng 3 khung nhìn + đoạn hit-test điều khiển của trang, KHÔNG có extension.
+async function runBaseline() {
+  await sleep(4000);
+  const ver = await browserVersion();
+  const handler = async (r) =>
+    /^\/danh-sach-phieu-nhan-hang\/[0-9a-f-]{36}\/?$/.test(new URL(r.url).pathname) ? { status: 200, type: "text/html; charset=utf-8", body: GR_PAGE } : { status: 404, type: "application/json", body: "{}" };
+  const g = await openPage(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`, handler, { trace: true });
+  const pg = g.page;
+  const ctxId = () => (mainCtx(g.ctxs) || {}).id;
+  phaseMark = (label) => void evalIn(pg, `console.timeStamp(${JSON.stringify(label)}), true`, ctxId()).catch(() => {});
+  await sleep(2500);
+  const gm = JSON.parse((await evalIn(pg, GEO_JS, ctxId())) || "{}");
+  check("baseline: trang phiếu mở được, không có khung extension", gm.hosts === 0 && gm.anchorTop > 0, `${ver} · ${JSON.stringify(gm)}`);
+  for (const [w, h] of VIEWPORTS) {
+    await pg.send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+    await sleep(300);
+    const pc = JSON.parse((await evalIn(pg, PAGE_CLICK_JS, ctxId())) || "{}");
+    check(`baseline · ${w}×${h}: điều khiển vùng sản phẩm (${pc.n}) + HỦY / HOÀN THÀNH (${pc.bar}) bấm được`, pc.n >= 30 && pc.bar === 2 && pc.bad.length === 0);
+  }
+  await pg.send("Emulation.clearDeviceMetricsOverride", {});
+  phaseMark("cgn#so-sanh");
+  await sleep(300);
+  phaseMark = null;
+  // Một lần đọc bố cục (getBoundingClientRect) khi cả trang đang chờ layout lại — đổi khung nhìn rồi đọc ngay; đổi cỡ chữ gốc (rem)
+  // rồi đọc ngay. Đây là cái giá bất kỳ script nào (kể cả extension) trả nếu nó đọc bố cục đúng lúc đó.
+  const READ_JS = `(() => { const b = document.querySelector("div.fixed.bottom-0 button"); const t = performance.now(); b.getBoundingClientRect(); return +(performance.now() - t).toFixed(2); })()`;
+  const forced = [];
+  for (const [w, h] of VIEWPORTS.concat([[750, 485]])) {
+    await pg.send("Emulation.setDeviceMetricsOverride", { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+    forced.push(`${w}px ${await evalIn(pg, READ_JS, ctxId())}`);
+    await sleep(300);
+  }
+  await pg.send("Emulation.clearDeviceMetricsOverride", {});
+  await sleep(300);
+  for (const fsz of ["17px", ""]) {
+    forced.push(`cỡ chữ ${fsz || "gốc"} ${await evalIn(pg, `(document.documentElement.style.fontSize = ${JSON.stringify(fsz)}, ${READ_JS})`, ctxId())}`);
+    await sleep(300);
+  }
+  info("đọc bố cục khi cả trang chờ layout lại (ms)", forced.join(" | "));
+  const tr = await g.stopTrace();
+  const mt = mainThreadTasks(tr, "cgn#so-sanh");
+  info("luồng chính trang KHÔNG extension (mở trang → 3 khung nhìn)", fmtMain(mt));
+  if (TRACE_OUT) fs.writeFileSync(TRACE_OUT, JSON.stringify({ mode: "baseline", browser: ver, marks: traceMarks(tr), mainTasks: (mt || []).filter((t) => t.ms >= 5) }, null, 1));
+  pg.close();
+  await closeTarget(g.targetId);
 }
 
 (async () => {
@@ -271,7 +393,8 @@ function extensionTasks(events) {
     process.exit(2);
   }
   const prof = fs.mkdtempSync(path.join(os.tmpdir(), "cgn-edge-gr-"));
-  const proc = spawn(browser, ["--headless=new", `--user-data-dir=${prof}`, `--remote-debugging-port=${PORT}`, "--no-first-run", "--disable-features=DisableLoadExtensionCommandLineSwitch", `--load-extension=${EXT}`, "about:blank"], { stdio: "ignore" });
+  const extArgs = BASELINE ? [] : ["--disable-features=DisableLoadExtensionCommandLineSwitch", `--load-extension=${EXT}`];
+  const proc = spawn(browser, ["--headless=new", `--user-data-dir=${prof}`, `--remote-debugging-port=${PORT}`, "--no-first-run", ...extArgs, "about:blank"], { stdio: "ignore" });
   // Trang treo (vd. vòng gắn khung vô hạn): lượt CDP không bao giờ trả về → báo HỎNG, tắt trình duyệt, không để tiến trình mồ côi.
   const watchdog = setTimeout(() => {
     console.log("HỎNG  quá 360 s — trang / extension treo");
@@ -280,11 +403,25 @@ function extensionTasks(events) {
     process.exit(1);
   }, 360000);
   watchdog.unref();
+  if (BASELINE) {
+    try {
+      await runBaseline();
+    } catch (err) {
+      check("chạy hết kịch bản baseline", false, String((err && err.stack) || err).slice(0, 300));
+    } finally {
+      proc.kill();
+      killProfile(prof);
+    }
+    const ok = results.every(Boolean);
+    console.log(`\n${ok ? "TẤT CẢ ĐẠT" : "CÓ MỤC HỎNG"} (${results.filter(Boolean).length}/${results.length})`);
+    process.exit(ok ? 0 : 1);
+  }
   try {
     await sleep(4000);
+    const ver = await browserVersion();
     const sw = await serviceWorker();
     const version = sw ? await evalIn(sw, "chrome.runtime.getManifest().version") : null;
-    check("service worker nạp được", !!sw, sw ? `version ${version}` : "trình duyệt không nạp extension");
+    check("service worker nạp được", !!sw, sw ? `version ${version} · ${ver}` : "trình duyệt không nạp extension");
     if (!sw) throw new Error("dừng");
 
     // ---- server giả (GR03880 thật, PUT áp vào GR) ----
@@ -339,6 +476,7 @@ function extensionTasks(events) {
     await auth();
 
     const ctxId = () => (mainCtx(g.ctxs) || {}).id;
+    phaseMark = (label) => void evalIn(pg, `console.timeStamp(${JSON.stringify(label)}), true`, ctxId()).catch(() => {});
     const geo = async () => JSON.parse((await evalIn(pg, GEO_JS, ctxId())) || "{}");
     async function layoutAt(label) {
       for (const [w, h] of VIEWPORTS) {
@@ -371,6 +509,7 @@ function extensionTasks(events) {
       const pf = JSON.parse((await evalIn(pg, src, ctxId())) || "{}");
       check("đoạn preflight operator (scripts/preflight-gr-page.js) · nw_ready 1095×756: KET_QUA ĐẠT", pf.KET_QUA === "ĐẠT", JSON.stringify(pf).slice(0, 240));
       await pg.send("Emulation.clearDeviceMetricsOverride", {});
+      phaseMark("cgn#so-sanh"); // hết nw_ready: cửa sổ so với --baseline
       await sleep(200);
     }
 
@@ -534,10 +673,31 @@ function extensionTasks(events) {
     await layoutAt("đã điền");
 
     // 5) Ngân sách tác vụ.
-    const tasks = extensionTasks(await g.stopTrace());
-    const longest = tasks.slice().sort((a, b) => b.ms - a.ms)[0];
-    const top3 = tasks.slice().sort((x, y) => y.ms - x.ms).slice(0, 3).map((t) => `${t.ms.toFixed(2)} ms ${t.file}${t.fn ? ":" + t.fn : ""}${t.load ? " (nạp script)" : ""}`);
+    phaseMark = null;
+    const tr = await g.stopTrace();
+    const tasks = extensionTasks(tr);
+    const sorted = tasks.slice().sort((a, b) => b.ms - a.ms);
+    const longest = sorted[0];
+    const top3 = sorted.slice(0, 3).map((t) => `${t.ms.toFixed(2)} ms ${t.file}${t.fn ? ":" + t.fn : ""}${t.load ? " (nạp script)" : ""}`);
     info("tác vụ extension (cả lượt)", `${tasks.length} tác vụ, dài nhất ${longest ? `${longest.ms.toFixed(2)} ms ${longest.file}${longest.fn ? ":" + longest.fn : ""}` : "—"} · 3 dài nhất: ${top3.join(" | ")}`);
+    sorted.slice(0, 5).forEach((t, i) => info(`  tác vụ dài #${i + 1}`, fmtTask(t)));
+    // Gọi hàm theo vị trí (file:dòng:cột): số lần, dài nhất, tổng — chỉ ra hàm ẩn danh nào tốn nhất.
+    const bySite = new Map();
+    for (const t of tasks.filter((x) => !x.load)) {
+      const k = `${t.file}:${t.line}:${t.col} ${t.fn || "(ẩn danh)"}`;
+      const s = bySite.get(k) || { n: 0, max: 0, sum: 0 };
+      s.n++;
+      s.max = Math.max(s.max, t.ms);
+      s.sum += t.ms;
+      bySite.set(k, s);
+    }
+    const sites = [...bySite.entries()].sort((a, b) => b[1].max - a[1].max).slice(0, 5);
+    info("gọi hàm theo vị trí (5 dài nhất)", sites.map(([k, s]) => `${k} ×${s.n} max ${s.max.toFixed(2)} tổng ${s.sum.toFixed(1)}`).join(" | "));
+    const loads = tasks.filter((x) => x.load).sort((a, b) => b.ms - a.ms);
+    info("nạp script (pha nạp)", loads.map((t) => `${t.file} ${t.ms.toFixed(2)}${t.cpu != null ? `/${t.cpu.toFixed(2)}` : ""}`).join(" | ") + " ms (thực/CPU)");
+    const mt = mainThreadTasks(tr, "cgn#so-sanh");
+    info("luồng chính trang CÓ extension (mở trang → hết nw_ready; so với --baseline)", fmtMain(mt));
+    if (TRACE_OUT) fs.writeFileSync(TRACE_OUT, JSON.stringify({ mode: "extension", ext: EXT, version, browser: ver, checkNames, marks: traceMarks(tr), extTasks: tasks, mainTasks: (mt || []).filter((t) => t.ms >= 5) }, null, 1));
     check("không tác vụ nào của extension ≥ 50 ms (trace CDP từ lúc mở trang, gồm nạp script, vẽ lại, điền)", tasks.length > 0 && tasks.every((t) => t.ms < 50), longest ? `${longest.ms.toFixed(2)} ms` : "");
     pg.close();
     await closeTarget(g.targetId);
