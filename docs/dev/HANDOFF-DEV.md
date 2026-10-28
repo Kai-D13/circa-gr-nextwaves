@@ -155,8 +155,9 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
      - kế hoạch #EF0E020C 5 lô / 15 UID;
      - 5 PUT 200, 0 UID sai lô;
      - HOÀN THÀNH do trang gọi, 200, COMPLETED.
-   - Khác runbook: phiên GR03887 tạo lại 21:32:57 (phiên cũ + GR03878 không còn, nhiều khả năng xoá tay); kiểm GR03879 lúc 21:32:43; cấp phép gõ nhầm "GR3887"; không capture tab Nextwaves.
-   - Finding: khung nổi đỏ sai sau COMPLETED (`ui_anchor_missing`). Mã POS thêm sau HOÀN THÀNH = mã QR của lô, dùng lại giữa GR03880 / GR03887.
+   - Khác runbook: operator xác nhận đã xoá phiên bằng nút và bấm nhầm dòng GR03879 → phiên GR03887 tạo lại 21:32:57; cấp phép gõ nhầm "GR3887"; không capture tab Nextwaves.
+   - Finding: khung nổi đỏ sai sau COMPLETED (`ui_anchor_missing`; trang COMPLETED không có `#all-receipt`, operator kiểm). Mã POS thêm sau HOÀN THÀNH = mã QR của lô, dùng lại giữa GR03880 / GR03887.
+   - Mẫu thật + `tests/a1-real.test.js` (7 test, kế hoạch tính lại #EF0E020C): nhánh `13170bc`, 167/167. Báo cáo §0 là mục lục gói gửi PM.
    - **Yêu cầu stakeholder chờ PM:** xác nhận trên Nextwaves thì POS hoàn thành luôn (tự điền + tự HOÀN THÀNH). Trái quyết định 24/10; không làm trong A1. Đề xuất dev ở `A1-S0-KET-QUA` §4.
    - **Hạn phiên GR03887:** 24 giờ từ lần cập nhật cuối (13:39:57 28/10 → ~13:39 29/10; bấm "Mở tab Nextwaves" làm mới). Mất phiên → dừng, không tạo lại.
    - **P2 hiệu năng (lượt Edge 75,18 ms):** `docs/dev/PERF-75MS-v0.2.4-20261028.md` — không tái hiện. `edge-gr-page.js` nay in dòng / cột, CPU, phần con, bước của tác vụ dài và có `--baseline` (không extension). Hàm ẩn danh của `ui/panel.js` là callback 10 s nhánh lỗi (`:336`), ≤ 10,47 ms; trang tự có tác vụ layout 60–78 ms không extension.
