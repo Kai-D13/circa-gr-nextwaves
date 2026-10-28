@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **28/10/2026 (lần 51, PM audit A1 GR03887 v0.2.4)**. Giai đoạn: **A1 staging đạt gate chức năng E2E (15 EPC → kế hoạch #EF0E020C → 5 PUT/15 UID → COMPLETED), với giới hạn không có capture tab Nextwaves. PM kiểm SHA 8/8 file gốc, chạy 167/167 test trên `13170bc`, đối chiếu 5/5 PUT với capture gốc và GET cuối COMPLETED. Chưa staging done/merge: khung đỏ báo sai sau COMPLETED là P2 phải sửa ở gói v0.2.5; hiệu năng phải đo lại trên gói cuối. Duyệt kèm cảnh báo popup khi cấp phép mã không khớp phiên (P3). Production Florita còn O1, QR lô, reader, quyết định tự động hoá, T1-PRD và phép W1-PRD riêng.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **28/10/2026 (lần 52, operator chốt một lượt staging cho tự điền + tự HOÀN THÀNH)**. Giai đoạn: **A1 trên v0.2.4 đạt gate chức năng, nhưng chưa staging done/merge. Operator muốn gộp tự điền và tự HOÀN THÀNH trước pilot production, chỉ dùng một đơn staging chưa nhận để QC gói cuối vì nguồn đơn test ít. v0.2.5 P2/P3 hiện là ứng viên nội bộ, không cài/tiêu đơn staging riêng; dev hoàn tất gate local rồi làm batch tự động. Một quyền rõ ràng trước xác nhận Nextwaves cho đúng GR/PO/SO, dùng một lần; POS tự điền, GET kiểm toàn GR rồi mới gửi HOÀN THÀNH đúng một lần; lỗi/không rõ thì dừng, không retry. PM audit gói cuối G0–G3 và một E2E staging thật trước staging done/merge. Production còn O1, QR lô, reader, T1-PRD và phép W1-PRD riêng.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -587,7 +587,11 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-51. **Hiện hành (sau PM audit A1 GR03887, 28/10):**
+52. **Hiện hành (sau quyết định operator gộp luồng tự động, 28/10):**
+    - Operator yêu cầu tự điền + tự HOÀN THÀNH trong một luồng trước pilot production, **một** E2E staging có tác động thật trên gói cuối; không dùng thêm đơn test cho mỗi bản trung gian. Chưa có phép ghi cho GR mới. PM spec/gate tại `docs/pm/DECISION-ONE-STG-AUTO-FLOW-20261028.md`.
+    - v0.2.5 sửa P2/P3 đang chạy test/đột biến/Edge; dev hoàn tất để PM audit nội bộ, chưa yêu cầu operator cài/kiểm riêng và chưa merge. Batch sau có quyền một lần cho đúng GR/PO/SO trước Nextwaves; tự W1 chỉ khi receipt/UID/kế hoạch đầy đủ; GET toàn GR sau W1 phải trùng kế hoạch trước một PUT COMPLETED; GET cuối xác nhận. Lỗi/không rõ dừng, không tự retry. Test âm dùng fixture A1/server giả, chỉ một lượt staging thật trên gói cuối.
+    - Manual mode vẫn giữ. Quyết định 24/10 “dược sĩ bấm HOÀN THÀNH” được thay **chỉ trong chế độ tự động được cấp phép riêng**; dev đồng bộ `agent.md` sau khi commit spec PM. Production vẫn chỉ đọc tới gate PRD và phép operator riêng.
+51. (cũ, thay bằng mục 52) **Sau PM audit A1 GR03887, 28/10:**
     - Báo cáo dev `main` `675abf8`; 9 mẫu/test thật ở `batch/v0.2-rfid` `13170bc`, `src/` không đổi so với gói v0.2.4 `0BB73E2D`. PM kiểm 8/8 SHA bằng chứng gốc, 167/167 test, capture POS có 15 GET QR 200, 5 PUT 200 với body trùng mẫu 5/5, một PUT COMPLETED 200, GET cuối COMPLETED với `items` trùng mẫu. Storage có 15 đơn vị Nextwaves, một biên nhận, 5 `apply_done`, phiên `done`. Không có capture Nextwaves; A1 đạt chức năng nhưng không khẳng định đã xem body `receive-scan` trực tiếp.
     - **Chưa staging done/merge:** GR03887 sau COMPLETED không còn `#all-receipt`, v0.2.4 chờ anchor rồi hiện khung đỏ `ui_anchor_missing`; ảnh và log thật xác nhận. PM duyệt v0.2.5 sửa P2 này và P3 popup cảnh báo mã cấp phép không khớp phiên; test/gói/kiểm Chrome staging thật chỉ đọc và trace hiệu năng gói cuối trước audit merge. Không chạy lại A1 chỉ để bù capture. Xem `docs/pm/AUDIT-A1-GR03887-STG-v0.2.4-20261028.md`.
     - Sai lệch runbook: operator xoá phiên cũ/tạo lại GR03887, bấm nhầm GR03879 (0 PUT), thiếu capture Nextwaves. Dev cập nhật runbook. Production còn O1, QR lô sau HOÀN THÀNH, reader Florita, quyết định yêu cầu tự điền/tự HOÀN THÀNH, T1-PRD chỉ đọc và W1-PRD có phép riêng.
