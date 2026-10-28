@@ -1,8 +1,10 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **26/10/2026 (lần 24, PM audit T3/W1 staging)**. Giai đoạn: **v0.1.5 trên nhánh `batch/v0.1-staging` (`456205a`, gói `CDD02C3D`; `afd98d5` mẫu T3, `25082b2` mẫu W1/HOÀN THÀNH, `7eadfe3` sửa test, `fa66de6` request T3 từ HAR); T1, T3 và W1 staging đã qua gate PM; cho merge mã staging, production vẫn chỉ đọc; O1 và ý nghĩa mã QR thêm sau HOÀN THÀNH còn mở trước production**. Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **29/10/2026 (lần 54, operator đổi cấu trúc dự án)**. Giai đoạn: **Từ 29/10 chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), không còn PM Codex, áp quy tắc một người ghi (`agent.md` §2.1). G0 v0.2.5 đạt (PM Codex audit cuối `docs/pm/AUDIT-G0-v0.2.5-G1-PRELIM-20261029.md`). G1 v0.3.0 tự điền + tự HOÀN THÀNH đang làm trên `batch/v0.2-rfid` (chưa commit SHA cố định), còn finding P2.5 (popup báo "ĐÃ CHO PHÉP" sau khi tự động đã bị bỏ qua), đột biến / Edge / gói chưa xong. Operator chưa cần cài hay cho phép lượt nhận mới. Production chỉ đọc.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
+
+**Phiên giữ quyền ghi (`agent.md` §2.1):** Claude Code — phiên "QR code scan log project (fork)" do operator chỉ định 29/10 (chat: "bạn sẽ đảm nhận cả PM, senior Software Engineer, QC, tester, audit, review"). Mọi phiên khác (gốc, resume như `qr-code-b2`, fork mới, Codex) **chỉ đọc**. Worktree mã: `C:QR_codecirca-gr-nextwaves-dev` (chuyển từ thư mục tạm của phiên sau khi đột biến v0.3.0 chạy xong).
 
 - Đã hiểu luồng nhận hàng trên POS hiện tại (capture production 19/10, §1).
 - Đã kiểm chuỗi khoá ba bên trên SO 38468903 (§2). Mã SO là khoá chung **ở production**. GR không có SO, nhưng PO của GR có SO.
@@ -111,6 +113,107 @@ Cập nhật: **26/10/2026 (lần 24, PM audit T3/W1 staging)**. Giai đoạn: *
   - Nhánh `25082b2`: 10 mẫu thật + `tests/full-real.test.js` (6). `7eadfe3` sửa test P1.3 chạy đua (3/15 → 0/25). `fa66de6`: request receive-scan từ HAR + 1 test. Không đổi `src/`; 100/100.
   - P3: tra QR lặp 3 vòng / lượt; `at` của `scan_ok` dạng số.
 - **Lần 24 (26/10, PM audit T3/W1):** `docs/pm/AUDIT-T3-W1-FULL-STG-20261026.md`. PM kiểm Net Capture gốc: `receive-scan` PO28237814 trùng fixture, 12/12 và biên nhận mới; 5 PUT GR03880 trùng request gốc, mỗi GET sau ghi đúng UID/lô, GR chuyển RECEIVING; POS `COMPLETED` 200 và GET sau là COMPLETED. HAR đã lọc của PO76458756 có request/status 200, thiếu body response. Chạy 100/100 test trên `fa66de6`, test P1.3 riêng 20/20 trên `7eadfe3`; `src/` không đổi. **T3 và W1 đạt gate staging, cho merge nhánh; production chỉ đọc.** GR03878 thiếu traffic POS riêng. O1 chấp nhận fail-closed ở staging, phải giải trước production hoặc stakeholder chấp nhận nhập tay. Sau HOÀN THÀNH có 5 mã QR mới khác UID Nextwaves, nguồn/ảnh hưởng kinh doanh chưa xác định; cần tra QR và chốt trước production. P3 đọc QR lặp/giờ log để sau.
+- **Lần 25 (26/10, merge + PM review UI sơ bộ):** Dev đã merge `fa66de6` vào `main` tại `aa42dcc`; PM kiểm parent merge và `src/` trên `main` trùng v0.1.5. Dev làm bản sửa khung v0.1.6 trên `batch/v0.1.6-ui` (`b4017d7`), báo 106/106 test 10 lượt, Edge POS giả 12/12 (v0.1.5 hỏng 2/12); 65 ca đột biến và gói còn đang chạy. PM review source trong `docs/pm/REVIEW-UI-v0.1.6-PRELIM-20261026.md`: chưa cho phát hành/cài, cần gói và kiểm nút trên POS/Nextwaves staging thật. Quy đổi vỉ → hộp: giữ chặn toàn GR nếu một lô lẻ, không làm tròn hoặc điền một phần trong batch UI; không mặc định nhập tay được 0,5 hộp.
+- **Lần 26 (26/10, dev hoàn tất gate source / gói v0.1.6):** báo cáo `docs/dev/FIX-UI-v0.1.6.md`.
+  - Đột biến `mutate-v0.1.6.py` **65/65 bị bắt** (60 cũ + 5 ca khung), chạy một mình, 0 ca hết giờ, 0 neo lệch.
+  - **Gói v0.1.6 `34B4AE1A`** (sha256 `34b4ae1a…`, 18 file) từ commit sạch `b4017d7`; giải nén `C:\circa-gr-nextwaves-v0.1.6` khớp `src/` từng file; `edge-check` trên bản giải nén 12/12. Nhánh đã push.
+  - Chưa cài cho operator: chờ PM audit gói, sau đó lượt xem UI chỉ đọc theo `FIX-UI-v0.1.6.md` §6.
+
+- **Lần 27 (26/10, PM audit độc lập UI v0.1.6):** `docs/pm/AUDIT-UI-v0.1.6-SOURCE-PACK-20261026.md`. PM chạy 106/106 test, tự dựng ZIP từ `b4017d7` ra đúng SHA-256 `34b4ae1a1cd38f2c713eeed28aaf874e571a7b9ad6323a7a745e6fea42bf077c`, 18/18 file source = ZIP = bản giải nén. Edge trên bản giải nén 12/12 đạt; đối chứng v0.1.5 hỏng đúng 2/12 ca chồng nút; 5/5 đột biến mới bị bắt, không timeout. Số 65/65 toàn bộ là kết quả dev báo, PM chưa chạy lại 60 ca cũ. **Cho operator cài v0.1.6 để kiểm UI chỉ đọc trên staging thật; chưa cho dùng để nhận/điền, chưa merge UI.** Cần ảnh nút thao tác thực trên POS/Nextwaves trước gate tiếp theo.
+- **Lần 28 (26/10, operator yêu cầu mới → dev đề xuất kế hoạch v0.2):** `docs/dev/PLAN-v0.2-RFID-BUTTON-PROD.md`, **chờ PM duyệt spec**.
+  - Yêu cầu operator:
+    - nút "Nhận hàng bằng RFID" trên **danh sách** phiếu nhận POS (như "View on Nextwaves" của extension Nextwaves `circa-rfid`, dev chỉ đọc mã tham khảo);
+    - audit đủ cho E2E / production;
+    - sửa lỗi tồn;
+    - không làm chậm POS.
+  - Operator chốt:
+    - bấm trên danh sách thì bắt đầu ngay, tab POS ở lại danh sách; nhận xong tự về trang phiếu;
+    - **bỏ tự chạy khi mở phiếu, chỉ chạy khi bấm nút** (đảo quyết định 24/10);
+    - production đợt đầu **chỉ Florita**.
+  - Đợt 0 (không code):
+    - operator xem UI v0.1.6 chỉ đọc;
+    - operator gửi outerHTML dòng danh sách / vùng nút HOÀN THÀNH, capture đơn Nextwaves đã nhận (O1), tra QR `1791530171312AA1`, thông tin máy Florita.
+  - Đợt 1 (v0.2.0, staging):
+    - lối vào mới (danh sách + trang phiếu, click mới chạy);
+    - cache tra QR + lọc refresh;
+    - `scanAt` ISO;
+    - giữ `x-store-id`;
+    - Abort khi rời trang;
+    - đổi URL theo sự kiện;
+    - panel nhẹ hơn;
+    - ngân sách hiệu năng đo trên Edge.
+  - Đợt 2:
+    - O1 (giữ phiên `received` / `applying`, khôi phục theo capture);
+    - PRD Florita (allowlist, `writeEnabled` false) → T1-PRD chỉ đọc → gate W1-PRD.
+
+- **Lần 29 (26/10, PM duyệt hướng v0.2 và gate):** `docs/pm/REVIEW-PLAN-v0.2-RFID-BUTTON-PROD-20261026.md`. PM kiểm source v0.1.5/v0.1.6 và commit `650c24a`: chưa có runtime/test/ZIP v0.2. Duyệt hướng bấm nút trên danh sách mới tạo phiên, POS ở danh sách đến khi Nextwaves nhận xong rồi về GR; phiên đã tồn tại vẫn tự tiếp tục. Đợt 0 chỉ đọc được làm; Đợt 1 theo spec PM sau ảnh UI v0.1.6 thật và response/outerHTML danh sách đã làm sạch. P1: `gr_list` phải có nhánh riêng, dữ liệu dòng chỉ gợi ý UI và GET GR/PO phải xác minh lại, không ghép header cửa hàng qua phiên khác, huỷ lượt chuẩn bị khi đổi trang, giới hạn `returnUrl`. P2: cache/refresh, hiệu năng, panel tránh nút, nâng cấp giữ ID có gate riêng. O1/production Florita cần spec/gate riêng; chưa duyệt ghi production hoặc E2E ghi staging mới.
+- **Lần 30 (26/10, dev cập nhật kế hoạch theo review PM):** `docs/dev/PLAN-v0.2-RFID-BUTTON-PROD.md` thêm **"Spec Đợt 1 — rev 1"** (S1–S8).
+  - S1: dòng danh sách chỉ là gợi ý; khi bấm đọc lại GR / PO và kiểm đủ trước `session:start`.
+  - S2: nhánh `gr_list` riêng, một bộ điều khiển; không tự tạo phiên; phiên cũ tiếp tục; không tạo trùng.
+  - S3: header cửa hàng đã xác nhận / chưa xác nhận.
+  - S4: Abort + kiểm sau mỗi `await`; background tự dựng `returnUrl`.
+  - S5: hợp đồng response danh sách + nút.
+  - S6: cache QR theo `nwResult.at` + lọc refresh.
+  - S7: giữ panel v0.1.6 tới khi có DOM thật; đo hiệu năng so baseline.
+  - S8: hướng dẫn nâng cấp.
+  - Kèm danh sách test G1. **Chưa code, chờ G0.**
+
+- **Lần 31 (26/10, PM kiểm plan rev 1):** `docs/pm/REVIEW-PLAN-v0.2-REV1-20261026.md`. Dev đã commit nguyên trạng tài liệu PM ở `f12934a`; `1b03c5c` chỉ sửa plan/state, chưa có runtime/test/ZIP v0.2. Rev 1 xử lý phần lớn finding P1/P2, được chấp nhận làm nền. Cần chỉnh lý P1: cấp `seq` khi request danh sách bắt đầu và đối chiếu query/filter/page để response cũ không đè mới; vô hiệu cú bấm nếu dòng hoặc bộ lọc đổi giữa các GET dù URL không đổi. G0 vẫn chờ ảnh UI v0.1.6 thật, response danh sách và outerHTML đã làm sạch; chưa cho code Đợt 1.
+- **Lần 32 (26/10, dev bổ sung Spec rev 2 theo PM):** `docs/dev/PLAN-v0.2-RFID-BUTTON-PROD.md`.
+  - R1: `reqSeq` cấp lúc **gửi** request danh sách + `queryKey`; chỉ nhận response của request mới nhất; request mới nhất lỗi thì xoá nút.
+  - R2: `clickToken` gắn dòng `<tr>` + lượt danh sách + `queryKey` + route. `stillValid` kiểm sau mỗi `await` và ngay trước `session:start`; huỷ chủ động khi có request danh sách mới hoặc dòng đổi.
+  - Ghi chú P2: long task đo bằng trace CDP, thiếu attribution không tính đạt. Đợt 1 bản đầu đánh dấu đã thay; sẽ hợp nhất spec khi giao code.
+  - **Chưa code, chờ G0.**
+
+- **Lần 33 (26/10, PM sửa điều kiện khởi công):** `docs/pm/CORRECTION-G0-v0.2-20261026.md` thay quy tắc “không code đến G0” ở các review trước. Dev được code/test v0.2 ngay trên nhánh riêng từ `b4017d7`. UI/response/DOM thật dùng để chốt selector/hợp đồng, Edge và gate merge/cài, không phải đầu vào bắt buộc cho mọi code. Dev/PM tự lấy bằng chứng chỉ đọc trên máy staging nếu có phiên đăng nhập; operator chỉ hỗ trợ nếu cần. Lượt nhận/ghi staging vẫn cần operator cho phép riêng, production chỉ đọc.
+
+- **Lần 34 (27/10, dev giao v0.2.0):** `docs/dev/BATCH-v0.2.0.md` (spec hiệu lực rev 1 + rev 2, diff, test, đột biến, Edge, hiệu năng, G0 còn thiếu, cài đặt).
+  - Nhánh `batch/v0.2-rfid` từ `b4017d7`: `24d0070`, `d7d2cbd`, `b0129a4`, `ef67a7b` (runtime cuối), `682c509` (chỉ test). Gói `096D97D9`, giải nén `C:\circa-gr-nextwaves-v0.2.0`. **Chưa cài.**
+  - `npm test` 131/131. Đột biến 93/93 (lượt 2 sót 1 ca; sửa test `682c509`, chạy lại ca 76–93: 18/18). Edge thật trên bản giải nén 16/16 (v0.1.6 đối chứng hỏng 6/16).
+  - Đột biến lần 1 sót 6 ca. Nguyên nhân chính: GET hết giờ bị coi là "huỷ", báo nhầm "Danh sách đã đổi" và che test R2 → đã sửa mã + test.
+  - Hiệu năng (Edge, trang giả):
+    - danh sách 20 dòng: mỗi lượt quét ≤ 1,8 ms;
+    - bão 300 thay đổi DOM: 2 lượt, tổng 1,2 ms; CPU extension 5,0 ms / trang 22,3 ms;
+    - trang bán hàng: 0,0 ms, 0 request.
+    Chưa có baseline trên POS thật.
+  - G0 còn thiếu: ảnh UI v0.1.6, Copy response danh sách GR, outerHTML dòng danh sách / vùng nút HOÀN THÀNH. Selector `gr-list.js` dựa trên giả định theo extension Nextwaves.
+
+- **Lần 36 (27/10, dev giao v0.2.1 theo PM audit v0.2.0 — mục 35):** `docs/dev/BATCH-v0.2.1.md`.
+  - Nhánh `batch/v0.2-rfid` `cbac491` (đã push). Gói `E34FF7C5`, giải nén `C:\circa-gr-nextwaves-v0.2.1`, tái lập cùng SHA từ checkout sạch. **Chưa cài.**
+  - P2.1: hook chỉ gửi lại lượt danh sách **mới nhất đã gửi** (kết quả, hoặc đang chờ); response lượt cũ về muộn không ghi vào. Test hook + hook thật → content nạp muộn; cả hai hỏng trên hook cũ.
+  - P2.2: ngưỡng < 2 ms áp cho cả lượt lúc tải trang (mục Edge riêng, 17 mục). `gr-list.js`: một bộ nghe capture ở document, nút clone từ mẫu, chia lát ~1 ms, làm ấm phần chỉ tốn lần đầu trong hai task riêng.
+    - Lượt tải trang tối đa 1,0–1,3 ms (v0.2.0 cùng buổi: 3,7–7,0 ms, hỏng mục mới).
+    - Danh sách 200 dòng: tối đa ≤ 1,4 ms mỗi lát (v0.2.0: 2–9,5 ms một lượt).
+  - `npm test` 133/133 × 3; đột biến 96/96; đột biến DOM trên Edge 3/3; Edge 17/17 (src × 5, gói × 2).
+  - G0: operator cho phép dev dùng Claude in Chrome **chỉ đọc** trên Chrome đã đăng nhập staging, và sẽ cài v0.1.6 để kiểm khung. Lúc giao, Claude in Chrome chưa kết nối.
+
+- **Lần 38 (27/10, dev giao G0 trang thật + v0.2.2 theo PM audit v0.2.1 — mục 37):** `docs/dev/BATCH-v0.2.2-G0.md`.
+  - **Cách lấy:** Claude in Chrome không kết nối → operator chọn trình duyệt trong app, **tự đăng nhập** POS / Nextwaves staging. Dev chỉ đọc (không token / cookie / header; không nhận / điền / HOÀN THÀNH).
+  - **G0.1 response danh sách thật khớp parser:** 76 KB / 20 dòng, `data.goods_receipts[{id, code, status, purchase_order_id, pos_info.id}]`, `total/page/limit`; không tên nhân viên. Phân tích của hook trên body thật ≤ 0,8 ms.
+  - **G0.2 DOM thật khớp `gr-list.js`:** bảng MUI, mã ở ô đầu, ô cuối `div.flex`.
+    - Chạy `gr-list.js` nguyên văn trong trang (cục bộ): 7/7 nút đúng dòng; click thật vào nút không mở dòng (đối chứng bấm dòng thì mở).
+    - Tìm ra **F1**: nút 28px làm dòng 57 → 61px.
+  - **G0.3:** thanh HỦY / HOÀN THÀNH cố định góc dưới phải (vị trí thật đã ghi). Màn quét Nextwaves là modal, "Xác nhận nhận hàng" ở cuối thân cuộn.
+    - Tìm ra **F2**: khung không đặt lại khi cuộn → che nút tới 1 s sau khi cuộn.
+    - Ảnh khung với extension cài thật **chưa có**: pane không nạp được extension, Chrome không kết nối.
+  - **G0.4 hiệu năng toàn bộ tác vụ (trace CDP, trang dựng từ DOM thật):**
+    - Trạng thái thường mỗi lời gọi < 2 ms (cả lúc máy bận).
+    - Hai lời gọi một lần mỗi lượt tải danh sách (hook parse 76 KB; content xử lý tin danh sách): ≤ 1,5 ms lúc máy yên, 1,9–3,6 ms lúc máy bận. v0.2.1 cùng lúc cao tương đương.
+    - Nạp script một lần mỗi trang 5–30 ms tuỳ tải; không tác vụ nào ≥ 50 ms.
+    - Trên trang thật: `show()` cả `querySelectorAll('tr')` 1,4 ms, riêng bước lấy dòng ≤ 0,2 ms.
+    - Dev đề nghị PM chốt định nghĩa ngân sách; nếu cần < 2 ms cho cả hai lời gọi một lần → v0.2.3 tách task.
+  - **v0.2.2** (`a1975f1`, gói `AB96179D`): F1 nút 24px; F2 khung đặt lại khi cuộn (capture ở document, rAF).
+    - Edge 25 mục dựng theo DOM thật: v0.2.2 25/25; v0.2.1 hỏng 3/25 đúng F1 / F2.
+    - Đột biến DOM 6/6; `npm test` 133/133; đột biến Node 96/96; Edge trên gói giải nén 25/25 × 7. **Chưa cài.**
+
+- **Lần 41 (27/10, dev giao v0.2.3 theo PM review G3a — mục 40):** `docs/dev/BATCH-v0.2.3.md`.
+  - **F3:** nhãn "Nhận hàng bằng RFID" / "Đang kiểm…" / "Mở Nextwaves" / "Mở phiếu"; `title` = `aria-label` = mã GR + trạng thái phiên (chữ + mã) + hành động. Nút ≤ 150px, ellipsis, cao 24px; `syncRow` so cả `title` / `aria-label`.
+  - **F4:** danh sách không dùng khung nổi; huỷ / lỗi / không liên kết báo trong khối thông báo **trong luồng trang ngay trên bảng** (Đóng; gỡ khi rời trang / bấm lại).
+  - **Kiểm:**
+    - `npm test` 135/135 × 3; đột biến Node 102/102 (2 ca sót lượt đầu do thiếu test → sửa test `f76cbcc`, chạy lại 6/6); DOM 9/9.
+    - Edge 41 mục (1095×756 / 1366×768 / 1440×900, trước / sau bấm / received / applied, thông báo lỗi không phủ 29 điều khiển, rời / quay lại, đổi trang, tải lại): gói 41/41 × 2; v0.2.2 hỏng 7/41 đúng F3 / F4.
+  - **Hiệu năng:** lượt quét gồm lấy dòng 1,0–1,2 ms; tác vụ dài nhất 6,7–7,0 ms. **Chưa cài.**
+  - Ghi phương án P2 (khung trang phiếu che "SL nhận" ở 1095px): dev khuyên mặc định thu nhỏ khi không cần thao tác + hướng dẫn thu nhỏ; chờ PM chọn.
 
 ## 1. Luồng nhận hàng hiện tại trên POS (capture Net Capture, POS-02 Florita, 19/10/2026, production)
 
@@ -486,11 +589,137 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-24. **Hiện hành (sau PM audit T3/W1, 26/10):**
-    - **Dev:** có thể merge `batch/v0.1-staging` tại `fa66de6` vào `main` sau khi kiểm diff/test/bí mật; production vẫn chỉ đọc. Nếu runtime đổi, version/ZIP/SHA-256 mới và PM audit lại.
-    - **Operator/dev (chỉ đọc):** tra QR một mã POS thêm sau HOÀN THÀNH và một UID Nextwaves để xác định sản phẩm/đơn vị/lô; hỏi stakeholder ảnh hưởng tới tồn kho/bán hàng trước production.
-    - **O1:** staging dùng đường xử lý tay khi mất phiên sau nhận; production cần khôi phục an toàn hoặc quyết định chấp nhận nhập tay của stakeholder. PO staging còn lại chỉ dùng cho lượt thử có mục đích đã chốt, ghi cả tab Nextwaves.
-    - **P3:** tối ưu tra QR lặp và định dạng `scan_ok.at` ở batch sau; không chặn merge staging.
+54. **Hiện hành (operator đổi cấu trúc dự án, 29/10):**
+    - Chỉ còn operator + một phiên Claude Code giữ quyền ghi (kiêm PM / senior engineer / QC / tester / audit / review). PM Codex thôi vai trò; `docs/pm/*` là lịch sử, quyết định cũ vẫn hiệu lực trừ khi bị thay. Plan / audit mới ở `docs/dev/`. Ghi thật và cài / nâng gói vẫn cần operator cho phép từng lần.
+    - Lý do: 29/10 00:05–00:08 phiên `qr-code-b2` (operator gõ "resume") sửa cùng worktree v0.3.0 với phiên dev; PM Codex cũng ghi tài liệu song song. Quy tắc mới: một người ghi, phiên mới / resume / fork mặc định chỉ đọc, commit từng bước, worktree ở đường dẫn cố định (`agent.md` §2.1, `CLAUDE.md`, `AGENTS.md`).
+    - Việc kế tiếp: sửa P2.5 (quyền tự động bị bỏ qua → thu hồi + popup / Nextwaves báo "Tự động đã dừng"), commit SHA cố định v0.3.0, đột biến + Edge + trace + gói + script nâng v0.2.4 → v0.3.0, audit độc lập bằng sub-agent, báo cáo G1. Sau đó G2 (operator cài gói cuối, kiểm chỉ đọc) và G3 (một E2E staging thật có phép riêng).
+53. (cũ, thay bằng mục 54) **Sau PM audit G0 v0.2.5, 29/10:**
+    - G0 nội bộ đạt: `batch/v0.2-rfid` `02f2575`, gói `792817B9…`, PM so source/ZIP 19/19, chạy Node 180/180, `background.js` không đổi. Edge 103/103 ×3, Edge tổng 42/42, đột biến 146/146, trace ≤21,71 ms là số dev báo; PM chưa chạy lại Edge/đột biến. Không cài v0.2.5 cho operator, chưa dùng đơn staging/merge. Xem `docs/pm/AUDIT-G0-v0.2.5-G1-PRELIM-20261029.md`.
+    - G1 v0.3.0 chưa đạt gate: dev báo 204/204 test trên mã chưa commit; hai phiên cùng sửa worktree v0.3.0. PM yêu cầu một owner (ưu tiên phiên đã viết luồng chính/test), rà nhận các phần `autoRun.skipped`/`auto:skip`/`grant_expired` rồi chốt SHA trước đột biến/Edge/gói. Finding P2.5: popup không được báo “ĐÃ CHO PHÉP” sau khi auto đã skip; vô hiệu quyền và hiển thị đường thủ công, test F5 không tự chạy lại. Operator chưa cần làm gì.
+52. (cũ, thay bằng mục 53) **Sau quyết định operator gộp luồng tự động, 28/10:**
+    - Operator yêu cầu tự điền + tự HOÀN THÀNH trong một luồng trước pilot production, **một** E2E staging có tác động thật trên gói cuối; không dùng thêm đơn test cho mỗi bản trung gian. Chưa có phép ghi cho GR mới. PM spec/gate tại `docs/pm/DECISION-ONE-STG-AUTO-FLOW-20261028.md`.
+    - v0.2.5 sửa P2/P3 đang chạy test/đột biến/Edge; dev hoàn tất để PM audit nội bộ, chưa yêu cầu operator cài/kiểm riêng và chưa merge. Batch sau có quyền một lần cho đúng GR/PO/SO trước Nextwaves; tự W1 chỉ khi receipt/UID/kế hoạch đầy đủ; GET toàn GR sau W1 phải trùng kế hoạch trước một PUT COMPLETED; GET cuối xác nhận. Lỗi/không rõ dừng, không tự retry. Test âm dùng fixture A1/server giả, chỉ một lượt staging thật trên gói cuối.
+    - Manual mode vẫn giữ. Quyết định 24/10 “dược sĩ bấm HOÀN THÀNH” được thay **chỉ trong chế độ tự động được cấp phép riêng**; dev đồng bộ `agent.md` sau khi commit spec PM. Production vẫn chỉ đọc tới gate PRD và phép operator riêng.
+51. (cũ, thay bằng mục 52) **Sau PM audit A1 GR03887, 28/10:**
+    - Báo cáo dev `main` `675abf8`; 9 mẫu/test thật ở `batch/v0.2-rfid` `13170bc`, `src/` không đổi so với gói v0.2.4 `0BB73E2D`. PM kiểm 8/8 SHA bằng chứng gốc, 167/167 test, capture POS có 15 GET QR 200, 5 PUT 200 với body trùng mẫu 5/5, một PUT COMPLETED 200, GET cuối COMPLETED với `items` trùng mẫu. Storage có 15 đơn vị Nextwaves, một biên nhận, 5 `apply_done`, phiên `done`. Không có capture Nextwaves; A1 đạt chức năng nhưng không khẳng định đã xem body `receive-scan` trực tiếp.
+    - **Chưa staging done/merge:** GR03887 sau COMPLETED không còn `#all-receipt`, v0.2.4 chờ anchor rồi hiện khung đỏ `ui_anchor_missing`; ảnh và log thật xác nhận. PM duyệt v0.2.5 sửa P2 này và P3 popup cảnh báo mã cấp phép không khớp phiên; test/gói/kiểm Chrome staging thật chỉ đọc và trace hiệu năng gói cuối trước audit merge. Không chạy lại A1 chỉ để bù capture. Xem `docs/pm/AUDIT-A1-GR03887-STG-v0.2.4-20261028.md`.
+    - Sai lệch runbook: operator xoá phiên cũ/tạo lại GR03887, bấm nhầm GR03879 (0 PUT), thiếu capture Nextwaves. Dev cập nhật runbook. Production còn O1, QR lô sau HOÀN THÀNH, reader Florita, quyết định yêu cầu tự điền/tự HOÀN THÀNH, T1-PRD chỉ đọc và W1-PRD có phép riêng.
+50. (cũ, thay bằng mục 51) **Sau PM quyết định gate A1, 28/10:**
+    - Operator đã nâng v0.2.3 → v0.2.4 cùng thư mục/ID trên Chrome staging thật; phiên GR03887 `nw_ready` và cấu hình STG còn, 0 cấp phép, Nextwaves 0/15. Kiểm khung trên trang GR03887 tại `vw=1216` ĐẠT, không điều khiển bị che; operator bỏ qua kiểm lại 1095px. Edge 1095×756 đạt nhưng không thay thế ảnh Chrome thật. Xem `docs/dev/A1-S0-KET-QUA-v0.2.4-20261028.md`.
+    - Dev đã phân loại lượt 75,18 ms: không còn trace gốc; tám lượt sau không tái hiện, ba lượt trace có tên ≤10,47 ms, baseline không extension có layout 60–78 ms. PM cho A1 có giám sát, **chưa đóng P2 cho staging done**. Xem `docs/dev/PERF-75MS-v0.2.4-20261028.md`.
+    - Operator báo có đúng 15 tem và cho phép một lượt nhận → điền → HOÀN THÀNH trên GR03887/PO13806459/SOBD1594095-F. PM **mở gate A1** theo `docs/pm/DECISION-A1-GATE-v0.2.4-20261028.md`: kiểm hai capture có GET mới, xác nhận 15/15 tem, nhận một lần; dừng trước cấp phép để đối chiếu kế hoạch 5 lô/15 UID; sau điền đọc lại đủ rồi dược sĩ tự HOÀN THÀNH. Lỗi/không rõ thì dừng, không retry. Chưa có bằng chứng A1 thực hiện.
+    - Yêu cầu stakeholder tự điền/tự HOÀN THÀNH sau xác nhận Nextwaves là thay đổi nghiệp vụ mới, chưa vào A1; dev khảo sát/spec riêng sau kết quả A1. Production vẫn cần O1/QR/reader, T1-PRD chỉ đọc và phép W1-PRD riêng.
+49. (cũ, thay bằng mục 50) **Sau PM audit chuẩn bị A1 v0.2.4, 28/10:**
+    - Dev giao `main` `82b215e`, nhánh `b90f6be`: gói giao ổn định, runbook A1 §0, script nâng và preflight chỉ đọc. PM kiểm SHA gói/script; `nang-cap-v0.2.4.ps1 -Check` trên `C:\circa-gr-nextwaves-v0.2.3` đạt 19/19, chưa đổi file. Raw log dev: diễn tập Edge 17/17 giữ ID/phiên, Edge GR 95/95 × 5, đối chứng v0.2.3 hỏng 52/92, Edge tổng 42/42; lượt đối chứng nối nhầm trình duyệt trước đó đã bị loại.
+    - **Cho operator nâng cùng thư mục/Extension ID để kiểm staging chỉ đọc theo runbook §0b–§0d**, sau khi xác nhận đúng đường dẫn đang tải. Trước nâng có thể bấm “Mở tab Nextwaves” trên v0.2.3 để làm mới `updatedAt` của phiên GR03887 (chỉ focus/mở tab + cập nhật phiên, không ghi POS/NW). Mất phiên hoặc sai ID/cửa hàng/PO/SO/UI thì dừng trước receive. Operator gửi một bộ bằng chứng UI; PM chốt sau khi xem. Chưa có phép nhận/PUT/HOÀN THÀNH.
+    - **P2 hiệu năng mở:** một lượt Edge sau cập nhật đo `ui/panel.js` 75,18 ms, vượt gate <50 ms; năm lượt sau 14,32–16,62 ms. Dev phân loại pha/hàm bằng trace có tên và baseline; không xoá lượt hỏng. Không chặn kiểm chỉ đọc, nhưng PM chưa chốt A1/staging done. Dev sửa lỗi tài liệu `C:circa-...` và đường `-Target` khác mặc định; bắt đầu discovery O1/QR/reader chỉ đọc. Xem `docs/pm/AUDIT-A1-PREP-v0.2.4-20261028.md`.
+48. (cũ, thay bằng mục 49) **Sau PM audit cuối v0.2.4, 28/10:**
+    - PM kiểm `28d1f9c`/`c08f709` và gói `0BB73E2D`: hai finding rev 1 được sửa ở source/test; SHA và 19/19 ZIP/source/bản giải nén khớp; PM chạy Node 160/160. Raw log dev: Edge GR 94/94 × 2, Edge tổng 42/42 × 2, Node mutation 128/130 trên runtime + 2/2 sau thêm test, Edge mutation 25/25 (một ca bắt bằng watchdog khi cố ý bỏ giới hạn gắn khung). Chưa kiểm UI v0.2.4 trên Chrome staging thật.
+    - Operator xác nhận `805da9a` hoàn tác nhầm. PM **đạt gate source/gói** và chọn A1 trên v0.2.4, sau khi dev sửa runbook/version/hash, giao gói ở chỗ ổn định, rehearsal nâng cùng Extension ID trên profile thử và kiểm phiên `nw_ready`. Sau đó cho nâng thật để kiểm UI GR03887 ~1095px **chỉ đọc**; sai phiên/ID/trang/cửa hàng/UI thì dừng trước receive. Xem `docs/pm/AUDIT-POST-REVERT-v0.2.4-20261028.md`. Operator vẫn phải xác nhận 15 tem và cho phép riêng một lượt trước nhận/PUT/HOÀN THÀNH; không thay extension giữa ba chặng.
+    - Sau A1 và UI P2 thật đạt mới xét staging done/merge. Discovery O1/QR/reader Florita chỉ đọc có thể làm song song; production còn spec/gate riêng.
+47. (cũ, thay bằng mục 48) **Sau PM audit rev 1 v0.2.4, 27/10:**
+    - Dev sửa theo ba finding đầu trên `a8d49a1`, gói `95BECDEA`. PM so SHA-256 và 19/19 file ZIP/source/bản giải nén khớp. Dev báo Node 154/154 × 3, Edge GR 90/90, Edge tổng 42/42, 8/8 đột biến mới; 122 Node + 23 Edge đầy đủ còn chạy. PM chưa chạy test nặng song song, chưa có kiểm UI gói mới trên Chrome staging thật.
+    - **Chưa duyệt cài/merge:** `grAnchor(code)` chấp nhận mã GR cũ nếu breadcrumb còn A dù thẻ thông tin sát bảng đã đổi B; cần test chỉ đổi thẻ thông tin và guard chính xác trước claim/PUT. Khi W1 đang điền, chuyển GR A → SO B khác có thể vẽ khung nổi A trên SO B do `evalHref` được gán B và router cho mọi SO; cần test và chặn view sai SO. Xem `docs/pm/AUDIT-REV1-v0.2.4-P2-20261027.md`.
+    - A1 trên v0.2.3 không đổi: operator xác nhận 15 tem vật lý và cho phép riêng một lượt GR03887 trước receive/PUT/HOÀN THÀNH; không nâng cấp giữa chặng. Production vẫn theo gate O1/QR/reader/T1-PRD/W1-PRD, ngày chỉ là mục tiêu có điều kiện.
+46. (cũ, thay bằng mục 47) **Sau PM audit sơ bộ v0.2.4, 27/10:**
+    - Runbook A1 `b4cfc67` đã sửa kiểm capture hai tab bằng GET còn mới và đường nhập tay theo đơn vị/lô/số lượng. PM chấp nhận trình operator xác nhận đúng 15 tem vật lý và cho phép riêng một lượt GR03887/PO13806459/SOBD1594095-F; chưa có phép, chưa nhận/PUT/HOÀN THÀNH. Nếu chạy A1 trên v0.2.3 thì không nâng cấp giữa chặng nhận và hoàn tất.
+    - P2 v0.2.4 source `b227585`, gói `E8531EB4`: PM đã so 19/19 ZIP/source/bản giải nén và SHA-256 `E8531EB48BE0AE975081691F768B8EB0707EE0CAD6565B142711612F361A9EA8`. Dev báo Node 145/145 × 6, Edge GR 88/88, Edge tổng 42/42; PM chưa chạy test nặng vì đột biến dev đang chạy. Chưa cài lên Chrome staging thật.
+    - **Chưa duyệt cài/merge:** (P1) guard `anchoredFor()` không đọc lại mã GR hiển thị khi React giữ nguyên node `#all-receipt`; (P2) kết quả đánh giá GR cũ về muộn có thể vẽ khung nổi trên danh sách/trang khác; (P2) cảnh báo đổi nội dung khi khung thu nhỏ có thể không tự mở. Dev tái hiện bằng test, sửa, ra gói/hash mới, báo kết quả đột biến trên source cuối. Sau đó PM audit lại và mới xét kiểm UI thật. Xem `docs/pm/AUDIT-PRELIM-v0.2.4-P2-20261027.md`.
+    - Staging done cần A1 có phép và đạt, P2 trên gói cuối đạt UI/guard/W1; production còn O1, QR POS sau HOÀN THÀNH, máy/reader Florita, T1-PRD chỉ đọc, allowlist/rollback và W1-PRD có phép riêng. Lịch chỉ theo gate.
+45. (cũ, thay bằng mục 46) **Sau PM review runbook A1 và spec P2, 27/10:**
+    - PM kiểm runbook `docs/dev/RUNBOOK-A1-GR03887-20261027.md`: 15 hậu tố EPC duy nhất, tổng 1+3+3+4+4=15. Status GR/PO và quy đổi là dev quan sát trên trang thật, PM chưa có response làm sạch để tự đối chiếu. Runbook được chấp nhận để trình operator **sau khi dev thêm kiểm capture đang chạy trên hai tab và sửa đường nhập tay (15 EPC không phải 15 hộp/đơn vị cơ bản)**. Không cần vòng PM review mới nếu chỉ sửa đúng hai điểm. Operator vẫn phải xác nhận đủ tem đúng đơn và cho phép riêng một lượt A1; chưa có phép ghi.
+    - P2 v0.2.4: PM chọn phương án A có điều kiện, host Shadow DOM trong luồng trang trước `#all-receipt`; sticky chỉ khi geometry không che `SL nhận`, HỦY/HOÀN THÀNH hay nút trong khung ở 1095/1366/1440, nếu không thì in-flow không sticky. Không dùng nhãn nổi B; thiếu anchor thì báo lỗi và W1 fail closed, không mở nút Điền trên panel nổi cũ. Dev được code trên batch, giao test/gói/DIFF; không thay/cài bản v0.2.3 giữa A1.
+    - Đợt 2 O1/QR chỉ đọc tiếp tục song song. Không Go merge/staging done/production từ hai quyết định này. Xem `docs/pm/REVIEW-A1-RUNBOOK-P2-v0.2.4-20261027.md`.
+44. (cũ, thay bằng mục 45) **Sau PM review plan staging done → Florita, 27/10:**
+    - PM duyệt hướng chia giai đoạn/đóng băng phạm vi của `docs/dev/PLAN-STG-DONE-PRD-20261027.md`, **không duyệt nguyên trạng lịch và không cấp phép A1**. Xem finding P1/P2, hợp đồng A1/P2 và mốc có điều kiện tại `docs/pm/REVIEW-PLAN-STG-DONE-PRD-20261027.md`.
+    - A1 v0.2.3 trên GR03887/PO13806459/SOBD1594095-F có thể chuẩn bị ngay; dev giao runbook một trang với preflight đúng 15 tem/EPC, trạng thái GR/PO/phiếu gửi, capture, điểm dừng nhận→điền→HOÀN THÀNH và đường xử lý khi mất phiên. Sau PM duyệt runbook, operator mới xác nhận tem và cho phép đúng một lượt. Không nâng cấp giữa receive và hoàn tất.
+    - P2 khung phiếu: PM duyệt khảo sát/spec hướng trong luồng trang, chưa duyệt layout/code cho tới khi có anchor DOM, hành vi qua React render và gate mọi trạng thái/nút. Một E2E staging **có giám sát** trên v0.2.3 được phép xét sau A0 dù P2 chưa sửa; P2 vẫn chặn staging done/dùng thường xuyên. v0.2.4 cần audit nguồn/gói/hồi quy W1 và kiểm UI thật trước merge.
+    - O1 khôi phục sau nhận cần hợp đồng dữ liệu thật; QR POS mới sau HOÀN THÀNH cần quyết định nghiệp vụ; máy/SO Florita và xử lý reader/rollback còn thiếu. Các mốc 30/10 staging done, 4/11 build/trial PRD, 6/11 Go là **mục tiêu phụ thuộc gate**, không cam kết ngày. Dev có thể làm discovery/spec chỉ đọc song song, production vẫn chỉ đọc.
+43. (cũ, thay bằng mục 44) **Sau PM chốt G3a v0.2.3, 27/10:**
+    - PM chấp nhận G3a **đạt cho UI chỉ đọc** theo `docs/pm/DECISION-G3a-v0.2.3-20261027.md`: dev xem ảnh POS sau bấm GR03887 (nút `Mở Nextwaves`, bảng đều, không khung che phân trang) và popup v0.2.3 một phiên `nw_ready`; ảnh Nextwaves thật cho thấy khung ngoài modal và nút xác nhận hiện sau cuộn; PM đã kiểm source/gói/Edge. Lượt chạy nhầm bản cũ loại khỏi bằng chứng.
+    - Giới hạn: ảnh POS sau bấm khoảng 1230px, không đúng 1095px; hai ảnh Nextwaves không cùng khung hình; số tab thật chưa đếm riêng. PM chấp nhận tổ hợp bằng chứng, **không yêu cầu ảnh hay lượt G3a bổ sung**. G3a không cho phép nhận/ghi/HOÀN THÀNH.
+    - Chưa Go merge/vận hành v0.2.3. G3b nhận hàng và W1 điền POS cần plan/gate và phép operator riêng đúng GR/PO; P2 khung phiếu che `SL nhận` ở 1095px cần batch UI trước gate vận hành W1/production. Dev commit file PM nguyên trạng theo quy trình.
+42. (cũ, thay bằng mục 43) **Sau PM audit v0.2.3, 27/10:**
+    - PM kiểm diff `3218cae..f76cbcc`, chạy `npm test` **135/135**, Edge trên bản giải nén **41/41**, SHA `40236D67A5A4135B3D9B37683167A81667F668A08CBC29DF4F0472076DA5D96C` và **19/19** file ZIP/source/bản cài khớp. F3/F4 đạt gate source/gói/Edge; đột biến 102/102 + DOM 9/9 và đối chứng v0.2.2 hỏng 7/41 là số dev báo, PM chưa chạy lại. Xem `docs/pm/AUDIT-v0.2.3-F3-F4-G3a-20261027.md`.
+    - **Cho cài v0.2.3 để kiểm G3a chỉ đọc** trên Chrome staging: trước/sau bấm ở 1095×756 mốc 57px trên trang thật, không khung nổi che phân trang; Nextwaves khung mở rộng sau cuộn không che Xác nhận nhận hàng (một ảnh hoặc quan sát trực tiếp); số tab, popup một phiên, version 0.2.3. Không cần ảnh khung thu nhỏ, không bấm xác nhận/ghi/HOÀN THÀNH. Kiểm phiên đang nhận/điền dở trước khi thay extension và chỉ bật một bản.
+    - P2 khung phiếu che `SL nhận` tại 1095px: chưa sửa trong v0.2.3; tách batch UI riêng trước vận hành W1/production, không tự mặc định thu nhỏ khung ở trạng thái cần hành động. G3a chưa đạt toàn bộ, chưa Go merge; G3b/W1/production có gate và phép riêng.
+41. (cũ, thay bằng mục 42) **Sau dev giao v0.2.3, 27/10:**
+    - **PM:** audit nguồn / gói v0.2.3 (`f76cbcc`, runtime `247386f`, gói `40236D67`) theo `docs/dev/BATCH-v0.2.3.md`. Quyết phương án P2 khung trang phiếu (§4.2 báo cáo).
+    - **Sau PM cho cài:** kiểm G3a lại trên Chrome staging với `C:\circa-gr-nextwaves-v0.2.3`:
+      - danh sách trước / sau bấm ở 1095px (dòng 57px, tiêu đề không xuống dòng);
+      - Nextwaves sau cuộn với khung mở rộng;
+      - số tab, popup, version.
+
+      Dev tự quan sát nếu Claude in Chrome kết nối; không thì operator theo hướng dẫn G3a. Không nhận / điền / HOÀN THÀNH.
+    - Chưa Go merge / vận hành. G3b / W1 / production có gate và phép riêng.
+40. (cũ, thay bằng mục 41) **Sau PM review bốn ảnh G3a v0.2.2, 27/10:**
+    - PM xem trực tiếp ảnh danh sách trước/sau bấm GR03879 và phiếu GR03878 mở/thu khung. Phần đã thấy: nút đúng 7 dòng chờ nhận/đang nhận, dòng trước bấm 57px, POS vẫn ở danh sách sau bấm; khung phiếu không che HỦY/HOÀN THÀNH. Chưa kết luận G3a đạt toàn bộ.
+    - F3: nhãn trạng thái dài làm bảng dàn lại, dòng cao khoảng 73px tại vùng trang 1095×756. F4: khung thông báo che phân trang và cột hành động cuối. Cả hai phải sửa trước merge/vận hành. PM duyệt nhãn ngắn có nghĩa đầy đủ ở `title`/`aria-label`; trên danh sách không giữ khung nổi thành công, lỗi/cảnh báo phải hiện mà không phủ điều khiển. Xem hợp đồng và gate trong `docs/pm/REVIEW-G3a-F3-F4-v0.2.3-20261027.md`.
+    - **Dev được làm v0.2.3 ngay** trên nhánh batch, tăng version/ZIP/SHA, giao DIFF/test/Edge ở 1095×756 và ảnh thật sau sửa để PM audit. Không cần chờ đủ ảnh Nextwaves mới viết code. PM chưa duyệt merge hoặc dùng bản này để nhận/ghi.
+    - Operator xác nhận lần bấm GR03879 đầu đã thấy “Danh sách đã đổi — bấm lại”; không phải cú bấm không phản hồi. Thông báo phù hợp hàng rào huỷ khi danh sách đổi, chưa chứng minh sự kiện đổi cụ thể. Còn thiếu G3a: kiểm khung Nextwaves **mở rộng sau cuộn** cùng nút Xác nhận nhận hàng trên trang thật (một ảnh hoặc dev/PM quan sát trực tiếp có kích thước/trạng thái), số tab Nextwaves, popup một phiên GR03879, version cài và tình trạng phiên cũ. **Không buộc operator chụp khung Nextwaves thu nhỏ**; Edge đã kiểm trên trang dựng, đây chỉ là bằng chứng phụ. Dev tự quan sát chỉ đọc nếu truy cập được. Khung mở trên GR03878 còn che một phần điều khiển số lượng sản phẩm ở 1095×756; ghi P2 tương tác riêng trước W1. Ảnh chứa tên nhân viên, chưa đưa vào repo.
+39. (cũ, thay bằng mục 40) **Sau PM audit G0/G1/G2 v0.2.2, 27/10:**
+    - PM audit `batch/v0.2-rfid` tại `3218cae` (runtime `a1975f1`, gói `AB96179D`): G0.1 response và G0.2 DOM chấp nhận cho tích hợp; G1 source/test và G2 gói/Edge đạt. PM độc lập chạy 133/133 test, Edge gói 25/25, gói cũ v0.2.1 hỏng đúng 3/25 F1/F2, dựng lại SHA và so 19/19 file. Xem `docs/pm/AUDIT-v0.2.2-G0-G1-G2-20261027.md`.
+    - **Cho phép cài v0.2.2 trên Chrome staging để kiểm G0.3 UI và phần G3a chỉ đọc**, sau khi xác nhận không có phiên nhận/điền dở và không bật hai bản extension cùng lúc. Chọn Staging, không cấp phép điền; kiểm nút danh sách, khung POS và khung Nextwaves sau cuộn. Được bấm bắt đầu RFID để tạo phiên/GET, không bấm Xác nhận nhận hàng/HOÀN THÀNH, không PUT. Ảnh hoặc quan sát trực tiếp ba màn theo báo cáo PM; không bắt đúng năm ảnh cũ.
+    - Ngân sách: mỗi lượt quét danh sách <2 ms gồm bước lấy dòng; mọi tác vụ extension <50 ms. Không áp <2 ms cho mọi callback. Dev sửa mâu thuẫn mô tả giữa §3b và §4.2 của `docs/dev/BATCH-v0.2.2-G0.md`, không đổi runtime/gói vì lỗi tài liệu.
+    - Chưa Go merge hoặc dùng v0.2.2 để vận hành nhận/ghi. G3b sau nhận hàng/quay về GR còn chờ lượt thật với phép operator riêng đúng GR/PO; production vẫn chỉ đọc và có gate Đợt 2.
+38. (cũ, thay bằng mục 39) **Sau dev giao G0 + v0.2.2, 27/10:**
+    - **PM:** audit G0 và v0.2.2 (`a1975f1`, gói `AB96179D`) theo `docs/dev/BATCH-v0.2.2-G0.md`. Quyết hai điểm dev đề nghị:
+      - Edge trên trang dựng theo cấu trúc / kích thước thật (1366×768, 1440×900) có thay được ảnh khung với extension cài thật không;
+      - định nghĩa ngân sách toàn bộ tác vụ: mỗi lời gọi extension < 2 ms ở trạng thái thường; nạp script một lần mỗi trang < 50 ms.
+    - **Operator:** nếu PM vẫn cần ảnh thật, cài gói v0.2.2 (hoặc v0.1.6) trên Chrome đã đăng nhập staging khi Claude in Chrome kết nối được, để dev chụp chỉ đọc. Lượt nhận / ghi staging vẫn cần phép riêng đúng GR / PO.
+    - Chưa Go merge / cài v0.2.x để vận hành. Production chỉ đọc; Đợt 2 có gate riêng.
+37. (cũ, thay bằng mục 38) **Sau PM audit v0.2.1, 27/10:**
+    - PM đã kiểm độc lập `cbac491` / gói `E34FF7C5`: 133/133 test; dựng lại SHA và so 19/19 file source/ZIP/bản giải nén; Edge trên gói 17/17 hai lượt (lượt tải tối đa 1,2 và 1,0 ms); benchmark bảng giả 200 dòng tạo đủ 130 nút. P2.1 đóng ở source/test, P2.2 đóng trên Edge trang giả. Xem `docs/pm/AUDIT-v0.2.1-SOURCE-PACK-20261027.md`.
+    - **G1 source/gói và G2 Edge trang giả đạt; G0 trang thật còn chờ.** Dev đã được operator cho phép dùng Claude in Chrome chỉ đọc nhưng bàn giao cho biết Chrome chưa kết nối. Dev lấy response/DOM/UI và đo toàn bộ tác vụ trên trang danh sách staging thật, đối chiếu selector/parser; khác giả định thì sửa, phát hành gói mới và PM audit lại.
+    - Chưa Go merge/cài v0.2.1 để vận hành, chưa Go nhận/ghi staging. Mỗi lượt có tác động cần operator cho phép riêng. Production chỉ đọc; Đợt 2 có gate riêng.
+36. (cũ, thay bằng mục 37) **Sau dev giao v0.2.1, 27/10:**
+    - **PM:** audit lại P2.1 / P2.2 trên nhánh `batch/v0.2-rfid` `cbac491` và gói `E34FF7C5` theo `docs/dev/BATCH-v0.2.1.md`.
+    - **Dev:** lấy G0 chỉ đọc bằng Claude in Chrome (operator cho phép 27/10):
+      - Copy response danh sách GR (chỉ body);
+      - outerHTML một dòng chờ nhận và vùng HOÀN THÀNH / Hủy;
+      - ảnh khung v0.1.6 trên POS GR03878 và màn quét Nextwaves;
+      - đo hiệu năng trên DOM danh sách thật (phát lại trong edge-check, có / không extension).
+      Đối chiếu với giả định `gr-list.js` / hook; khác thì sửa, ra gói mới.
+    - **Operator:** giữ Chrome đăng nhập POS / Nextwaves staging, kết nối Claude in Chrome, cài v0.1.6 (`C:\circa-gr-nextwaves-v0.1.6`, chọn Staging, không cấp phép điền).
+    - Chưa Go merge / cài v0.2 để vận hành, chưa Go nhận / ghi staging. Production chỉ đọc; Đợt 2 có gate riêng.
+35. (cũ, thay bằng mục 36) **Sau PM audit v0.2.0, 27/10:**
+    - PM đã kiểm độc lập `batch/v0.2-rfid` tại `682c509` và gói `096D97D9`: `npm test` 131/131; dựng lại ZIP cùng SHA, 19/19 file khớp source và bản giải nén; Edge trên trang giả 16/16 hai lượt. Xem `docs/pm/AUDIT-v0.2.0-SOURCE-PACK-20261027.md`.
+    - **Dev:** sửa P2.1 replay response danh sách cũ khi content nạp muộn; làm rõ/sửa P2.2 phép kiểm lượt quét lúc tải trang (<2 ms theo ngân sách PM, nhưng test hiện cho <16 ms). Runtime sửa phải tăng version/gói/hash; bàn giao diff, test và số đo.
+    - **G0 tích hợp trang thật:** dev/PM lấy chỉ đọc trên phiên staging đã đăng nhập: response danh sách GR, outerHTML một dòng và vùng HOÀN THÀNH/Hủy, kiểm khung POS/Nextwaves và hiệu năng thật. Bộ 5 ảnh v0.1.6 là checklist đề xuất; PM chấp nhận bằng chứng UI tương đương vì phần khung và Nextwaves không đổi trong v0.2. Operator hỗ trợ mở phiên hoặc chuyển mục thiếu nếu dev/PM không truy cập được; không bắt operator tự thu đủ bộ trước khi dev làm việc.
+    - Chưa Go merge/cài v0.2 để vận hành, chưa Go nhận/ghi staging. Lượt có tác động cần phép operator riêng. Production vẫn chỉ đọc; Đợt 2 có gate riêng.
+34. (cũ, thay bằng mục 35) **Sau dev giao v0.2.0, 27/10:**
+    - **PM:** audit nhánh `batch/v0.2-rfid` (đầu `682c509`, runtime `ef67a7b`) và gói `096D97D9` theo `docs/dev/BATCH-v0.2.0.md` (G1 test / đột biến, G2 Edge / hiệu năng). Chốt gate UI v0.1.6 khi có ảnh thật.
+    - **Operator (hoặc dev chỉ đọc nếu operator mở phiên / cho phép Claude in Chrome):** G0:
+      - 5 ảnh UI v0.1.6 (3 POS trên GR03878, 2 Nextwaves);
+      - Copy response danh sách GR `/danh-sach-phieu-nhan-hang`;
+      - outerHTML một dòng danh sách + vùng nút HOÀN THÀNH / Hủy (đã làm sạch).
+      Chưa nhận / điền / HOÀN THÀNH để lấy G0.
+    - **Dev:** đối chiếu G0 với giả định `gr-list.js` (`rowCode` / `slotOf`) và hợp đồng hook. Khác thì sửa, ra gói mới, PM audit lại. Không cài v0.2 trước khi PM cho phép.
+    - Staging nhận / PUT / HOÀN THÀNH vẫn cần phép riêng từng lượt; production chỉ đọc; Đợt 2 (O1, mã QR sau HOÀN THÀNH, reader Florita, PRD Florita) spec riêng.
+33. (cũ, thay bằng mục 34) **Sau PM đính chính G0, 26/10:**
+    - **Dev:** bắt đầu code/test Đợt 1 v0.2 trên nhánh riêng từ `b4017d7`; dùng mẫu giả cho phần chưa có DOM thật. Song song thu response/DOM staging chỉ đọc khi truy cập được; bàn giao G1/G2 theo spec rev 2 và đính chính PM.
+    - **PM:** cùng dev kiểm giao diện v0.1.6 và dữ liệu danh sách thật; dùng bằng chứng để chốt selector/hợp đồng và gate merge/cài v0.2. Không yêu cầu operator tự làm đủ năm ảnh trước khi dev code.
+    - **Operator:** chỉ cần hỗ trợ mở phiên staging hoặc gửi bằng chứng còn thiếu nếu dev/PM không truy cập được. Mọi thao tác nhận hàng/PUT/HOÀN THÀNH trên staging vẫn cần phép riêng từng lượt; production chỉ đọc.
+32. (cũ, thay bằng mục 33) Dev hoàn thiện spec rev 2; quy tắc chờ G0 trước khi code đã được PM sửa ở lần 33.
+31. (cũ, thay bằng mục 32) **Sau PM kiểm plan rev 1, 26/10:**
+    - **Operator:** gửi G0 chỉ đọc: 3 ảnh POS + 2 ảnh Nextwaves v0.1.6, `Copy response` danh sách GR và outerHTML dòng/vùng nút đã làm sạch. Chưa nhận/điền/HOÀN THÀNH để lấy G0.
+    - **Dev:** bổ sung thứ tự request/query và vô hiệu click khi dòng/filter đổi theo `docs/pm/REVIEW-PLAN-v0.2-REV1-20261026.md`; chờ PM chốt G0 trước khi code Đợt 1.
+    - **PM:** kiểm ảnh/response/DOM thật, chốt gate UI v0.1.6 và G0; sau đó audit build v0.2.0 theo G1/G2. O1/PRD Florita có spec/gate riêng.
+30. (cũ, thay bằng mục 31) Dev thêm Spec Đợt 1 rev 1 theo P1/P2 PM; G0 chưa đạt.
+29. (cũ, thay bằng mục 30) **Sau PM review kế hoạch v0.2, 26/10:**
+    - **Operator:** gửi ảnh UI v0.1.6 chỉ đọc trên POS/Nextwaves staging; response danh sách GR và outerHTML dòng/vùng nút đã làm sạch. Lượt nhận/ghi staging mới chỉ tiến hành khi operator cho phép riêng đúng GR/PO.
+    - **PM:** chốt gate UI v0.1.6 trên trang thật; sau đó audit Đợt 1 v0.2.0 theo `docs/pm/REVIEW-PLAN-v0.2-RFID-BUTTON-PROD-20261026.md` và bằng chứng dev. Chưa duyệt merge v0.1.6 hoặc build/ghi v0.2.0.
+    - **Dev:** cập nhật plan theo P1/P2 PM; chỉ code Đợt 1 khi G0 đạt, bàn giao nhánh/DIFF/test/gói/Edge/hiệu năng. Đợt 2 O1/PRD Florita phải có spec riêng.
+    - **Production:** chỉ đọc. O1, ý nghĩa mã QR POS sau HOÀN THÀNH và xung đột reader trên máy Florita cần giải hoặc có quyết định vận hành rõ trước gate W1-PRD.
+28. (cũ, thay bằng mục 29) Dev đề xuất kế hoạch v0.2; PM đã duyệt hướng và bổ sung gate ở lần 29.
+27. (cũ, thay bằng mục 28) **Sau PM audit source/gói UI v0.1.6, 26/10:**
+    - **Operator:** sau khi chắc chắn không có phiên dở giữa Nextwaves đã nhận và POS chưa điền, cài bản giải nén `C:\circa-gr-nextwaves-v0.1.6`, chọn Staging và kiểm UI **chỉ đọc** theo `docs/dev/FIX-UI-v0.1.6.md` §6: ba ảnh POS, hai ảnh Nextwaves, thấy rõ nút thao tác và khung ở trạng thái mở/thu nhỏ, sau cuộn hoặc đổi kích thước. Không nhận hàng, cấp phép điền, điền GR hay bấm HOÀN THÀNH trong lượt này.
+    - **PM:** đối chiếu ảnh trên trang thật; nếu khung tránh nút, chốt gate UI và quyết merge/dùng bản v0.1.6. Nếu còn chồng, chuyển DOM/ảnh cho dev sửa, tăng version/ZIP/SHA rồi audit lại.
+    - **Quy đổi:** v0.1.6 giữ all-or-nothing theo từng lô; lô lẻ không PUT, không làm tròn/điền một phần. Operator/Buymed/POS xác nhận cách sửa đơn vị/chứng từ nếu ca này xảy ra.
+    - **Trước production:** O1 và ý nghĩa mã QR POS thêm sau HOÀN THÀNH vẫn mở; tra QR chỉ đọc và quyết nghiệp vụ. PO staging còn lại giữ cho lượt thử đã chốt mục đích.
+26. (cũ, thay bằng mục 27) Dev hoàn tất gate source/gói v0.1.6; PM đã audit độc lập và cho lượt kiểm UI chỉ đọc trên staging thật.
+25. (cũ, thay bằng mục 26) PM review UI sơ bộ và quyết định quy đổi vỉ → hộp; chờ gate dev source/gói.
+24. (cũ, thay bằng mục 25) PM audit T3/W1 đã cho merge mã staging; O1, mã QR sau HOÀN THÀNH và P3 còn mở.
 23. (cũ, thay bằng mục 24) PM audit T3/W1, O1, mã QR sau HOÀN THÀNH, P3; giữ PO thứ hai để thử sau.
 22. (cũ, thay bằng mục 23) **Hiện hành (26/10, sau lần 22):**
     - **Operator — gấp, trước 23:00 ngày 26/10:** export `chrome.storage` (bước 12 của `docs/dev/FULL-STG-HUONG-DAN.md`) để giữ nhật ký phiên GR03878 trước khi bị xoá.

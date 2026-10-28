@@ -1,7 +1,7 @@
 # agent.md — circa-gr-nextwaves
 
 Đọc file này trước khi làm bất cứ việc gì trong project, rồi đọc `state.md` (trạng thái hiện tại, sự thật đã kiểm, câu hỏi mở).
-Session mới phải biết mình đóng vai nào (§2). Codex đọc `AGENTS.md`, Claude Code đọc `CLAUDE.md`; cả hai chỉ trỏ về file này.
+Session mới phải biết mình đóng vai nào (§2) và **mặc định chỉ đọc** cho tới khi operator chỉ định là phiên giữ quyền ghi (§2.1). Claude Code đọc `CLAUDE.md`; Codex đọc `AGENTS.md` (Codex không còn vai trò, không sửa file).
 
 ## 1. Project là gì
 
@@ -15,23 +15,44 @@ Mục tiêu (stakeholder): trên màn GR của POS, người dùng bấm bắt �
 
 Bài toán khó nhất: từ một GR trên POS, xác định đúng PO trên Nextwaves. Xem `state.md` §3.
 
-## 2. Vai trò (operator chốt 24/10/2026)
+## 2. Vai trò (operator đổi 29/10/2026 — thay bảng 24/10)
+
+Project chỉ còn **hai người**:
 
 | Vai trò | Ai | Trách nhiệm |
 |---|---|---|
-| **Operator** | Người dùng | Vận hành trực tiếp, thử trên máy thật, cầu nối giữa dev-team và PM. Chuyển yêu cầu, spec, finding, dữ liệu (response / ảnh). Quyết định nghiệp vụ và chấp nhận rủi ro đi qua operator |
-| **Dev-team** | Claude Code (session dev + các sub-agent Claude Code do dev điều phối) | Khảo sát kỹ thuật, implement đúng spec PM đã duyệt, viết test, đóng gói. Báo gate bằng **con số thật** của test runner, kèm DIFF và rủi ro còn mở |
-| **PM** | Agent Codex | Lập plan, spec, plan implementation chi tiết; audit / review; điều phối. **PM không sửa code**, kết luận dạng P1/P2 + yêu cầu + gate |
+| **Operator** | Người dùng | Vận hành trên máy thật (cài / nâng gói, chạy lượt thử, lấy dữ liệu). Quyết định nghiệp vụ, chấp nhận rủi ro. **Cho phép từng lần** mọi lượt ghi thật (staging / production) và mọi lần cài / nâng gói. Chỉ định phiên Claude Code giữ quyền ghi (§2.1) |
+| **Claude Code** — đúng **một** phiên giữ quyền ghi | Kiêm PM, senior software engineer, QC / tester, audit / review | Lập plan / spec, implement, test, đột biến, kiểm trên Edge, đóng gói, tự audit, viết báo cáo, cập nhật `state.md` / `agent.md` |
 
-Nhịp làm việc (theo cách đã chạy ở `circa-qr-scan-log`):
+- **PM Codex không còn vai trò từ 29/10.** `docs/pm/*` là lịch sử: quyết định cũ vẫn hiệu lực trừ khi bị thay. Quyết định / plan / audit mới viết ở `docs/dev/` (`PLAN-*`, `AUDIT-*`, `BATCH-*`) và tóm trong `state.md`.
+- Tài liệu cũ nói "PM duyệt / PM audit" thì từ 29/10 hiểu là: Claude tự audit theo §2.2, việc chạm ghi thật hoặc đổi luật nghiệp vụ thì **operator duyệt**.
 
-1. PM ra spec / plan cho một batch.
-2. Dev implement, sau đó gửi: nhánh / PR (hoặc DIFF), danh sách file, hợp đồng thay đổi, kết quả test **nguyên văn**, rủi ro còn mở.
-3. PM audit và trả finding.
-4. **Chỉ sang batch kế tiếp khi PM cho qua.**
-5. Việc ngoài spec: dev báo một dòng và hỏi trước, không tự mở rộng.
+### 2.1 Một người ghi (sau sự cố 29/10: hai phiên cùng sửa một worktree)
 
-Báo cáo phải tách bốn mức bằng chứng: **đã kiểm từ source / gói**, **dev tự báo**, **đã thấy trên môi trường thật** (staging / production), **còn thiếu (cần operator / Nextwaves)**. Không gọi thiếu bằng chứng là lỗi đã xác nhận.
+- Chỉ **một phiên Claude Code** được sửa file, chạy git ghi (commit / push / merge / worktree), đóng gói trong repo này và worktree mã. Đó là phiên operator chỉ định **trong chính cuộc trò chuyện của phiên đó**. Tên phiên ghi ở `state.md` §0.
+- **Phiên mới, phiên resume, phiên fork: mặc định CHỈ ĐỌC.** Fork / resume không thừa hưởng quyền ghi. Muốn ghi phải hỏi operator và được trả lời trong chính phiên đó.
+- **Codex, công cụ khác:** không sửa file nào của project (xem `AGENTS.md`).
+- **Sub-agent** do phiên ghi điều phối: chỉ đọc / review. Hoặc ghi vào bản sao riêng, rồi phiên ghi rà và nhận.
+- **Không để mã sửa dở chưa commit.** Mỗi bước xong là commit lên nhánh `batch/*`. Trước khi sửa: `git status` phải sạch hoặc chỉ có thay đổi của chính mình. Thấy thay đổi lạ thì **dừng, chụp lại diff, báo operator**, không sửa đè.
+- **Worktree mã ở đường dẫn cố định** `C:\QR_code\circa-gr-nextwaves-dev`, không đặt trong thư mục tạm của một phiên.
+
+### 2.2 Nhịp làm việc mỗi batch
+
+1. **Plan:** `docs/dev/PLAN-<batch>.md` — phạm vi, hợp đồng, gate. Batch chạm ghi thật (POS / Nextwaves) hoặc đổi luật nghiệp vụ: operator đọc plan và đồng ý trước khi code.
+2. **Implement** trên nhánh `batch/<tên>`. Test cho lỗi / hàng rào mới viết **trước**, chạy trên mã cũ phải trượt.
+3. **QC:**
+   - `npm test`;
+   - đột biến cho mọi hàng rào mới;
+   - Edge trên gói giải nén + trace hiệu năng;
+   - source = ZIP, SHA-256;
+   - diễn tập script nâng.
+
+   Báo **con số thật**, không làm tròn.
+4. **Audit độc lập:** với batch có ghi POS / Nextwaves, một sub-agent review không mang kết luận của phiên chính đọc diff. Finding và cách xử lý ghi vào `docs/dev/AUDIT-<batch>.md`.
+5. **Giao operator:** gói + SHA + hướng dẫn ngắn. Operator cài / chạy khi cho phép.
+6. **Ghi thật** chỉ khi operator cho phép bằng chữ, đúng mã phiếu, đúng một lượt.
+
+Báo cáo tách ba mức bằng chứng: **đã kiểm từ source / gói**, **đã thấy trên môi trường thật** (staging / production), **còn thiếu** (cần operator / Nextwaves). Không gọi thiếu bằng chứng là lỗi đã xác nhận.
 
 ## 3. Quyết định đã chốt
 
@@ -48,7 +69,9 @@ Báo cáo phải tách bốn mức bằng chứng: **đã kiểm từ source / g
 | 24/10 | Dùng **API thường** của Nextwaves (GET); **không** dùng `/integrations/circa/*` (Nextwaves làm extension riêng). Không gọi API ghi của Nextwaves, không bấm nút hộ dược sĩ |
 | 24/10 | Ghi GR bằng **W1** (`PUT …/detail`) do extension làm; khoá nối = `thuocsi_delivery_code` (1 mã giao ↔ 1 PO POS ↔ 1 GR) |
 | 24/10 | Không có nút: mở GR (hoặc `/chi-tiet-so/<SO>`) là extension tự chuyển sang `/vi/purchases/receive?po=<SO>`; không cần chế độ nhập hàng trên POS |
-| 24/10 | **Dược sĩ bấm HOÀN THÀNH** trên POS; extension chỉ điền sẵn UID đã map |
+| 24/10 | **Dược sĩ bấm HOÀN THÀNH** trên POS; extension chỉ điền sẵn UID đã map (chế độ thủ công — vẫn giữ khi không bật tự động, xem dòng 28/10) |
+| 28/10 | **Chế độ tự động (mặc định TẮT):** operator cấp **một quyền riêng cho đúng một phiên** (GR/PO/SO/cửa hàng/EPC dự kiến, 30 phút) trong popup, sau khi khớp PO Nextwaves và trước khi dược sĩ xác nhận nhận hàng. Khi đó extension tự điền (đủ UID, kế hoạch 0 chặn / 0 cảnh báo) rồi đọc lại toàn phiếu, khớp hoàn toàn mới gửi `PUT …/status/COMPLETED` **một lần**; lỗi / chưa rõ thì dừng, không tự thử lại. Thay dòng 24/10 **chỉ trong chế độ này**. Production vẫn chỉ đọc tới gate PRD. Nguồn: `docs/pm/DECISION-ONE-STG-AUTO-FLOW-20261028.md` |
+| 28/10 | Kiểm từng phiên bản bằng fixture A1 / server giả / Node / Edge / trang GR đã COMPLETED chỉ đọc; **một** lượt E2E staging thật chỉ trên gói cuối (G3), operator cấp phép theo mã phiếu cụ thể |
 
 Hệ quả của "một gói":
 - `manifest.json` phải khai quyền cho host của **cả hai** môi trường.
@@ -110,7 +133,7 @@ Hiện có (24/10):
 | `agent.md` | File này: vai trò, quyết định, luật, môi trường |
 | `state.md` | Trạng thái, sự thật đã kiểm, khác biệt stg / prd, câu hỏi mở, việc tiếp theo |
 | `AGENTS.md`, `CLAUDE.md` | Trỏ về `agent.md` + `state.md` (Codex / Claude Code tự đọc) |
-| `docs/PROMPT-PM-CODEX.md` | Prompt mở session PM (Codex) |
+| `docs/PROMPT-PM-CODEX.md` | Prompt mở session PM Codex — **không còn dùng từ 29/10** |
 | `docs/SPEC-STG-v0.1.md` | Spec staging v0.1 của PM (đề xuất) |
 | `docs/dev/` | Báo cáo / phản hồi của dev gửi PM: `DEV-REVIEW-SPEC-STG-v0.1.md`, `LOGIC-v0.3.md` (logic hiện hành), `BATCH-v0.1-STG.md` (batch đầu, chờ audit) |
 | `samples/README.md` | Danh sách mẫu: môi trường, API nguồn, ghi chú |
@@ -144,17 +167,9 @@ Công cụ ngoài repo: `C:\QR_code\requests\net-capture\` (extension Net Captur
 ## 7. Git
 
 - Repo: `https://github.com/Kai-D13/circa-gr-nextwaves` (**public**).
-- **PM và dev làm chung một thư mục local**, nên phải tránh sửa đè nhau:
-  - **PM** viết `docs/SPEC-*.md`, `docs/pm/*`, và có thể thêm dòng vào `state.md`.
-  - **Dev** viết mã, `tests/`, `scripts/`, `samples/`, `docs/dev/*`, và cập nhật `state.md` / `agent.md`.
-  - Không sửa file của bên kia. Thấy sai thì phản hồi bằng file của mình.
-  - Trước khi sửa `state.md`, chạy `git diff` để thấy phần bên kia vừa thêm.
-  - Dev commit file của PM **nguyên trạng**, trong commit riêng có tiền tố `PM:`.
-- Tài liệu (`state.md`, `agent.md`, `docs/`, `samples/`) push thẳng `main`. **Mã** đi theo nhánh `batch/<tên>`, PM audit xong mới merge.
-- Đề xuất quy trình nhánh (chờ PM / operator chốt):
-  - Mỗi batch một nhánh `batch/<tên>` và một PR để PM audit.
-  - Operator merge vào `main` khi PM cho qua.
-  - Không push thẳng `main` sau commit khởi tạo.
+- **Chỉ phiên giữ quyền ghi (§2.1) commit / push.** Từ 29/10 không còn file của PM để commit hộ. Commit cũ có tiền tố `PM:` là tài liệu PM Codex nguyên văn.
+- Tài liệu (`state.md`, `agent.md`, `docs/`, `samples/`) push thẳng `main`.
+- **Mã** đi theo nhánh `batch/<tên>`, làm ở worktree `C:\QR_code\circa-gr-nextwaves-dev`. Chỉ merge vào `main` khi batch qua đủ gate (§2.2) và operator đồng ý (với batch đã chạy thật trên staging).
 - Quét bí mật trước commit. Kết quả phải rỗng:
   `git grep -nIE "Bearer [A-Za-z0-9._=-]{20,}|eyJ[A-Za-z0-9_-]{20,}|session_token=[A-Za-z0-9]|nwc_(pk|sk)_"`
 - Commit message kết thúc bằng dòng `Co-Authored-By` của Claude.
