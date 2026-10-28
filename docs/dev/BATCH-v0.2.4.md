@@ -127,9 +127,9 @@
 | Mức | Kết quả |
 |---|---|
 | `npm test` | **160/160 × 3** trên `c08f709` (thêm 1 test, §2a). **159/159 × 3** trên `28d1f9c` (154/154 × 3 trên `a8d49a1`; 145/145 × 6 trên `b227585`). +25 test so với v0.2.3 (xem dưới) |
-| Đột biến Node `python -I scripts/mutate-v0.2.4.py` (130 = 102 cũ + 12 P2 + 8 audit sơ bộ + 8 audit rev 1) | Lượt đủ trên `28d1f9c`: **128/130** (0 ANCHOR, 0 hết giờ). **2 ca sống là thiếu test, mã không lỗi**, đóng ở `c08f709` (§2a). **Chạy lại 2 ca trên `c08f709`: 2/2 bị bắt** ⇒ 130/130 trên mã cuối |
-| Đột biến DOM trên Edge `node scripts/mutate-edge-v0.2.4.js` (25 = 9 cũ trên `edge-check.js` + 12 P2 + 2 audit sơ bộ + 2 audit rev 1 trên `edge-gr-page.js`) | **25/25 bị bắt** trên `28d1f9c`. Ca "bỏ giới hạn gắn lại" bị bắt vì trang treo (vòng gắn khung vô hạn) → watchdog 360 s báo HỎNG, tắt Edge. Sau lượt: không còn tiến trình Edge / node sót |
-| Edge `node scripts/edge-gr-page.js` (**mới**, 94 mục) | `src/` 94/94. **Gói giải nén `0BB73E2D`: 94/94 × 2** (dài nhất 5,2 ms / tác vụ). Gói bị chặn `95BECDEA`: **hỏng 7/91** (P1 rev 1: 5 PUT server giả, các mục sau hỏng theo). Gói bị chặn `E8531EB4`: hỏng 7/90 (audit sơ bộ). **Đối chứng gói v0.2.3: hỏng 51/91** (kịch bản dừng sớm sau ca mã bất đồng vì bản cũ ghi). Gồm "điều khiển SL nhận / vùng sản phẩm bấm được": hỏng 8 mục, trong đó 1095×756 hỏng ở `nw_ready`, chỉ xem, lỗi đọc phiếu, đã điền (khung nổi phủ ô lô, −, ô số, +, icon) |
+| Đột biến Node `python -I scripts/mutate-v0.2.4.py` (130 = 102 cũ + 12 P2 + 8 audit sơ bộ + 8 audit rev 1) | Lượt đủ trên `28d1f9c`: **128/130** (0 ANCHOR, 0 hết giờ). **2 ca sống là thiếu test, mã không lỗi**, đóng ở `c08f709` (§2a). **Chạy lại 2 ca trên `c08f709`: 2/2 bị bắt** ⇒ cả 130 ca bị bắt trên cùng runtime `28d1f9c` (128 ở lượt đủ + 2 chạy lại sau khi thêm test). **Không phải một lượt chạy lại đủ 130 ca trên `c08f709`** |
+| Đột biến DOM trên Edge `node scripts/mutate-edge-v0.2.4.js` (25 = 9 cũ trên `edge-check.js` + 12 P2 + 2 audit sơ bộ + 2 audit rev 1 trên `edge-gr-page.js`) | **25/25 bị bắt** trên `28d1f9c`. Ca "bỏ giới hạn gắn lại" bị bắt vì trang treo (vòng gắn khung vô hạn) → watchdog 360 s báo HỎNG, tắt Edge; 24 ca còn lại hỏng theo phép kiểm. Test gốc trên gói đạt, test Node riêng xác nhận `unstable` dừng sau giới hạn. Sau lượt: không còn tiến trình Edge / node sót |
+| Edge `node scripts/edge-gr-page.js` (**mới**, 94 mục) | `src/` 94/94. **Gói giải nén `0BB73E2D`: 94/94 × 2** (tác vụ extension dài nhất **9,75 ms** lượt 1, **5,19 ms** lượt 2). Gói bị chặn `95BECDEA`: **hỏng 7/91** (P1 rev 1: 5 PUT server giả, các mục sau hỏng theo). Gói bị chặn `E8531EB4`: hỏng 7/90 (audit sơ bộ). **Đối chứng gói v0.2.3: hỏng 51/91** (kịch bản dừng sớm sau ca mã bất đồng vì bản cũ ghi). Gồm "điều khiển SL nhận / vùng sản phẩm bấm được": hỏng 8 mục, trong đó 1095×756 hỏng ở `nw_ready`, chỉ xem, lỗi đọc phiếu, đã điền (khung nổi phủ ô lô, −, ô số, +, icon) |
 | Edge `node scripts/edge-check.js` (42 mục) | `src/` 42/42; **gói giải nén `0BB73E2D`: 42/42 × 2** |
 
 **Race lộ ra khi chạy lặp:**
@@ -193,7 +193,7 @@
   - mã trở lại bằng sửa nút chữ → khung trong luồng, lỗi gỡ.
 - **Trang tranh giành** (observer của trang gỡ khung ngay khi gắn) → bỏ sau 20 lần, khung nổi "liên tục vẽ lại", không nút Điền, trang không treo. Hết tranh giành → "Kiểm tra lại" → trong luồng.
 - **W1 bằng bàn phím** (CDP `DOM.focus` + Enter trên nút Điền) → 5 PUT đúng thứ tự / lượng / mã như lượt thật, tải lại → "đã điền 11 UID"; cấp phép đã tiêu.
-- **Trace CDP từ lúc mở trang** (nạp script, mọi trạng thái, vẽ lại, tranh giành, điền): 169 tác vụ extension, dài nhất 5,2 ms (gói `95BECDEA`) / 10–15 ms (`src/`, máy bận); **không tác vụ ≥ 50 ms**.
+- **Trace CDP từ lúc mở trang** (nạp script, mọi trạng thái, vẽ lại, tranh giành, điền): 169 tác vụ extension, dài nhất: gói `0BB73E2D` **9,75 ms** (lượt 1) / **5,19 ms** (lượt 2); gói `95BECDEA` 5,2 ms; `src/` 10–15 ms (máy bận); **không tác vụ ≥ 50 ms**. Chưa đo trên Chrome staging thật.
 - **Trang không có `#all-receipt`** → sau 10 s khung nổi báo lỗi, chỉ "Kiểm tra lại", 0 PUT, cấp phép còn.
 
 **`edge-check.js` đổi:**
@@ -217,7 +217,7 @@
 
 ## 4. Đề xuất bước tiếp (dev đề xuất — PM quyết)
 
-1. **PM audit gói `0BB73E2D`** (source / gói / Edge). Số kiểm cuối ở §2: đột biến Node 130/130 trên mã cuối, Edge 25/25.
+1. **PM audit gói `0BB73E2D`** (source / gói / Edge). Số kiểm cuối ở §2: đột biến Node 128/130 trên `28d1f9c` + 2/2 sau khi thêm test ở `c08f709` (cùng runtime), Edge 25/25.
 2. **Thứ tự A1 và v0.2.4.** PM chọn một trong hai:
    - **(a) Giữ runbook như đã duyệt.**
      - A1 chạy trên v0.2.3 (`40236D67`).
