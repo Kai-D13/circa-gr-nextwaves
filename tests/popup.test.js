@@ -19,7 +19,7 @@ const session = (extra) =>
   Object.assign({ schema: 1, key: `STG:${GR_ID}`, envId: "STG", grId: GR_ID, grCode: "GR03887", deliveryCode: "SOBD1594095-F", soBase: "SOBD1594095", state: "received", writeLocks: [], nwWriteLocks: [], createdAt: Date.now(), updatedAt: Date.now(), log: [] }, extra || {});
 
 // Mở popup trên trình duyệt giả có sẵn phiên `sessions`. `sent` ghi lại mọi message popup gửi background.
-async function openPopup({ sessions = [], config = { mode: "STG", url: "" }, interceptBg } = {}) {
+async function openPopup({ sessions = [], config = { mode: "STG", url: "" }, interceptBg, autoGrants } = {}) {
   const sent = [];
   const b = createBrowser(
     async () => {
@@ -29,6 +29,7 @@ async function openPopup({ sessions = [], config = { mode: "STG", url: "" }, int
   );
   await b.setConfig(config);
   b.store.sessions = Object.fromEntries(sessions.map((s) => [s.key, s]));
+  if (autoGrants) b.store.autoGrants = autoGrants;
   const dom = createDom();
   const ids = [["small", "ver"], ["select", "mode"], ["input", "url"], ["p", "envInfo"], ["button", "save"], ["span", "msg"], ["section", "grantBox"], ["input", "grCode"], ["button", "grant"], ["p", "grantMsg"], ["div", "grants"], ["div", "sessions"]];
   for (const [tag, id] of ids) dom.document.body.appendChild(dom.el(tag, undefined, id));
@@ -199,5 +200,38 @@ test("v0.3.0 P2.5 popup: lượt tự động đã bị bỏ qua → 'Tự độ
     } finally {
       p.b.close();
     }
+  }
+});
+
+test("audit v0.3.0 popup: đã ghi nhận lượt nhận (F1) / PO đã có biên nhận (F2) → nêu lý do, không nút; quyền gắn phiên cũ (F3) không hiện ĐÃ CHO PHÉP; thu hồi khi không còn quyền (F6) báo rõ", async () => {
+  for (const [name, s, re] of [
+    ["F1", a1Ready({ scanOk: { shipmentId: "x", httpStatus: 200 } }), /Nextwaves đã ghi nhận lượt xác nhận nhận hàng/],
+    ["F2", a1Ready({ receiptIdsBefore: ["11111111-2222-4333-8444-555555555555"] }), /PO Nextwaves đã có biên nhận từ trước/],
+  ]) {
+    const p = await openPopup({ sessions: [s] });
+    try {
+      await until(() => texts(p.dom).some((x) => re.test(x)));
+      assert.equal(buttons(p.dom, "Cho phép tự điền và HOÀN THÀNH 1 lần").length, 0, name);
+    } finally {
+      p.b.close();
+    }
+  }
+  const s = a1Ready();
+  const stale = { [A1KEY]: { schema: 1, key: A1KEY, sessionCreatedAt: s.createdAt - 60000, envId: "STG", grCode: "GR03887", nwPoNumber: "PO13806459", epcs: [], createdAt: Date.now(), expiresAt: Date.now() + 600000 } };
+  const p = await openPopup({ sessions: [s], autoGrants: stale });
+  try {
+    await until(() => buttons(p.dom, "Cho phép tự điền và HOÀN THÀNH 1 lần").length === 1);
+    assert.ok(!texts(p.dom).some((x) => /ĐÃ CHO PHÉP/.test(x)), "F3: quyền của phiên cũ không hiện");
+  } finally {
+    p.b.close();
+  }
+  const fresh = { [A1KEY]: Object.assign({}, stale[A1KEY], { sessionCreatedAt: s.createdAt }) };
+  const q = await openPopup({ sessions: [s], autoGrants: fresh, interceptBg: (msg) => (msg.type === "auto:revoke" ? { ok: true, data: false } : undefined) });
+  try {
+    await until(() => buttons(q.dom, "Thu hồi tự động").length === 1);
+    buttons(q.dom, "Thu hồi tự động")[0].click();
+    await until(() => /Không còn quyền tự động để thu hồi/.test(q.$("msg").textContent));
+  } finally {
+    q.b.close();
   }
 });

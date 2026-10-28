@@ -31,7 +31,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const detailsOf = (gr) => gr.data.items.flatMap((i) => i.details);
 
 function makeA1Server(o = {}) {
-  const st = { gr: H.clone(H.sample("pos-stg-gr-GR03887-truoc-20261028.json")), puts: [], completes: [], log: [], getsAfterPuts: 0, completeHeld: false };
+  const st = { gr: H.clone(H.sample(o.grStart || "pos-stg-gr-GR03887-truoc-20261028.json")), puts: [], completes: [], log: [], getsAfterPuts: 0, completeHeld: false, verifyHeld: false };
+  if (o.grMut) o.grMut(st.gr.data);
   const applyCompleted = () => {
     st.gr.data.status = "COMPLETED";
     const done = new Map(detailsOf(COMPLETED_GR).map((d) => [d.id, d.thuocsi_qr_codes]));
@@ -43,6 +44,7 @@ function makeA1Server(o = {}) {
     if (u.origin !== POS) return { status: 404, json: {} };
     if (u.pathname === "/thuocsi-warehouse/qrcode") {
       const code = u.searchParams.get("code");
+      if (o.qrDelayMs) await sleep(o.qrDelayMs);
       const forced = o.qr ? o.qr(code) : null;
       if (forced) return forced;
       return { status: 200, json: QR.get(code) || { status: "OK", data: [] } };
@@ -57,6 +59,10 @@ function makeA1Server(o = {}) {
         st.getsAfterPuts += 1;
         // GET thứ 2 sau PUT cuối = lần đọc lại toàn phiếu trước HOÀN THÀNH (lần 1 là GET kiểm của runPlan).
         if (o.tamper && st.getsAfterPuts === 2) o.tamper(snap.data);
+        if (o.verifyHold && st.getsAfterPuts === 2) {
+          st.verifyHeld = true;
+          await o.verifyHold; // treo lần đọc lại toàn phiếu trước HOÀN THÀNH
+        }
       }
       return { status: 200, json: snap };
     }
@@ -769,6 +775,233 @@ test("G1 HOÀN THÀNH chưa rõ: hook báo COMPLETED 2xx (dược sĩ tự bấm
     assert.ok(logTypes(b).includes("gr_completed_seen"));
     assert.ok(!logTypes(b).includes("gr_completed"));
     assert.equal(srv.st.completes.length, 1, "extension không gửi lại");
+  } finally {
+    b.close();
+  }
+});
+
+// ---------- audit độc lập v0.3.0 (29/10): F1–F6 + ca G1 còn thiếu ----------
+test("audit F1: Nextwaves đã ghi nhận lượt nhận 2xx (đọc lại kết quả lỗi, phiên còn nw_ready) → không cho phép tự động; quyền có SAU lượt nhận → không kích hoạt (armed_after_scan)", async () => {
+  const ctx = await setup();
+  const { b, srv, nw } = ctx;
+  try {
+    const r1 = await b.sendFromTab(nw, { type: "session:scanOk", key: KEY, scan: { shipmentId: A1.shipmentIds[0], httpStatus: 200, sentEpcs: 15, at: Date.now() } });
+    assert.equal(r1.ok, true);
+    assert.equal(session(b).state, "nw_ready");
+    const late = await arm(b);
+    assert.match(late.error, /đã ghi nhận lượt xác nhận nhận hàng/);
+    assert.deepEqual(autoGrants(b), []);
+    // Lớp thứ hai: quyền (bằng cách nào đó) có giờ tạo SAU lượt nhận → điểm kích hoạt không nhận.
+    const s = session(b);
+    b.store.autoGrants = { [KEY]: { schema: 1, key: KEY, sessionCreatedAt: s.createdAt, envId: "STG", posId: s.posId, posName: "", grId: s.grId, grCode: s.grCode, soBase: s.soBase, deliveryCode: s.deliveryCode, nwPoId: s.nwPoId, nwPoNumber: s.nwPoNumber, warehouseId: s.warehouseId, epcs: A1.nwResult.units.map((u) => u.epc).sort(), createdAt: s.scanOkAt + 1000, expiresAt: Date.now() + 600000 } };
+    const r2 = await b.sendFromTab(nw, { type: "session:received", key: KEY, payload: H.clone(A1.nwResult) });
+    assert.equal(r2.ok, true);
+    await until(() => logTypes(b).includes("auto_skipped"));
+    assert.equal(session(b).log.find((l) => l.type === "auto_skipped").reason, "armed_after_scan");
+    assert.deepEqual(autoGrants(b), []);
+    await settle(300);
+    assert.equal(srv.st.puts.length, 0);
+    noComplete(srv, "quyền sau lượt nhận");
+  } finally {
+    b.close();
+  }
+});
+
+test("audit F2: PO Nextwaves đã có biên nhận từ trước (receiptIdsBefore) → không cho phép tự động", async () => {
+  const ctx = await setup({ match: { receiptIdsBefore: ["11111111-2222-4333-8444-555555555555"] } });
+  const { b } = ctx;
+  try {
+    const r = await arm(b);
+    assert.match(r.error, /đã có biên nhận từ trước/);
+    assert.deepEqual(autoGrants(b), []);
+  } finally {
+    b.close();
+  }
+});
+
+test("audit F4: tab POS được giao bị đóng trước khi giành lượt → bỏ qua tab_closed + thu hồi quyền; Nextwaves báo đã dừng; 0 PUT", async () => {
+  const ctx = await setup({ tuning: { autoAnchorWaitMs: 5000, uiWaitMs: 8000 } });
+  const { b, srv, pos, nw } = ctx;
+  try {
+    assert.equal((await arm(b)).ok, true);
+    pos.setAnchor(false); // tab được giao còn chờ khung gắn đúng trang
+    await receive(ctx);
+    await until(() => session(b).autoRun);
+    b.closeTab(pos);
+    await until(() => session(b).autoRun.skipped);
+    assert.equal(session(b).autoRun.skipped.reason, "tab_closed");
+    assert.deepEqual(autoGrants(b), []);
+    await until(() => nw.view && (nw.view.lines || []).some((l) => /Tự động đã dừng/.test(l)));
+    await settle(200);
+    assert.equal(srv.st.puts.length, 0);
+    noComplete(srv, "tab được giao đã đóng");
+  } finally {
+    b.close();
+  }
+});
+
+test("audit F4: quyền hết hạn sau điểm kích hoạt, trước khi giành lượt → bỏ qua grant_invalid, 0 PUT", async () => {
+  const ctx = await setup({ bgTuning: { autoTtlMs: 600 }, server: { qrDelayMs: 300 } });
+  const { b, srv } = ctx;
+  try {
+    assert.equal((await arm(b)).ok, true);
+    await receive(ctx);
+    await until(() => session(b).autoRun);
+    await until(() => session(b).autoRun.skipped, 8000);
+    assert.equal(session(b).autoRun.skipped.reason, "grant_invalid");
+    await settle(200);
+    assert.equal(srv.st.puts.length, 0);
+    noComplete(srv, "quyền hết hạn sau kích hoạt");
+  } finally {
+    b.close();
+  }
+});
+
+test("audit F4: phiếu đã có đủ UID đúng lô khi tới lượt tự động → không ghi, bỏ qua uid_already_on_gr, thu hồi quyền, 0 COMPLETED", async () => {
+  const ctx = await setup({ server: { grStart: "pos-stg-gr-GR03887-W1-sau-20261028.json" } });
+  const { b, srv } = ctx;
+  try {
+    assert.equal((await arm(b)).ok, true);
+    await receive(ctx);
+    await until(() => session(b).autoRun && session(b).autoRun.skipped);
+    assert.equal(session(b).autoRun.skipped.reason, "uid_already_on_gr");
+    assert.deepEqual(autoGrants(b), []);
+    await settle(300);
+    assert.equal(srv.st.puts.length, 0);
+    noComplete(srv, "phiếu đã đủ");
+  } finally {
+    b.close();
+  }
+});
+
+test("audit F5: tab khác trong lúc tab chủ đọc lại / đang gửi HOÀN THÀNH → 'KHÔNG bấm HOÀN THÀNH', không khuyên tự bấm; Nextwaves báo đang gửi", async () => {
+  let releaseVerify;
+  const verifyHold = new Promise((r) => (releaseVerify = r));
+  let releaseComplete;
+  const completeHold = new Promise((r) => (releaseComplete = r));
+  const ctx = await setup({ server: { verifyHold, completeHook: () => completeHold } });
+  const { b, srv, nw } = ctx;
+  try {
+    assert.equal((await arm(b)).ok, true);
+    await receive(ctx);
+    await until(() => srv.st.verifyHeld, 8000);
+    const pos2 = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    pos2.post(POS_AUTH);
+    const v1 = await until(() => pos2.view && /đang tự HOÀN THÀNH ở tab POS khác — KHÔNG bấm HOÀN THÀNH/.test(pos2.view.title || "") && pos2.view, 4000);
+    assert.ok(!v1.lines.some((l) => /tự bấm HOÀN THÀNH/.test(l)));
+    releaseVerify();
+    await sessionState(b, "auto_completing", 4000);
+    pos2.reload();
+    pos2.post(POS_AUTH);
+    const v2 = await until(() => pos2.view && /đang gửi HOÀN THÀNH tự động — KHÔNG bấm HOÀN THÀNH/.test(pos2.view.title || "") && pos2.view, 4000);
+    assert.ok(!v2.lines.some((l) => /tự bấm HOÀN THÀNH/.test(l)));
+    await until(() => nw.view && (nw.view.lines || []).some((l) => /đang gửi HOÀN THÀNH/.test(l)), 4000);
+    releaseComplete();
+    await sessionState(b, "done", 6000);
+    assert.equal(srv.st.completes.length, 1);
+  } finally {
+    releaseVerify();
+    releaseComplete();
+    b.close();
+  }
+});
+
+test("audit F5: trang tự HOÀN THÀNH (hook 2xx) trong lúc tab chủ đọc lại → extension KHÔNG gửi lệnh HOÀN THÀNH; phiên done theo trang", async () => {
+  let release;
+  const verifyHold = new Promise((r) => (release = r));
+  const ctx = await setup({ server: { verifyHold } });
+  const { b, srv, pos } = ctx;
+  try {
+    assert.equal((await arm(b)).ok, true);
+    await receive(ctx);
+    await until(() => srv.st.verifyHeld, 8000);
+    pos.post({ mark: "cgn/pos-hook", type: "gr-status", payload: { envId: "STG", grId: GR_ID, status: "COMPLETED", httpStatus: 200 } });
+    await sessionState(b, "done", 4000);
+    release();
+    await settle(400);
+    noComplete(srv, "trang đã tự HOÀN THÀNH");
+    assert.equal(session(b).state, "done");
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("G1 trang: đổi route sang phiếu khác trong lúc tab chủ đọc lại → không giữ lượt, 0 COMPLETED (ui_not_anchored_complete), phiên applied", async () => {
+  let release;
+  const verifyHold = new Promise((r) => (release = r));
+  const ctx = await setup({ server: { verifyHold } });
+  const { b, srv, pos } = ctx;
+  try {
+    assert.equal((await arm(b)).ok, true);
+    await receive(ctx);
+    await until(() => srv.st.verifyHeld, 8000);
+    const to = `${POS}/danh-sach-phieu-nhan-hang/0f0f0f0f-1111-4222-8333-444455556666`;
+    pos.url = to;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: to } });
+    await settle(50);
+    release();
+    await until(() => (session(b).log || []).some((l) => l.type === "auto_skipped" && l.reason === "ui_not_anchored_complete"), 4000);
+    await settle(200);
+    assert.equal(session(b).state, "applied");
+    noComplete(srv, "đổi route");
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("G1 kế hoạch: sai sản phẩm (tra QR) / sai đơn vị (Nextwaves) / nhận thiếu so với phiếu (cảnh báo) → auto_skipped, 0 PUT / 0 COMPLETED", async () => {
+  const uid = A1.nwResult.units[0].uid;
+  const variants = [
+    ["QR sai sản phẩm", { qr: (code) => (code === uid ? { status: 200, json: Object.assign(H.clone(QR.get(code)), { data: [Object.assign(H.clone(QR.get(code).data[0] || QR.get(code).data), { productId: 999999 })] }) } : null) }, null, "plan_blocked"],
+    ["đơn vị Nextwaves lạ", {}, (p) => (p.units[0].unitName = "thùng"), "plan_blocked"],
+    ["phiếu cần 2 mà chỉ nhận 1", { grMut: (d) => { d.items[0].quantity += 1; d.items[0].details[0].quantity = 2; } }, null, "plan_warning"],
+  ];
+  for (const [name, server, mutPayload, reason] of variants) {
+    const ctx = await setup({ server });
+    const { b, srv } = ctx;
+    try {
+      assert.equal((await arm(b)).ok, true);
+      const p = H.clone(A1.nwResult);
+      if (mutPayload) mutPayload(p);
+      await receive(ctx, p);
+      await until(() => session(b).autoRun && session(b).autoRun.skipped, 6000);
+      assert.equal(session(b).autoRun.skipped.reason, reason, name);
+      await settle(200);
+      assert.equal(srv.st.puts.length, 0, name);
+      noComplete(srv, name);
+    } finally {
+      b.close();
+    }
+  }
+});
+
+test("G1 cửa hàng: POS đổi sang cửa hàng ngoài danh sách thử trước lượt nhận → không tự chạy, 0 PUT", async () => {
+  const ctx = await setup();
+  const { b, srv, pos } = ctx;
+  try {
+    assert.equal((await arm(b)).ok, true);
+    pos.post({ mark: "cgn/pos-hook", type: "auth", payload: { envId: "STG", headers: { authorization: "Bearer pos-test", "x-client-id": "1", "x-store-id": "00000000-0000-0000-0000-00000000abcd", "grpc-timeout": "30S" } } });
+    await settle(150);
+    await receive(ctx);
+    await settle(600);
+    assert.equal(srv.st.puts.length, 0);
+    noComplete(srv, "đổi cửa hàng");
+  } finally {
+    b.close();
+  }
+});
+
+test("audit F6: thu hồi sau khi lượt tự động đã dùng quyền → background trả false (không còn quyền)", async () => {
+  const ctx = await setup();
+  const { b } = ctx;
+  try {
+    assert.equal((await arm(b)).ok, true);
+    await receive(ctx);
+    await sessionState(b, "done", 8000);
+    const r = await b.sendFromPopup({ type: "auto:revoke", key: KEY });
+    assert.deepEqual([r.ok, r.data], [true, false]);
   } finally {
     b.close();
   }
