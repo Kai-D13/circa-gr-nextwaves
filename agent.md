@@ -48,7 +48,9 @@ Báo cáo phải tách bốn mức bằng chứng: **đã kiểm từ source / g
 | 24/10 | Dùng **API thường** của Nextwaves (GET); **không** dùng `/integrations/circa/*` (Nextwaves làm extension riêng). Không gọi API ghi của Nextwaves, không bấm nút hộ dược sĩ |
 | 24/10 | Ghi GR bằng **W1** (`PUT …/detail`) do extension làm; khoá nối = `thuocsi_delivery_code` (1 mã giao ↔ 1 PO POS ↔ 1 GR) |
 | 24/10 | Không có nút: mở GR (hoặc `/chi-tiet-so/<SO>`) là extension tự chuyển sang `/vi/purchases/receive?po=<SO>`; không cần chế độ nhập hàng trên POS |
-| 24/10 | **Dược sĩ bấm HOÀN THÀNH** trên POS; extension chỉ điền sẵn UID đã map |
+| 24/10 | **Dược sĩ bấm HOÀN THÀNH** trên POS; extension chỉ điền sẵn UID đã map (chế độ thủ công — vẫn giữ khi không bật tự động, xem dòng 28/10) |
+| 28/10 | **Chế độ tự động (mặc định TẮT):** operator cấp **một quyền riêng cho đúng một phiên** (GR/PO/SO/cửa hàng/EPC dự kiến, 30 phút) trong popup, sau khi khớp PO Nextwaves và trước khi dược sĩ xác nhận nhận hàng. Khi đó extension tự điền (đủ UID, kế hoạch 0 chặn / 0 cảnh báo) rồi đọc lại toàn phiếu, khớp hoàn toàn mới gửi `PUT …/status/COMPLETED` **một lần**; lỗi / chưa rõ thì dừng, không tự thử lại. Thay dòng 24/10 **chỉ trong chế độ này**. Production vẫn chỉ đọc tới gate PRD. Nguồn: `docs/pm/DECISION-ONE-STG-AUTO-FLOW-20261028.md` |
+| 28/10 | Kiểm từng phiên bản bằng fixture A1 / server giả / Node / Edge / trang GR đã COMPLETED chỉ đọc; **một** lượt E2E staging thật chỉ trên gói cuối (G3), operator cấp phép theo mã phiếu cụ thể |
 
 Hệ quả của "một gói":
 - `manifest.json` phải khai quyền cho host của **cả hai** môi trường.
