@@ -35,6 +35,7 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { killProfile, portBusy } = require("./edge-proc.js");
 
 const EXT = path.resolve(process.argv[2] || path.join(__dirname, "..", "src"));
 const ROOT = path.join(__dirname, "..");
@@ -366,6 +367,10 @@ const STORM_JS = `(async () => {
   const browser = BROWSERS.find((b) => fs.existsSync(b));
   if (!browser) {
     console.log("HỎNG  không thấy Edge / Chrome");
+    process.exit(2);
+  }
+  if (await portBusy(PORT)) {
+    console.log(`HỎNG  cổng ${PORT} đang có trình duyệt khác (lượt trước còn sót?) — tắt nó rồi chạy lại`);
     process.exit(2);
   }
   const prof = fs.mkdtempSync(path.join(os.tmpdir(), "cgn-edge-check-"));
@@ -701,6 +706,7 @@ const STORM_JS = `(async () => {
     if (e.message !== "dừng") check("chạy kiểm tra", false, e.stack || e.message);
   } finally {
     proc.kill();
+    killProfile(prof);
     await sleep(800);
     try {
       fs.rmSync(prof, { recursive: true, force: true });

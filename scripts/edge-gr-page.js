@@ -28,6 +28,7 @@ const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const { killProfile, portBusy } = require("./edge-proc.js");
 
 const EXT = path.resolve(process.argv[2] || path.join(__dirname, "..", "src"));
 const ROOT = path.join(__dirname, "..");
@@ -265,12 +266,17 @@ function extensionTasks(events) {
     console.log("HỎNG  không thấy Edge / Chrome");
     process.exit(2);
   }
+  if (await portBusy(PORT)) {
+    console.log(`HỎNG  cổng ${PORT} đang có trình duyệt khác (lượt trước còn sót?) — tắt nó rồi chạy lại`);
+    process.exit(2);
+  }
   const prof = fs.mkdtempSync(path.join(os.tmpdir(), "cgn-edge-gr-"));
   const proc = spawn(browser, ["--headless=new", `--user-data-dir=${prof}`, `--remote-debugging-port=${PORT}`, "--no-first-run", "--disable-features=DisableLoadExtensionCommandLineSwitch", `--load-extension=${EXT}`, "about:blank"], { stdio: "ignore" });
   // Trang treo (vd. vòng gắn khung vô hạn): lượt CDP không bao giờ trả về → báo HỎNG, tắt trình duyệt, không để tiến trình mồ côi.
   const watchdog = setTimeout(() => {
     console.log("HỎNG  quá 360 s — trang / extension treo");
     proc.kill();
+    killProfile(prof);
     process.exit(1);
   }, 360000);
   watchdog.unref();
@@ -357,6 +363,16 @@ function extensionTasks(events) {
     const a1 = await waitText(/Đã khớp đơn Nextwaves/);
     check("nw_ready: khung trang phiếu hiện trạng thái + 'Mở tab Nextwaves'", !!a1 && /Mở tab Nextwaves/.test(a1), (a1 || (await panelText(pg))).slice(0, 140));
     await layoutAt("nw_ready");
+    // Đoạn preflight giao operator (scripts/preflight-gr-page.js, runbook A1 §0d) trên đúng trạng thái preflight (nw_ready) ở 1095×756.
+    {
+      const src = fs.readFileSync(path.join(__dirname, "preflight-gr-page.js"), "utf8").replace('const WANT = "GR03887"', `const WANT = ${JSON.stringify(GR_CODE)}`);
+      await pg.send("Emulation.setDeviceMetricsOverride", { width: 1095, height: 756, deviceScaleFactor: 1, mobile: false });
+      await sleep(300);
+      const pf = JSON.parse((await evalIn(pg, src, ctxId())) || "{}");
+      check("đoạn preflight operator (scripts/preflight-gr-page.js) · nw_ready 1095×756: KET_QUA ĐẠT", pf.KET_QUA === "ĐẠT", JSON.stringify(pf).slice(0, 240));
+      await pg.send("Emulation.clearDeviceMetricsOverride", {});
+      await sleep(200);
+    }
 
     await setSession({ state: "received" });
     const b1 = await waitText(/Chỉ xem kế hoạch — chưa có cấp phép điền/);
@@ -520,7 +536,8 @@ function extensionTasks(events) {
     // 5) Ngân sách tác vụ.
     const tasks = extensionTasks(await g.stopTrace());
     const longest = tasks.slice().sort((a, b) => b.ms - a.ms)[0];
-    info("tác vụ extension (cả lượt)", `${tasks.length} tác vụ, dài nhất ${longest ? `${longest.ms.toFixed(2)} ms ${longest.file}${longest.fn ? ":" + longest.fn : ""}` : "—"}`);
+    const top3 = tasks.slice().sort((x, y) => y.ms - x.ms).slice(0, 3).map((t) => `${t.ms.toFixed(2)} ms ${t.file}${t.fn ? ":" + t.fn : ""}${t.load ? " (nạp script)" : ""}`);
+    info("tác vụ extension (cả lượt)", `${tasks.length} tác vụ, dài nhất ${longest ? `${longest.ms.toFixed(2)} ms ${longest.file}${longest.fn ? ":" + longest.fn : ""}` : "—"} · 3 dài nhất: ${top3.join(" | ")}`);
     check("không tác vụ nào của extension ≥ 50 ms (trace CDP từ lúc mở trang, gồm nạp script, vẽ lại, điền)", tasks.length > 0 && tasks.every((t) => t.ms < 50), longest ? `${longest.ms.toFixed(2)} ms` : "");
     pg.close();
     await closeTarget(g.targetId);
@@ -548,6 +565,7 @@ function extensionTasks(events) {
     check("chạy hết kịch bản", false, String((err && err.stack) || err).slice(0, 300));
   } finally {
     proc.kill();
+    killProfile(prof);
   }
   const ok = results.every(Boolean);
   console.log(`\n${ok ? "TẤT CẢ ĐẠT" : "CÓ MỤC HỎNG"} (${results.filter(Boolean).length}/${results.length})`);
