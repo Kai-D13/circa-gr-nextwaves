@@ -69,3 +69,32 @@ Bằng chứng gần nhất cho 1095px là Edge trên DOM + CSS thật của tra
   - **operator xác nhận đủ đúng 15 tem** theo bảng §1 và **cho phép riêng một lượt GR03887** (nhận → điền → HOÀN THÀNH);
   - bật capture theo runbook §2.
 - **Hiệu năng (P2):** `docs/dev/PERF-75MS-v0.2.4-20261028.md` — không tái hiện, đề xuất không đổi gói cho A1.
+
+## 4. Quyết định operator / stakeholder (28/10 chiều) và rà lại trước A1
+
+**Operator / stakeholder trả lời trong chat:**
+1. Có **đúng 15 tem** của đơn này (bảng runbook §1).
+2. **Cho phép một lượt A1** trên GR03887 / PO13806459 / SOBD1594095-F: nhận → điền → HOÀN THÀNH. Mục tiêu: một luồng E2E staging chuẩn để làm căn cứ lên production.
+3. Đồng ý bật capture hai tab, điểm dừng 1, điểm dừng 2.
+4. Ở chặng 2: dev rà kế hoạch tại điểm dừng 1 rồi cho điền đủ cả 5 lô.
+
+**PM chưa ghi quyết định gate A1.** Stakeholder quyết chạy; dev ghi lại ở đây. Không đổi gói, không đổi runbook.
+
+**Dev rà lại đường A1 trên mã v0.2.4 (`28d1f9c`, gói `0BB73E2D`) — không thấy lỗi chặn:**
+- Nextwaves: chỉ chuyển sang POS khi lượt "Xác nhận nhận hàng" trả 2xx **và** đọc lại PO / biên nhận đủ EPC, có UID cho từng EPC, có biên nhận mới (`background.js` `received`, `lib/nw-model.js`). Thiếu / thừa / không có biên nhận mới → ở lại Nextwaves, báo lỗi.
+- POS: tra QR **từng UID** (GET), kế hoạch đối chiếu sản phẩm, lô, quy đổi đơn vị; có bất kỳ điểm chặn nào → không ghi gì (`lib/plan.js`).
+- Ghi chỉ khi có cấp phép 1 lần / 30 phút cho GR03887 **và** bấm nút mang mã kế hoạch trong khung đang gắn đúng trang phiếu. Mỗi PUT có GET kiểm sau; xong thì tải lại trang.
+- Extension **không** gọi `status/COMPLETED`; chỉ nghe kết quả để đánh dấu phiên "xong".
+
+**Rủi ro còn lại (đã có luật dừng):**
+- POS chỉ tra QR 15 UID **sau** khi Nextwaves đã nhận. UID nào POS không tra được → kế hoạch bị chặn ở điểm dừng 1, hàng bên Nextwaves đã nhận → runbook §4. Lượt GR03880 (26/10, cùng luồng tạo đơn staging) tra được 11/11.
+- Extension bán hàng trên cùng máy có thể giữ cổng reader → đóng tab POS production trước khi kết nối (runbook §3 chặng 1).
+
+**Yêu cầu mới của stakeholder — chuyển PM, không làm trong A1:** "Bấm hoàn thành trên Nextwaves thì nên hoàn thành trên POS luôn."
+- Hiện quyết định 24/10 (`agent.md`): dược sĩ bấm HOÀN THÀNH trên POS; extension chỉ điền sẵn UID và không gọi `status/COMPLETED`. Điền cần cấp phép + bấm mỗi lượt. A1 chạy theo luật này.
+- Yêu cầu mới bỏ hai chỗ người bấm: (a) cấp phép + "Điền"; (b) HOÀN THÀNH trên POS.
+- HOÀN THÀNH không hoàn tác được: cộng tồn, và POS tự thêm mã QR mới sau đó (Đợt 2 D4, chưa chốt ảnh hưởng).
+- **Đề xuất dev:** PM spec một lô sau A1, chỉ chạy khi A1 đạt.
+  - Bước 1: tự điền ngay sau xác nhận Nextwaves khi kế hoạch không có điểm chặn.
+  - Bước 2: tự HOÀN THÀNH chỉ khi GET sau điền đúng hoàn toàn kế hoạch (mọi lô đủ, đúng UID); lệch thì dừng và báo.
+  - Cả hai có công tắc theo môi trường / cửa hàng; staging trước, production sau gate riêng.
