@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **27/10/2026 (lần 47, PM audit rev 1 v0.2.4)**. Giai đoạn: **`main` có v0.1.5; v0.2.3 trên `batch/v0.2-rfid` đã qua PM audit và G3a UI chỉ đọc staging. Runbook A1 sẵn sàng trình operator quyết lượt GR03887. P2 v0.2.4 ở `a8d49a1`, gói `95BECDEA`: ba finding đầu đã có sửa/test, nhưng PM thấy hai ca biên còn hở ở kiểm mã phiếu và route sang SO khác trong lúc điền; chưa duyệt cài/merge. Đột biến đầy đủ còn chạy trên mã này; chưa kiểm UI v0.2.4 trên Chrome staging thật. Chưa có phép operator cho lượt nhận/ghi GR03887. Ngày 30/10, 4/11, 6/11 chỉ là mục tiêu có điều kiện; production chỉ đọc.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **28/10/2026 (lần 48, PM audit cuối v0.2.4)**. Giai đoạn: **`main` có v0.1.5; v0.2.3 trên `batch/v0.2-rfid` đã qua PM audit và G3a UI chỉ đọc staging. v0.2.4 runtime `28d1f9c`, đầu `c08f709`, gói `0BB73E2D` đóng hai finding rev 1 ở source/test; PM kiểm ZIP 19/19 và Node 160/160. Operator xác nhận `805da9a` hoàn tác nhầm. PM cho chuẩn bị nâng v0.2.4 cùng Extension ID để kiểm staging chỉ đọc có giám sát, chọn A1 trên v0.2.4 sau khi dev cập nhật runbook, rehearsal giữ phiên và preflight UI thật đạt. Chưa phép nhận/ghi GR03887, chưa staging done/merge/production. Ngày 30/10, 4/11, 6/11 chỉ là mục tiêu có điều kiện.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -587,7 +587,11 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-47. **Hiện hành (sau PM audit rev 1 v0.2.4, 27/10):**
+48. **Hiện hành (sau PM audit cuối v0.2.4, 28/10):**
+    - PM kiểm `28d1f9c`/`c08f709` và gói `0BB73E2D`: hai finding rev 1 được sửa ở source/test; SHA và 19/19 ZIP/source/bản giải nén khớp; PM chạy Node 160/160. Raw log dev: Edge GR 94/94 × 2, Edge tổng 42/42 × 2, Node mutation 128/130 trên runtime + 2/2 sau thêm test, Edge mutation 25/25 (một ca bắt bằng watchdog khi cố ý bỏ giới hạn gắn khung). Chưa kiểm UI v0.2.4 trên Chrome staging thật.
+    - Operator xác nhận `805da9a` hoàn tác nhầm. PM **đạt gate source/gói** và chọn A1 trên v0.2.4, sau khi dev sửa runbook/version/hash, giao gói ở chỗ ổn định, rehearsal nâng cùng Extension ID trên profile thử và kiểm phiên `nw_ready`. Sau đó cho nâng thật để kiểm UI GR03887 ~1095px **chỉ đọc**; sai phiên/ID/trang/cửa hàng/UI thì dừng trước receive. Xem `docs/pm/AUDIT-POST-REVERT-v0.2.4-20261028.md`. Operator vẫn phải xác nhận 15 tem và cho phép riêng một lượt trước nhận/PUT/HOÀN THÀNH; không thay extension giữa ba chặng.
+    - Sau A1 và UI P2 thật đạt mới xét staging done/merge. Discovery O1/QR/reader Florita chỉ đọc có thể làm song song; production còn spec/gate riêng.
+47. (cũ, thay bằng mục 48) **Sau PM audit rev 1 v0.2.4, 27/10:**
     - Dev sửa theo ba finding đầu trên `a8d49a1`, gói `95BECDEA`. PM so SHA-256 và 19/19 file ZIP/source/bản giải nén khớp. Dev báo Node 154/154 × 3, Edge GR 90/90, Edge tổng 42/42, 8/8 đột biến mới; 122 Node + 23 Edge đầy đủ còn chạy. PM chưa chạy test nặng song song, chưa có kiểm UI gói mới trên Chrome staging thật.
     - **Chưa duyệt cài/merge:** `grAnchor(code)` chấp nhận mã GR cũ nếu breadcrumb còn A dù thẻ thông tin sát bảng đã đổi B; cần test chỉ đổi thẻ thông tin và guard chính xác trước claim/PUT. Khi W1 đang điền, chuyển GR A → SO B khác có thể vẽ khung nổi A trên SO B do `evalHref` được gán B và router cho mọi SO; cần test và chặn view sai SO. Xem `docs/pm/AUDIT-REV1-v0.2.4-P2-20261027.md`.
     - A1 trên v0.2.3 không đổi: operator xác nhận 15 tem vật lý và cho phép riêng một lượt GR03887 trước receive/PUT/HOÀN THÀNH; không nâng cấp giữa chặng. Production vẫn theo gate O1/QR/reader/T1-PRD/W1-PRD, ngày chỉ là mục tiêu có điều kiện.
