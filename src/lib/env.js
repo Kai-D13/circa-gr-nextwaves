@@ -136,6 +136,8 @@
       `${env.posApiBase}/v1/order/goods-receipt/search?query=so_thuocsi=${enc(soDigits)},pos_id=${enc(posId)},with_items=true,with_seller_code=true,with_details=true&limit=1000&is_with_retail_unit=true&is_with_lot=true`,
     grDetailLine: (env, grId, itemId, detailId) =>
       `${env.posApiBase}/v1/order/goods-receipt/${enc(grId)}/item/${enc(itemId)}/detail/${enc(detailId)}`,
+    // v0.3.0 (PM DECISION-ONE-STG-AUTO-FLOW §2.3): HOÀN THÀNH ở chế độ tự động — đúng request trang POS gửi (A1): PUT, không body.
+    grStatus: (env, grId, status) => `${env.posApiBase}/v1/order/goods-receipt/${enc(grId)}/status/${enc(status)}`,
     qrLookup: (env, code) => `${env.posOrigin}/thuocsi-warehouse/qrcode?code=${enc(code)}`,
     // Nextwaves (API thường; KHÔNG dùng /integrations/circa/*)
     nwReceivingSearch: (env, q) => `${env.nwApiBase}/v1/inter-tenant-orders/receiving?pageSize=50&q=${enc(q)}`,

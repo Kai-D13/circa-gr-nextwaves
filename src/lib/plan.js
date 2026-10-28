@@ -228,7 +228,77 @@
     };
   }
 
-  const lib = { buildPlan, explain, snapshotOf, MESSAGES };
+  // v0.3.0 (PM DECISION-ONE-STG-AUTO-FLOW §2.2): kế hoạch chỉ được TỰ chạy khi phiếu sạch và nhận đủ: kế hoạch đạt, 0 chặn,
+  // 0 cảnh báo, không UID nào nằm sẵn trên phiếu, mọi chi tiết của phiếu có đúng một bước 0 → quantity (chưa nhận gì, không mã),
+  // tập UID kế hoạch = tập UID Nextwaves. Trả {ok} hoặc {ok:false, reason}.
+  function autoPlanCheck(gr, plan, units) {
+    const no = (reason) => ({ ok: false, reason });
+    if (!gr || !plan) return no("no_plan");
+    if (!plan.ok || plan.blocked.length) return no("plan_blocked");
+    if (plan.warnings.length) return no("plan_warning");
+    if (!plan.summary || plan.summary.alreadyOnGr !== 0) return no("uid_already_on_gr");
+    const uids = (units || []).map((u) => u.uid);
+    if (!uids.length || uids.some((u) => !u) || new Set(uids).size !== uids.length) return no("units_invalid");
+    const planned = new Set(plan.steps.flatMap((s) => s.uids));
+    if (planned.size !== uids.length || uids.some((u) => !planned.has(u))) return no("uid_set");
+    const stepByDetail = new Map(plan.steps.map((s) => [s.detailId, s]));
+    let details = 0;
+    for (const it of gr.items) {
+      for (const d of it.details) {
+        details += 1;
+        const st = stepByDetail.get(d.id);
+        if (!st) return no("detail_not_planned");
+        if (d.received !== 0 || d.qrCodes.length || st.before !== 0 || st.target !== d.quantity) return no("detail_not_full");
+      }
+    }
+    if (stepByDetail.size !== details) return no("detail_set");
+    return { ok: true };
+  }
+
+  // v0.3.0 (§2.3): phiếu đọc lại sau khi TỰ điền phải khớp HOÀN TOÀN kế hoạch mới được gửi HOÀN THÀNH (dùng cho phiếu sạch của chế
+  // độ tự động): đúng phiếu / PO, RECEIVING, cùng tập chi tiết; mỗi bước đúng dòng / sản phẩm / đơn vị dòng, đúng lô (id + lô-hạn),
+  // lượng = target, tập mã = đúng UID của bước, không mã trùng; chi tiết ngoài kế hoạch giữ nguyên; mọi mã trên phiếu là UID
+  // Nextwaves và đủ số. `plan.complete` một mình không đủ. Trả {ok, diffs:[{why, detailId}]}.
+  function verifyFinal(plan, gr, units) {
+    const diffs = [];
+    const bad = (why, detailId) => diffs.push({ why, detailId: detailId || null });
+    if (!plan || !plan.snapshot || !gr) return { ok: false, diffs: [{ why: "missing", detailId: null }] };
+    if (gr.id !== plan.grId) bad("gr_id");
+    if (gr.poId !== plan.poId) bad("po_id");
+    if (gr.status !== "RECEIVING") bad("status");
+    const steps = new Map(plan.steps.map((s) => [s.detailId, s]));
+    const seen = new Set();
+    const codesOnGr = [];
+    for (const it of gr.items) {
+      for (const d of it.details) {
+        seen.add(d.id);
+        codesOnGr.push(...d.qrCodes);
+        if ((d.qrCodeCount === undefined ? d.qrCodes.length : d.qrCodeCount) !== d.qrCodes.length) bad("duplicate_codes", d.id);
+        const snap = plan.snapshot.details[d.id];
+        if (!snap) {
+          bad("detail_new", d.id);
+          continue;
+        }
+        const got = d.qrCodes.slice().sort();
+        const st = steps.get(d.id);
+        if (!st) {
+          if (d.received !== snap.received || got.join() !== snap.codes.join()) bad("detail_changed", d.id);
+          continue;
+        }
+        if (st.itemId !== it.id || st.productId !== it.productId || st.unit !== it.unit) bad("item", d.id);
+        if (st.lotId !== d.lotId || st.lotDate !== d.lotDate) bad("lot", d.id);
+        if (d.received !== st.target) bad("received", d.id);
+        const want = snap.codes.concat(st.uids).sort();
+        if (want.length !== got.length || want.some((c, i) => c !== got[i])) bad("codes", d.id);
+      }
+    }
+    for (const id of Object.keys(plan.snapshot.details)) if (!seen.has(id)) bad("detail_missing", id);
+    const uidSet = new Set((units || []).map((u) => u.uid));
+    if (codesOnGr.length !== uidSet.size || codesOnGr.some((c) => !uidSet.has(c))) bad("gr_codes");
+    return { ok: diffs.length === 0, diffs };
+  }
+
+  const lib = { buildPlan, explain, snapshotOf, autoPlanCheck, verifyFinal, MESSAGES };
   root.__CGN__ = root.__CGN__ || {};
   root.__CGN__.plan = lib;
   if (typeof module !== "undefined" && module.exports) module.exports = lib;

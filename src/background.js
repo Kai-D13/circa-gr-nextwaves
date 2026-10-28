@@ -13,6 +13,12 @@
  *    Lease hết hạn (tab đóng / treo) mới cho tab khác giành; LEASE_MS > thời hạn một PUT (grpc-timeout 30S + hết giờ phía client).
  *  - Chỉ chủ lease kết thúc được lượt ghi (`finishApply`). Kết quả không rõ (mất kết nối) → chờ RETRY_COOLDOWN_MS mới cho ghi lại.
  *
+ * Chế độ tự động (v0.3.0, PM DECISION-ONE-STG-AUTO-FLOW-20261028, mặc định TẮT):
+ *  - popup cấp "quyền tự động một lần" (autoGrants) cho đúng một phiên nw_ready (GR / cửa hàng / SO / PO / kho / EPC dự kiến, 30 phút);
+ *  - received() là điểm kích hoạt duy nhất (autoRun, giao cho một tab POS); claim tự động tiêu quyền; tự điền như W1;
+ *  - đọc lại toàn phiếu khớp → claimComplete (auto_completing, đặt TRƯỚC khi gửi) → tab gửi HOÀN THÀNH một lần → done / auto_complete_unknown;
+ *  - không bao giờ tự chạy lại (apply_stopped, chưa rõ, tải lại sau claim).
+ *
  * Bất biến phiên (PM audit v0.1.1 P1.7):
  *  - content script chỉ đổi được `state` (sang applied / done) qua session:update; mọi trường khác bị bỏ qua;
  *  - khoá ghi phía POS đặt lúc tạo phiên (session:start, từ trang POS); khoá + dữ liệu đơn Nextwaves đặt MỘT lần (session:nwMatched,
@@ -28,14 +34,16 @@
 importScripts("lib/env.js", "lib/keys.js");
 const E = self.__CGN__.env;
 const K = self.__CGN__.keys;
-const T = Object.assign({ grantTtlMs: 30 * 60 * 1000, leaseMs: 90 * 1000, retryCooldownMs: 60 * 1000 }, self.__CGN__.tuning || {});
+// autoTtlMs: hạn quyền tự động (PM §2.1). completeStaleMs: phiên kẹt auto_completing quá lâu (tab chủ chết giữa lúc gửi) mới cho
+// GET thấy COMPLETED đóng phiên.
+const T = Object.assign({ grantTtlMs: 30 * 60 * 1000, leaseMs: 90 * 1000, retryCooldownMs: 60 * 1000, autoTtlMs: 30 * 60 * 1000, completeStaleMs: 2 * 60 * 1000 }, self.__CGN__.tuning || {});
 
 const DEFAULT_CONFIG = Object.freeze({ mode: "", url: "" });
 // Tăng khi cấu trúc / bất biến của phiên đổi; phiên của schema khác bị coi là bản cũ (P2.4).
 const SESSION_SCHEMA = 1;
 const isCurrent = (x) => !!x && x.schema === SESSION_SCHEMA;
 const appVersion = () => (chrome.runtime.getManifest ? chrome.runtime.getManifest().version : "");
-const ACTIVE = new Set(["waiting_nw", "nw_ready", "received", "applying", "applied", "apply_stopped"]);
+const ACTIVE = new Set(["waiting_nw", "nw_ready", "received", "applying", "applied", "apply_stopped", "auto_completing", "auto_complete_unknown"]);
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
 const LOG_MAX = 200;
 // session:update từ content script CHỈ đổi được `state`, và chỉ sang các trạng thái này (PM audit v0.1.1 P1.7).
@@ -117,6 +125,116 @@ async function revokeGrant(key, sender) {
   return true;
 }
 
+// ---------- quyền tự động một lần (v0.3.0, PM DECISION-ONE-STG-AUTO-FLOW §2.1) ----------
+// Tách khỏi cấp phép thủ công (`grants`). Khoá = khoá phiên. Gắn với đúng phiên (cả giờ tạo phiên), GR, cửa hàng, SO, PO Nextwaves,
+// kho và tập EPC dự kiến; hết hạn sau autoTtlMs. Chỉ popup tạo / thu hồi; mọi trường lấy từ phiên, không nhận từ trang.
+async function getAutoGrants() {
+  const { autoGrants } = await chrome.storage.local.get("autoGrants");
+  const all = autoGrants || {};
+  const now = Date.now();
+  for (const k of Object.keys(all)) if (!(all[k].expiresAt > now) || !isCurrent(all[k])) delete all[k];
+  return all;
+}
+
+const epcSetOf = (list) => [...new Set((list || []).map((e) => String(e || "").toUpperCase()).filter(Boolean))].sort();
+const expectedEpcList = (s) => ((s.expected && s.expected.shipments) || []).flatMap((sh) => (sh.lines || []).flatMap((l) => (l.units || []).map((u) => u.epc)));
+
+// Quyền còn hiệu lực cho ĐÚNG phiên này: đổi / tạo lại phiên, đổi đơn / cửa hàng / kho, hết hạn → vô hiệu.
+function autoGrantFits(g, s) {
+  return (
+    !!g &&
+    !!s &&
+    isCurrent(g) &&
+    g.expiresAt > Date.now() &&
+    g.key === s.key &&
+    g.sessionCreatedAt === s.createdAt &&
+    g.envId === s.envId &&
+    g.grId === s.grId &&
+    g.posId === s.posId &&
+    g.soBase === s.soBase &&
+    g.nwPoId === s.nwPoId &&
+    g.warehouseId === s.warehouseId
+  );
+}
+
+async function armAuto(msg, sender) {
+  if (sender && sender.tab) throw new Error("Chỉ cho phép tự động từ popup extension");
+  const s = (await getSessions())[msg.key];
+  if (!s) throw new Error("Không có phiên");
+  const env = E.envById(s.envId);
+  if (!isCurrent(s)) throw new Error("Phiên của bản cũ — mở lại phiếu trên POS");
+  if (!env || !env.writeEnabled) throw new Error(`${env ? env.label : s.envId}: chỉ đọc, không cho phép tự động`);
+  if (s.state !== "nw_ready") throw new Error("Chỉ cho phép khi phiên đã khớp đơn Nextwaves và CHƯA xác nhận nhận hàng");
+  if (!E.storeAllowed(env, s.posId)) throw new Error("Cửa hàng không thuộc danh sách chạy thử");
+  const blockers = writeBlockers(s);
+  if (blockers.length) throw new Error(`Phiên đang bị khoá điền: ${blockers.join(", ")}`);
+  const raw = expectedEpcList(s);
+  const epcs = epcSetOf(raw);
+  if (!s.nwPoId || !s.nwPoNumber || !epcs.length) throw new Error("Phiên thiếu dữ liệu đơn Nextwaves / tem dự kiến");
+  if (epcs.length !== raw.length) throw new Error("Phiếu gửi Nextwaves có tem trùng — không cho phép tự động");
+  const c = msg.confirm || {};
+  if (c.grCode !== s.grCode || c.nwPoNumber !== s.nwPoNumber || c.epcCount !== epcs.length) throw new Error("Thông tin xác nhận không khớp phiên hiện tại — mở lại popup");
+  const all = await getAutoGrants();
+  const now = Date.now();
+  const g = {
+    schema: SESSION_SCHEMA,
+    key: s.key,
+    sessionCreatedAt: s.createdAt,
+    envId: s.envId,
+    posId: s.posId,
+    posName: s.posName || "",
+    grId: s.grId,
+    grCode: s.grCode,
+    soBase: s.soBase,
+    deliveryCode: s.deliveryCode,
+    nwPoId: s.nwPoId,
+    nwPoNumber: s.nwPoNumber,
+    warehouseId: s.warehouseId,
+    epcs,
+    createdAt: now,
+    expiresAt: now + T.autoTtlMs,
+  };
+  all[s.key] = g;
+  await chrome.storage.local.set({ autoGrants: all });
+  await updateSession(s.key, null, { type: "auto_armed", grCode: s.grCode, epcs: epcs.length, expiresAt: new Date(g.expiresAt).toISOString() });
+  return g;
+}
+
+async function revokeAuto(key, sender) {
+  if (sender && sender.tab) throw new Error("Chỉ thu hồi từ popup extension");
+  const all = await getAutoGrants();
+  const had = !!all[key];
+  delete all[key];
+  await chrome.storage.local.set({ autoGrants: all });
+  if (had) await updateSession(key, null, { type: "auto_revoked" });
+  return true;
+}
+
+// Tab POS hỏi: có được TỰ chạy phiên này không (chưa tiêu quyền — claim tự động mới tiêu).
+async function autoStatus(key, sender) {
+  const s = (await getSessions())[key];
+  if (!s) return { eligible: false, reason: "no_session" };
+  requirePosTab(s, sender, "auto:status");
+  const g = (await getAutoGrants())[s.key];
+  if (!s.autoRun) return { eligible: false, reason: g ? "not_triggered" : "not_armed" };
+  if (s.autoRun.skipped) return { eligible: false, reason: "skipped" };
+  if (!autoGrantFits(g, s)) return { eligible: false, reason: "grant_invalid" };
+  if (s.state !== "received" || s.authorization) return { eligible: false, reason: `state_${s.state}` };
+  if (!sender || !sender.tab || sender.tab.id !== s.autoRun.tabId) return { eligible: false, reason: "other_tab" };
+  return { eligible: true, expiresAt: g.expiresAt };
+}
+
+// Tab POS được giao báo lượt tự động KHÔNG chạy (kế hoạch / phiếu / trang không đạt). Quyết định cuối cho lượt nhận này: không tự
+// chạy lại ở lần đánh giá sau (F5, cấp phép thủ công, chỗ gắn có lại) — phiếu đi đường thủ công. Quyền chưa tiêu, tự hết hạn.
+async function skipAuto(msg, sender) {
+  const s = (await getSessions())[msg.key];
+  if (!s) return null;
+  requirePosTab(s, sender, "auto:skip");
+  if (!s.autoRun || s.autoRun.skipped || !sender.tab || sender.tab.id !== s.autoRun.tabId) return s;
+  const reason = String(msg.reason || "unknown").slice(0, 60);
+  return updateSession(msg.key, { autoRun: Object.assign({}, s.autoRun, { skipped: { at: Date.now(), reason } }) }, { type: "auto_skipped", reason });
+}
+
 // ---------- phiên ----------
 async function getSessions() {
   const { sessions } = await chrome.storage.local.get("sessions");
@@ -148,6 +266,9 @@ async function contentUpdate(key, patch, logEvent) {
   const state = patch.state;
   if (!UPDATE_STATES.has(state)) throw new Error(`Không chuyển trạng thái ${state} qua session:update`);
   if (s.state === "applying" && state !== "done") throw new Error("Phiên đang ghi");
+  // v0.3.0 (§2.3): hook / tab khác không đánh dấu done sớm cho phiên đang tự HOÀN THÀNH — chỉ tab chủ (autoCompleteResult) kết thúc,
+  // trừ khi tab chủ đã chết quá completeStaleMs và GET thấy COMPLETED.
+  if (s.state === "auto_completing" && !(state === "done" && s.completeClaim && Date.now() - s.completeClaim.at > T.completeStaleMs)) throw new Error("Phiên đang tự HOÀN THÀNH");
   if (state === "applied" && !["received", "apply_stopped"].includes(s.state)) throw new Error(`Không chuyển ${s.state} → applied`);
   return updateSession(key, { state }, logEvent);
 }
@@ -254,6 +375,7 @@ async function startSession(msg, sender) {
     poPosId: msg.poPosId,
     poPosCode: msg.poPosCode,
     posId: String(msg.posId).toLowerCase(),
+    posName: typeof msg.posName === "string" ? msg.posName.slice(0, 60) : "",
     deliveryCode: msg.deliveryCode,
     soBase: K.soBase(msg.soBase),
     warehouseId: msg.warehouseId || null,
@@ -321,6 +443,34 @@ async function claimApply(msg, sender) {
   if (s.retryNotBefore && s.retryNotBefore > now) return no("cooldown");
   if (!msg.token || !/^[0-9A-F]{8}$/.test(String(msg.planHash || ""))) return no("bad_request");
   if (String(msg.grCode || "").toUpperCase() !== String(s.grCode || "").toUpperCase()) return no("gr_mismatch");
+  if (msg.auto === true) {
+    // v0.3.0 (§2.2): chỉ lượt đầu sau đúng điểm kích hoạt (autoRun), đúng tab POS được giao, quyền tự động còn hiệu lực, kế hoạch
+    // phủ ĐÚNG tập UID Nextwaves. Không bao giờ tự chạy lại sau apply_stopped / đã có authorization. Tiêu quyền tại đây (một lần).
+    if (s.state !== "received" || s.authorization) return no("auto_state");
+    if (!s.autoRun || s.autoRun.skipped || !sender || !sender.tab || sender.tab.id !== s.autoRun.tabId) return no("auto_tab");
+    const ag = await getAutoGrants();
+    const g = ag[s.key];
+    if (!autoGrantFits(g, s)) return no("auto_grant");
+    const want = [...new Set(((s.nwResult && s.nwResult.units) || []).map((u) => u.uid))].sort();
+    const rawUids = Array.isArray(msg.uids) ? msg.uids.map(String) : [];
+    const got = [...new Set(rawUids)].sort();
+    if (!want.length || got.length !== rawUids.length || want.length !== got.length || want.some((u, i) => u !== got[i])) return no("auto_uids");
+    delete ag[s.key];
+    await chrome.storage.local.set({ autoGrants: ag });
+    await updateSession(
+      msg.key,
+      {
+        state: "applying",
+        applyToken: msg.token,
+        autoToken: msg.token,
+        lease: { token: msg.token, expiresAt: now + T.leaseMs },
+        authorization: { auto: true, grCode: s.grCode, planHash: msg.planHash, grantedAt: g.createdAt, usedAt: now },
+        applyError: null,
+      },
+      { type: "auto_claimed", planHash: msg.planHash, uids: got.length }
+    );
+    return { ok: true, leaseMs: T.leaseMs };
+  }
   const grants = await getGrants();
   const gk = grantKey(s.envId, s.grCode);
   const grant = grants[gk];
@@ -339,6 +489,41 @@ async function claimApply(msg, sender) {
     { type: "apply_claimed", planHash: msg.planHash, takeover: leaseExpired }
   );
   return { ok: true, leaseMs: T.leaseMs };
+}
+
+// ---------- tự HOÀN THÀNH (v0.3.0, PM DECISION-ONE-STG-AUTO-FLOW §2.3) ----------
+// Tab đã tự điền xong (applied) và đọc lại toàn phiếu khớp kế hoạch → giành quyền gửi HOÀN THÀNH MỘT lần. Dấu "đã gửi hoặc chưa rõ"
+// (auto_completing) đặt TRƯỚC khi tab gọi POS; tab khác / lần gọi lại không bao giờ nhận lại quyền này.
+async function claimComplete(msg, sender) {
+  const s = (await getSessions())[msg.key];
+  const no = (reason) => ({ ok: false, reason });
+  if (!s) return no("no_session");
+  requirePosTab(s, sender, "session:claimComplete");
+  const blockers = writeBlockers(s);
+  if (blockers.length) return no(blockers[0]);
+  if (s.state !== "applied") return no(`state_${s.state}`);
+  const a = s.authorization || {};
+  if (!a.auto || a.planHash !== msg.planHash || !s.applyResult || s.applyResult.hash !== msg.planHash) return no("not_auto");
+  if (!msg.token || s.autoToken !== msg.token) return no("token");
+  if (s.completeClaim) return no("already_claimed");
+  await updateSession(msg.key, { state: "auto_completing", completeClaim: { at: Date.now(), planHash: msg.planHash } }, { type: "auto_complete_claimed", planHash: msg.planHash });
+  return { ok: true };
+}
+
+// Kết quả của lượt gửi HOÀN THÀNH: chỉ tab chủ (autoToken) báo. done chỉ khi GET sau đó thấy COMPLETED đúng phiếu; còn lại là "chưa
+// rõ" — dừng, không gửi lại.
+async function autoCompleteResult(msg, sender) {
+  const s = (await getSessions())[msg.key];
+  if (!s) return null;
+  requirePosTab(s, sender, "session:autoCompleteResult");
+  if (s.state !== "auto_completing" || !msg.token || s.autoToken !== msg.token) throw new Error("Không phải lượt HOÀN THÀNH của tab này");
+  const r = msg.result || {};
+  const info = { httpStatus: Number.isFinite(r.httpStatus) ? r.httpStatus : null, grStatus: r.grStatus ? String(r.grStatus).slice(0, 40) : null };
+  if (r.done === true) {
+    const source = r.source === "khong_chac" ? "khong_chac" : "auto";
+    return updateSession(msg.key, { state: "done", completeResult: Object.assign({ at: Date.now(), source }, info) }, Object.assign({ type: "auto_completed", source }, info));
+  }
+  return updateSession(msg.key, { state: "auto_complete_unknown", completeResult: Object.assign({ at: Date.now() }, info) }, Object.assign({ type: "auto_complete_unknown" }, info));
 }
 
 async function renewLease(key, token, sender) {
@@ -365,6 +550,12 @@ async function finishApply(msg, sender) {
   return true;
 }
 
+// Nhật ký phiên có auto_armed mà sau đó không bị thu hồi.
+function armedEarlier(s) {
+  const types = (s.log || []).map((l) => l.type).filter((t) => t === "auto_armed" || t === "auto_revoked");
+  return types[types.length - 1] === "auto_armed";
+}
+
 // Nextwaves đã nhận đủ: chỉ nhận khi phiên đang nw_ready và đã ghi nhận lượt "Xác nhận nhận hàng" 2xx (PM P2.1).
 async function received(key, payload, sender) {
   const cur = (await getSessions())[key];
@@ -382,7 +573,29 @@ async function received(key, payload, sender) {
   } catch (_) {
     posTabId = await openOrFocus(null, s.returnUrl);
   }
-  return updateSession(key, { posTabId });
+  // v0.3.0 (PM §2.2): điểm kích hoạt tự động DUY NHẤT — đúng lúc phiên chuyển nw_ready → received của chính lượt 2xx. Quyền phải còn
+  // hiệu lực cho đúng phiên; tập EPC nhận được = đúng tập đã cấp quyền; đúng MỘT biên nhận mới. Giao cho đúng một tab POS.
+  const patch = { posTabId };
+  let log = null;
+  const g = (await getAutoGrants())[key];
+  if (g) {
+    const units = (payload && payload.units) || [];
+    const got = epcSetOf(units.map((u) => u.epc));
+    const before = cur.receiptIdsBefore || [];
+    const fresh = [...new Set(((payload && payload.receiptIds) || []).filter((id) => !before.includes(id)))];
+    let reason = null;
+    if (!autoGrantFits(g, s)) reason = "grant_invalid";
+    else if (got.length !== units.length || got.length !== g.epcs.length || got.some((e, i) => e !== g.epcs[i])) reason = "epc_set";
+    else if (fresh.length !== 1) reason = "receipts";
+    if (reason) log = { type: "auto_skipped", reason };
+    else {
+      patch.autoRun = { at: Date.now(), tabId: posTabId };
+      log = { type: "auto_ready", tabId: posTabId, epcs: got.length };
+    }
+  } else if (armedEarlier(s)) {
+    log = { type: "auto_skipped", reason: "grant_expired" }; // đã cho phép nhưng hết hạn / bị thu hồi trước lượt nhận → thủ công
+  }
+  return updateSession(key, patch, log);
 }
 
 async function focusPos(key) {
@@ -411,8 +624,11 @@ async function dropOutdated(details) {
   const { grants } = await chrome.storage.local.get("grants");
   const kept = {};
   for (const [k, g] of Object.entries(grants || {})) if (isCurrent(g)) kept[k] = g;
-  const lastUpgrade = { at: new Date().toISOString(), reason: details.reason, from: details.previousVersion || null, to: appVersion(), removedSessions: removed, removedGrants: Object.keys(grants || {}).length - Object.keys(kept).length };
-  await chrome.storage.local.set({ sessions: all, grants: kept, lastUpgrade });
+  const { autoGrants } = await chrome.storage.local.get("autoGrants");
+  const keptAuto = {};
+  for (const [k, g] of Object.entries(autoGrants || {})) if (isCurrent(g)) keptAuto[k] = g;
+  const lastUpgrade = { at: new Date().toISOString(), reason: details.reason, from: details.previousVersion || null, to: appVersion(), removedSessions: removed, removedGrants: Object.keys(grants || {}).length - Object.keys(kept).length + Object.keys(autoGrants || {}).length - Object.keys(keptAuto).length };
+  await chrome.storage.local.set({ sessions: all, grants: kept, autoGrants: keptAuto, lastUpgrade });
   return lastUpgrade;
 }
 
@@ -435,6 +651,16 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         return revokeGrant(msg.key, sender);
       case "grant:list":
         return Object.values(await getGrants());
+      case "auto:arm":
+        return armAuto(msg, sender);
+      case "auto:revoke":
+        return revokeAuto(msg.key, sender);
+      case "auto:list":
+        return Object.values(await getAutoGrants());
+      case "auto:status":
+        return autoStatus(msg.key, sender);
+      case "auto:skip":
+        return skipAuto(msg, sender);
       case "grant:get":
         return (await getGrants())[grantKey(msg.envId, msg.grCode)] || null;
       case "session:get": {
@@ -475,6 +701,10 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         return renewLease(msg.key, msg.token, sender);
       case "session:finishApply":
         return finishApply(msg, sender);
+      case "session:claimComplete":
+        return claimComplete(msg, sender);
+      case "session:autoCompleteResult":
+        return autoCompleteResult(msg, sender);
       case "session:focusPos":
         return focusPos(msg.key);
       case "session:reopenNw": {
@@ -489,6 +719,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         const all = await getSessions();
         const s = all[msg.key];
         if (s && s.state === "applying" && s.lease && s.lease.expiresAt > Date.now()) throw new Error("Phiên đang ghi — chờ xong mới huỷ");
+        if (s && s.state === "auto_completing" && !(s.completeClaim && Date.now() - s.completeClaim.at > T.completeStaleMs)) throw new Error("Phiên đang tự HOÀN THÀNH — chờ xong mới huỷ");
         delete all[msg.key];
         await saveSessions(all);
         return true;

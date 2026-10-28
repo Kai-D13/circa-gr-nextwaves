@@ -21,6 +21,7 @@
       poId: lower(d.purchase_order_id),
       poCode: String(d.purchase_order_code || ""),
       posId: lower(d.pos_info && d.pos_info.id),
+      posName: String((d.pos_info && d.pos_info.name) || ""), // v0.3.0: hiện trong popup khi cấp quyền tự động
       updatedAt: String(d.updated_at || ""),
       items: d.items.map((it) => {
         const units = Array.isArray(it.retail_units) ? it.retail_units : [];

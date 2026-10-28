@@ -9,6 +9,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { createBrowser, until, settle, closeAll } = require("./browser-sim.js");
 const { createDom } = require("./fake-dom.js");
+const H = require("./helpers.js");
 
 test.afterEach(() => closeAll());
 
@@ -46,7 +47,7 @@ async function openPopup({ sessions = [], config = { mode: "STG", url: "" }, int
     await settle(30);
     return { text: $("grantMsg").textContent, err: /\berr\b/.test($("grantMsg").className) };
   };
-  return { b, $, sent, grants, press };
+  return { b, $, sent, grants, press, dom };
 }
 
 test("P3: mã gõ nhầm 'GR3887' khi phiên là GR03887 → cảnh báo không khớp, KHÔNG gửi grant:create, 0 cấp phép, giữ nguyên ô nhập", async () => {
@@ -124,5 +125,60 @@ test("P3: không đọc được danh sách phiên (background lỗi) → báo l
     assert.deepEqual(await p.grants(), []);
   } finally {
     p.b.close();
+  }
+});
+
+// ---------- v0.3.0 (PM DECISION-ONE-STG-AUTO-FLOW §2.1): quyền tự động một lần trong popup ----------
+const A1KEY = `STG:${GR_ID}`;
+const a1Ready = (extra) => {
+  const s = H.clone(H.sample("ext-stg-storage-GR03887-20261028.json").sessions[A1KEY]);
+  for (const k of ["nwResult", "scanOk", "authorization", "applyResult", "applyToken", "lease", "autoRun", "autoToken", "completeClaim", "completeResult"]) delete s[k];
+  return Object.assign(s, { state: "nw_ready", posName: "2222", log: [], createdAt: Date.now(), updatedAt: Date.now() }, extra || {});
+};
+const buttons = (dom, label) => dom.all(dom.document.body, (n) => n.tagName === "BUTTON" && n.textContent === label);
+const texts = (dom) => dom.all(dom.document.getElementById("sessions"), (n) => n.tagName === "SPAN").map((n) => n.textContent);
+
+test("v0.3.0 popup: phiên nw_ready có nút cho phép tự động; bấm chỉ MỞ khung xác nhận ghi rõ môi trường / cửa hàng / GR / SO / PO / số tem / việc tự HOÀN THÀNH; chỉ 'Xác nhận cho phép' mới gửi auto:arm; sau đó hiện hạn + 'Thu hồi tự động'", async () => {
+  const p = await openPopup({ sessions: [a1Ready()] });
+  try {
+    await until(() => buttons(p.dom, "Cho phép tự điền và HOÀN THÀNH 1 lần").length === 1);
+    buttons(p.dom, "Cho phép tự điền và HOÀN THÀNH 1 lần")[0].click();
+    const t = texts(p.dom).join("\n");
+    for (const re of [/Môi trường: Staging · cửa hàng 2222/, /Phiếu nhận: GR03887 · SO SOBD1594095-F/, /Nextwaves: PO13806459 · 15 tem dự kiến/, /TỰ ĐIỀN phiếu và POS sẽ TỰ HOÀN THÀNH/, /hết hạn sau 30 phút, chỉ dùng một lần/i]) assert.match(t, re);
+    await settle(50);
+    assert.ok(!p.sent.includes("auto:arm"), "mở khung xác nhận chưa gửi gì");
+    buttons(p.dom, "Xác nhận cho phép")[0].click();
+    await until(() => p.sent.includes("auto:arm"));
+    const g = await until(async () => (await p.b.sendFromPopup({ type: "auto:list" })).data[0]);
+    assert.deepEqual([g.grCode, g.nwPoNumber, g.epcs.length], ["GR03887", "PO13806459", 15]);
+    await until(() => buttons(p.dom, "Thu hồi tự động").length === 1);
+    assert.ok(texts(p.dom).some((x) => /Tự động: ĐÃ CHO PHÉP 1 lần · hết hạn/.test(x)));
+    buttons(p.dom, "Thu hồi tự động")[0].click();
+    await until(async () => (await p.b.sendFromPopup({ type: "auto:list" })).data.length === 0);
+  } finally {
+    p.b.close();
+  }
+});
+
+test("v0.3.0 popup: 'Huỷ' trong khung xác nhận không cấp quyền; không có nút cho phép ở phiên đã nhận / chưa khớp đơn / môi trường PRD", async () => {
+  const p = await openPopup({ sessions: [a1Ready()] });
+  try {
+    await until(() => buttons(p.dom, "Cho phép tự điền và HOÀN THÀNH 1 lần").length === 1);
+    buttons(p.dom, "Cho phép tự điền và HOÀN THÀNH 1 lần")[0].click();
+    buttons(p.dom, "Huỷ")[0].click();
+    await settle(80);
+    assert.ok(!p.sent.includes("auto:arm"));
+    assert.equal((await p.b.sendFromPopup({ type: "auto:list" })).data.length, 0);
+  } finally {
+    p.b.close();
+  }
+  for (const [name, s] of [["received", a1Ready({ state: "received" })], ["waiting_nw", a1Ready({ state: "waiting_nw" })], ["PRD", a1Ready({ envId: "PRD", key: "PRD:" + GR_ID })]]) {
+    const q = await openPopup({ sessions: [s] }); // popup ở Staging: phiên PRD không có nút
+    try {
+      await settle(80);
+      assert.equal(buttons(q.dom, "Cho phép tự điền và HOÀN THÀNH 1 lần").length, 0, name);
+    } finally {
+      q.b.close();
+    }
   }
 });

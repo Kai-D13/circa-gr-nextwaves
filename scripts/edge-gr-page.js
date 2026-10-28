@@ -75,6 +75,7 @@ const OTHER_ID = "0f0f0f0f-1111-4222-8333-444455556666";
 const QR = new Map(json("pos-stg-qrcode-GR03880-11uid-20261026.json").map((r) => [r.url.split("code=")[1], r.response]));
 const SESSION0 = json("ext-stg-storage-GR03878-GR03880-20261026.json").sessions[KEY];
 const PLAN_HASH = "E33C777A"; // kế hoạch của lượt thật (tests/full-real.test.js)
+const PO0 = json("pos-stg-po-PO00006754-SOBD1593849-20261026.json"); // mục 8: chế độ tự động đọc lại PO / SO trước khi tự điền
 const AUTH = { authorization: "Bearer kiem-thu", "x-client-id": "1", "x-store-id": STORE, "grpc-timeout": "30S" };
 
 // ---------- trang phiếu DOM + CSS thật ----------
@@ -430,10 +431,18 @@ async function runBaseline() {
     if (!sw) throw new Error("dừng");
 
     // ---- server giả (GR03880 thật, PUT áp vào GR) ----
-    const st = { gr: JSON.parse(JSON.stringify(GR0)), puts: [], grDown: false, noAnchor: false, completed: 0 };
+    // seq: thứ tự request ghi / đọc phiếu (mục 8: G = GET phiếu, P = PUT detail, C = PUT status/COMPLETED).
+    const st = { gr: JSON.parse(JSON.stringify(GR0)), puts: [], grDown: false, noAnchor: false, completed: 0, seq: [], completedNoAnchor: false };
     const handler = async (r) => {
       const u = new URL(r.url);
-      if (/^\/danh-sach-phieu-nhan-hang\/[0-9a-f-]{36}\/?$/.test(u.pathname)) return { status: 200, type: "text/html; charset=utf-8", body: st.noAnchor ? GR_PAGE_NO_ANCHOR : GR_PAGE };
+      if (/^\/danh-sach-phieu-nhan-hang\/[0-9a-f-]{36}\/?$/.test(u.pathname)) {
+        const noAnchor = st.noAnchor || (st.completedNoAnchor && st.gr.data.status === "COMPLETED"); // trang COMPLETED thật không có #all-receipt
+        return { status: 200, type: "text/html; charset=utf-8", body: noAnchor ? GR_PAGE_NO_ANCHOR : GR_PAGE };
+      }
+      if (/^\/backend\/v1\/pos\/[0-9a-f-]{36}\/po\/[0-9a-f-]{36}$/.test(u.pathname) && r.method === "GET") return { status: 200, type: "application/json", body: JSON.stringify(PO0) };
+      if (/^\/backend\/v1\/order\/goods-receipt\/[0-9a-f-]{36}$/.test(u.pathname) && r.method === "GET") st.seq.push("G");
+      if (/\/detail\/[0-9a-f-]{36}$/.test(u.pathname) && r.method === "PUT") st.seq.push("P");
+      if (/\/status\/COMPLETED$/.test(u.pathname) && r.method === "PUT") st.seq.push("C");
       if (u.pathname === "/thuocsi-warehouse/qrcode") {
         const q = QR.get(u.searchParams.get("code"));
         return q ? { status: 200, type: "application/json", body: JSON.stringify(q) } : { status: 404, type: "application/json", body: "{}" };
@@ -792,6 +801,79 @@ async function runBaseline() {
     await budget(q, "mở lại phiếu COMPLETED");
     q.page.close();
     await closeTarget(q.targetId);
+
+    // 8) v0.3.0 (PM DECISION-ONE-STG-AUTO-FLOW §2–§3, G1) — chế độ tự động trên trình duyệt thật, server giả, không ghi thật.
+    //  8a. Trang popup của extension (DOM thật): phiên nw_ready có nút cho phép tự động; bấm chỉ mở khung xác nhận ghi rõ phạm vi;
+    //      "Xác nhận cho phép" từ trang popup MỞ TRONG TAB bị chặn (hàng rào "chỉ popup": popup thật của Chrome không có tab).
+    //  8b. Quyền tự động đặt qua service worker; tab POS được giao (autoRun.tabId) trên DOM thật tự điền 5 lô (GR03880 thật, kế
+    //      hoạch #E33C777A) → đọc lại toàn phiếu → PUT status/COMPLETED MỘT lần → GET COMPLETED → phiên done, quyền đã tiêu →
+    //      tải lại trang COMPLETED (không #all-receipt) → quá 10 s không khung. Trace có tên: không tác vụ extension ≥ 50 ms.
+    const autoKeys = async () => JSON.parse(await evalIn(sw, "chrome.storage.local.get('autoGrants').then((x) => JSON.stringify(Object.keys(x.autoGrants || {})))"));
+    const FIXED = now();
+    st.noAnchor = false;
+    st.completedNoAnchor = true;
+    st.gr = JSON.parse(JSON.stringify(GR0));
+    st.seq = [];
+    const putsAuto0 = st.puts.length;
+    const completedAuto0 = st.completed;
+    await setGrant(false);
+    await evalIn(sw, "chrome.storage.local.set({ autoGrants: {} }).then(() => true)");
+    await setSession({ state: "nw_ready", nwResult: null, scanOk: null, createdAt: FIXED });
+    const extId = await evalIn(sw, "chrome.runtime.id");
+    const pp = await openPage(`chrome-extension://${extId}/popup/popup.html`, handler);
+    const pctx = () => (mainCtx(pp.ctxs) || {}).id;
+    const clickBtn = (label) => evalIn(pp.page, `(() => { const b = [...document.querySelectorAll("button")].find((x) => x.textContent === ${JSON.stringify(label)}); if (b) b.click(); return !!b; })()`, pctx());
+    await until(async () => /Cho phép tự điền và HOÀN THÀNH 1 lần/.test((await evalIn(pp.page, "document.body.innerText", pctx())) || ""), 6000);
+    const opened = await clickBtn("Cho phép tự điền và HOÀN THÀNH 1 lần");
+    await sleep(300);
+    const conf = (await evalIn(pp.page, `(document.querySelector(".confirm") || {}).innerText || ""`, pctx())) || "";
+    check(
+      "8a popup (trang extension, DOM thật): nút cho phép tự động mở khung xác nhận ghi rõ GR / SO / PO / số tem / tự HOÀN THÀNH; chưa có quyền",
+      opened && /GR03880/.test(conf) && /SOBD1593849-F/.test(conf) && /PO76458756 · 11 tem dự kiến/.test(conf) && /TỰ HOÀN THÀNH/.test(conf) && (await autoKeys()).length === 0,
+      conf.replace(/\n+/g, " | ").slice(0, 220)
+    );
+    await clickBtn("Xác nhận cho phép");
+    await sleep(600);
+    const pmsg = (await evalIn(pp.page, `document.getElementById("msg").textContent`, pctx())) || "";
+    check("8a popup mở trong TAB: 'Xác nhận cho phép' bị từ chối (chỉ popup thật cấp được), 0 quyền", /Chỉ cho phép tự động từ popup/.test(pmsg) && (await autoKeys()).length === 0, pmsg);
+    pp.page.close();
+    await closeTarget(pp.targetId);
+
+    const s8 = await sessionNow();
+    const grant8 = { schema: 1, key: KEY, sessionCreatedAt: FIXED, envId: "STG", posId: s8.posId, posName: "", grId: s8.grId, grCode: s8.grCode, soBase: s8.soBase, deliveryCode: s8.deliveryCode, nwPoId: s8.nwPoId, nwPoNumber: s8.nwPoNumber, warehouseId: s8.warehouseId, epcs: SESSION0.nwResult.units.map((x) => String(x.epc).toUpperCase()).sort(), createdAt: now(), expiresAt: now() + 30 * 60 * 1000 };
+    await evalIn(sw, `chrome.storage.local.set({ autoGrants: ${JSON.stringify({ [KEY]: grant8 })} }).then(() => true)`);
+    const a8 = await openPage(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`, handler, { trace: true });
+    const a8ctx = () => (mainCtx(a8.ctxs) || {}).id;
+    const auth8 = () => evalIn(a8.page, `window.postMessage({mark:"cgn/pos-hook", type:"auth", payload:{envId:"STG", headers:${JSON.stringify(AUTH)}}}, location.origin), true`, a8ctx());
+    await sleep(2500);
+    await auth8();
+    await until(async () => /Đã khớp đơn Nextwaves/.test(await panelText(a8.page)), 8000);
+    const tabId = await evalIn(sw, `chrome.tabs.query({}).then((ts) => (ts.find((t) => (t.url || "").includes(${JSON.stringify(GR_ID)})) || {}).id)`);
+    // Như background.received() khi quyền khớp: phiên received + autoRun giao cho đúng tab này.
+    await setSession({ state: "received", createdAt: FIXED, autoRun: { at: now(), tabId } });
+    await until(() => st.completed > completedAuto0, 20000);
+    const s8b = await until(async () => {
+      const x = await sessionNow();
+      return x && x.state === "done" && x;
+    }, 8000);
+    const puts8 = st.puts.slice(putsAuto0);
+    const iC = st.seq.indexOf("C");
+    const iLastP = st.seq.lastIndexOf("P");
+    const t8 = s8b ? s8b.log.map((l) => l.type) : [];
+    check(
+      `8b tự động trên DOM thật: 5 PUT đúng kế hoạch #${PLAN_HASH} (11 UID) → ≥ 2 GET đọc lại → 1 PUT status/COMPLETED sau PUT cuối → GET COMPLETED → phiên done, quyền đã tiêu`,
+      puts8.length === 5 && puts8.reduce((n, x) => n + x.body.detail.thuocsi_qr_codes.length, 0) === 11 && st.completed - completedAuto0 === 1 && iC > iLastP && st.seq.slice(iLastP + 1, iC).filter((x) => x === "G").length >= 2 && st.seq.slice(iC + 1).includes("G") && !!s8b && s8b.authorization && s8b.authorization.auto === true && (await autoKeys()).length === 0 && ["auto_claimed", "auto_complete_claimed", "auto_complete_sent", "auto_completed"].every((x) => t8.includes(x)),
+      `PUT ${puts8.length} · COMPLETED ${st.completed - completedAuto0} · seq ${st.seq.join("")} · phiên ${s8b ? s8b.state : "?"} · nhật ký ${t8.filter((x) => x.startsWith("auto_")).join(",")}`
+    );
+    await sleep(2500); // extension tải lại trang sau khi xác nhận COMPLETED
+    await auth8();
+    await sleep(11500);
+    const n8 = await panelNodes(a8.page);
+    const kk8 = JSON.parse((await evalIn(a8.page, KIEM_KHUNG_JS, a8ctx())) || "{}");
+    check("8b sau tự HOÀN THÀNH: trang tải lại (COMPLETED, không #all-receipt) quá 10 s không khung, không gửi thêm", !n8 && kk8.khung === 0 && st.completed - completedAuto0 === 1 && st.puts.length - putsAuto0 === 5, JSON.stringify(kk8));
+    await budget(a8, "8b chế độ tự động: tự điền → tự HOÀN THÀNH → tải lại");
+    a8.page.close();
+    await closeTarget(a8.targetId);
   } catch (err) {
     check("chạy hết kịch bản", false, String((err && err.stack) || err).slice(0, 300));
   } finally {

@@ -45,6 +45,7 @@
   let collecting = false;
   let ctx = null; // {env, key, po, nwPoId, nwPoNumber, shipmentIds, expected, grCode, soBase, fingerprint, receiptIdsBefore, warehouseId}
   let note = null; // thông báo gần nhất của lượt nhận (giữ khi vẽ lại)
+  let autoGrant = null; // v0.3.0: quyền tự động một lần của phiên đang mở — CHỈ để hiện (background mới là nơi kiểm)
   let pendingScan = null; // lượt "Xác nhận nhận hàng" đến trước khi khớp xong đơn → xử lý ngay sau khi khớp
 
   async function bg(type, extra) {
@@ -146,6 +147,7 @@
       pendingScan = null;
       return onReceiveScan(p);
     }
+    await loadAutoGrant();
     if (!note) {
       if (s.scanOk) await collect({}); // tải lại trang giữa lúc đọc kết quả của lượt 2xx đã ghi nhận
       else await peekReceived();
@@ -248,6 +250,16 @@
     return ((c && c.expected && c.expected.shipments) || []).reduce((n, s) => n + s.lines.reduce((m, l) => m + l.units.length, 0), 0);
   }
 
+  async function loadAutoGrant() {
+    try {
+      const { autoGrants } = await chrome.storage.local.get("autoGrants");
+      const g = ctx ? (autoGrants || {})[ctx.key] : null;
+      autoGrant = g && g.expiresAt > Date.now() ? g : null;
+    } catch (_) {
+      autoGrant = null;
+    }
+  }
+
   function renderReady() {
     if (!ctx) return;
     const key = ctx.key;
@@ -256,6 +268,11 @@
     else lines.push("Đặt hàng lên reader rồi bấm “Xác nhận nhận hàng”. Nhận đủ xong extension đưa về POS và lập kế hoạch điền phiếu.");
     const q = ctx.nwSearch;
     if (q) lines.push(`Tìm theo ${ctx.soBase}: total ${q.total}, đã đọc ${q.read}; ứng viên Buymed cùng kho ${q.candidates}; refId đúng SO ${q.verified}.`);
+    lines.push(
+      autoGrant
+        ? `Tự động: ĐÃ CHO PHÉP 1 lần (hết hạn ${new Date(autoGrant.expiresAt).toLocaleTimeString("vi-VN")}) — nhận xong, POS sẽ tự điền và tự HOÀN THÀNH khi đọc lại khớp.`
+        : "Tự động: chưa cho phép — nhận xong, điền phiếu POS thủ công."
+    );
     if (ctx.nwWriteLocks && ctx.nwWriteLocks.length) lines.push("Lưu ý: Nextwaves có nhiều đơn cùng SO — điền phiếu POS sẽ bị khoá (chỉ xem).");
     panel.show({
       tone: note ? note.tone : "info",
@@ -430,6 +447,7 @@
       config = changes.config.newValue || null;
       refresh();
     } else if (changes.sessions && !ctx) refresh();
+    else if (changes.autoGrants && ctx) loadAutoGrant().then(renderReady);
   });
 
   setInterval(() => {
