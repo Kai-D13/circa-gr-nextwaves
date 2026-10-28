@@ -1,8 +1,10 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **29/10/2026 (lần 53, PM audit G0 v0.2.5)**. Giai đoạn: **G0 v0.2.5 đạt ở phạm vi ứng viên nội bộ: PM kiểm SHA ZIP `792817B9…`, 19/19 file source=gói tại `02f2575`, Node 180/180; dev báo Edge 103/103 ×3, đột biến 146/146 và trace extension ≤21,71 ms. Không cài cho operator, chưa staging done/merge. G1 v0.3.0 đang sửa dở: dev báo 204/204 test nhưng worktree có hai phiên cùng ghi, chưa có SHA/gói để PM audit. PM yêu cầu một owner, giữ `autoRun.skipped` và sửa popup đang báo “ĐÃ CHO PHÉP” sau khi lượt tự động đã bỏ qua. Chỉ một E2E staging thật trên gói cuối; production vẫn chờ các gate riêng.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **29/10/2026 (lần 54, operator đổi cấu trúc dự án)**. Giai đoạn: **Từ 29/10 chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), không còn PM Codex, áp quy tắc một người ghi (`agent.md` §2.1). G0 v0.2.5 đạt (PM Codex audit cuối `docs/pm/AUDIT-G0-v0.2.5-G1-PRELIM-20261029.md`). G1 v0.3.0 tự điền + tự HOÀN THÀNH đang làm trên `batch/v0.2-rfid` (chưa commit SHA cố định), còn finding P2.5 (popup báo "ĐÃ CHO PHÉP" sau khi tự động đã bị bỏ qua), đột biến / Edge / gói chưa xong. Operator chưa cần cài hay cho phép lượt nhận mới. Production chỉ đọc.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
+
+**Phiên giữ quyền ghi (`agent.md` §2.1):** Claude Code — phiên "QR code scan log project (fork)" do operator chỉ định 29/10 (chat: "bạn sẽ đảm nhận cả PM, senior Software Engineer, QC, tester, audit, review"). Mọi phiên khác (gốc, resume như `qr-code-b2`, fork mới, Codex) **chỉ đọc**. Worktree mã: `C:QR_codecirca-gr-nextwaves-dev` (chuyển từ thư mục tạm của phiên sau khi đột biến v0.3.0 chạy xong).
 
 - Đã hiểu luồng nhận hàng trên POS hiện tại (capture production 19/10, §1).
 - Đã kiểm chuỗi khoá ba bên trên SO 38468903 (§2). Mã SO là khoá chung **ở production**. GR không có SO, nhưng PO của GR có SO.
@@ -587,7 +589,11 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-53. **Hiện hành (sau PM audit G0 v0.2.5, 29/10):**
+54. **Hiện hành (operator đổi cấu trúc dự án, 29/10):**
+    - Chỉ còn operator + một phiên Claude Code giữ quyền ghi (kiêm PM / senior engineer / QC / tester / audit / review). PM Codex thôi vai trò; `docs/pm/*` là lịch sử, quyết định cũ vẫn hiệu lực trừ khi bị thay. Plan / audit mới ở `docs/dev/`. Ghi thật và cài / nâng gói vẫn cần operator cho phép từng lần.
+    - Lý do: 29/10 00:05–00:08 phiên `qr-code-b2` (operator gõ "resume") sửa cùng worktree v0.3.0 với phiên dev; PM Codex cũng ghi tài liệu song song. Quy tắc mới: một người ghi, phiên mới / resume / fork mặc định chỉ đọc, commit từng bước, worktree ở đường dẫn cố định (`agent.md` §2.1, `CLAUDE.md`, `AGENTS.md`).
+    - Việc kế tiếp: sửa P2.5 (quyền tự động bị bỏ qua → thu hồi + popup / Nextwaves báo "Tự động đã dừng"), commit SHA cố định v0.3.0, đột biến + Edge + trace + gói + script nâng v0.2.4 → v0.3.0, audit độc lập bằng sub-agent, báo cáo G1. Sau đó G2 (operator cài gói cuối, kiểm chỉ đọc) và G3 (một E2E staging thật có phép riêng).
+53. (cũ, thay bằng mục 54) **Sau PM audit G0 v0.2.5, 29/10:**
     - G0 nội bộ đạt: `batch/v0.2-rfid` `02f2575`, gói `792817B9…`, PM so source/ZIP 19/19, chạy Node 180/180, `background.js` không đổi. Edge 103/103 ×3, Edge tổng 42/42, đột biến 146/146, trace ≤21,71 ms là số dev báo; PM chưa chạy lại Edge/đột biến. Không cài v0.2.5 cho operator, chưa dùng đơn staging/merge. Xem `docs/pm/AUDIT-G0-v0.2.5-G1-PRELIM-20261029.md`.
     - G1 v0.3.0 chưa đạt gate: dev báo 204/204 test trên mã chưa commit; hai phiên cùng sửa worktree v0.3.0. PM yêu cầu một owner (ưu tiên phiên đã viết luồng chính/test), rà nhận các phần `autoRun.skipped`/`auto:skip`/`grant_expired` rồi chốt SHA trước đột biến/Edge/gói. Finding P2.5: popup không được báo “ĐÃ CHO PHÉP” sau khi auto đã skip; vô hiệu quyền và hiển thị đường thủ công, test F5 không tự chạy lại. Operator chưa cần làm gì.
 52. (cũ, thay bằng mục 53) **Sau quyết định operator gộp luồng tự động, 28/10:**

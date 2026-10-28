@@ -1,3 +1,5 @@
+> **KHÔNG CÒN DÙNG từ 29/10/2026.** Operator đổi cấu trúc dự án: chỉ còn operator và một phiên Claude Code (kiêm PM / engineer / QC / audit). Codex không sửa file nào — xem `AGENTS.md`, `agent.md` §2. Giữ file này làm lịch sử.
+
 # Prompt mở session PM (Codex) — circa-gr-nextwaves
 
 Operator sao chép phần dưới đây vào session Codex mới. Đính kèm dữ liệu vận hành mới nếu có. Không dán token / Authorization / cookie.
