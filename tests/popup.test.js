@@ -182,3 +182,22 @@ test("v0.3.0 popup: 'Huỷ' trong khung xác nhận không cấp quyền; không
     }
   }
 });
+
+test("v0.3.0 P2.5 popup: lượt tự động đã bị bỏ qua → 'Tự động đã dừng — xử lý theo luồng thủ công', không 'ĐÃ CHO PHÉP', không nút; đã dùng quyền → báo đã dùng", async () => {
+  const cases = [
+    ["skipped", a1Ready({ state: "received", autoRun: { at: Date.now(), tabId: 1, skipped: { at: Date.now(), reason: "plan_blocked" } } }), /Tự động đã dừng — xử lý theo luồng thủ công/],
+    ["skip lúc nhận", a1Ready({ state: "received", log: [{ at: new Date().toISOString(), type: "auto_skipped", reason: "epc_set" }] }), /Tự động đã dừng/],
+    ["đã dùng", a1Ready({ state: "applied", authorization: { auto: true, grCode: "GR03887", planHash: "EF0E020C" } }), /đã dùng quyền 1 lần/],
+  ];
+  for (const [name, s, re] of cases) {
+    const p = await openPopup({ sessions: [s] });
+    try {
+      await until(() => texts(p.dom).some((x) => re.test(x)));
+      assert.ok(!texts(p.dom).some((x) => /ĐÃ CHO PHÉP/.test(x)), name);
+      assert.equal(buttons(p.dom, "Cho phép tự điền và HOÀN THÀNH 1 lần").length, 0, name);
+      assert.equal(buttons(p.dom, "Thu hồi tự động").length, 0, name);
+    } finally {
+      p.b.close();
+    }
+  }
+});

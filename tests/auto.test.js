@@ -293,6 +293,7 @@ test("G1 nhận: EPC nhận khác tập đã cấp quyền / 0 hoặc 2 biên nh
       await until(() => logTypes(b).includes("auto_skipped"));
       assert.equal(session(b).log.find((l) => l.type === "auto_skipped").reason, reason, name);
       assert.ok(!session(b).autoRun, name);
+      assert.deepEqual(autoGrants(b), [], `${name}: quyền tự động đã thu hồi`);
       await settle(250);
       assert.equal(srv.st.puts.length, 0, name);
       noComplete(srv, name);
@@ -683,6 +684,9 @@ test("G1 một lần: lượt tự động bị bỏ qua (QR lỗi lúc đầu) 
     await receive(ctx);
     await until(() => session(b).autoRun && session(b).autoRun.skipped);
     assert.equal(session(b).autoRun.skipped.reason, "plan_blocked");
+    // P2.5: bỏ qua → thu hồi quyền ngay; khung Nextwaves báo "Tự động đã dừng", không còn báo đã cho phép.
+    assert.deepEqual(autoGrants(b), [], "quyền tự động đã thu hồi khi bỏ qua");
+    await until(() => ctx.nw.view && (ctx.nw.view.lines || []).some((l) => /Tự động đã dừng/.test(l)));
     const err = await until(() => pos.view && /điểm chặn/.test(pos.view.title || "") && pos.view);
     qrDown = false;
     err.buttons.find((x) => x.label === "Kiểm tra lại").onClick();
@@ -692,8 +696,12 @@ test("G1 một lần: lượt tự động bị bỏ qua (QR lỗi lúc đầu) 
     assert.equal(srv.st.puts.length, 0);
     noComplete(srv, "đã bỏ qua");
     assert.equal(logTypes(b).filter((x) => x === "auto_skipped").length, 1, "ghi một lần");
+    pos.reload(); // F5 khi QR đã bình thường: vẫn không tự chạy
+    pos.post(POS_AUTH);
+    await settle(400);
+    assert.equal(srv.st.puts.length, 0, "F5 không tự chạy lại");
     const st = await b.sendFromTab(pos, { type: "auto:status", key: KEY });
-    assert.deepEqual([st.data.eligible, st.data.reason], [false, "skipped"]);
+    assert.equal(st.data.eligible, false);
     const c = await b.sendFromTab(pos, { type: "session:claimApply", key: KEY, token: "t", grCode: "GR03887", planHash: "EF0E020C", auto: true, uids: A1.nwResult.units.map((u) => u.uid) });
     assert.equal(c.data.reason, "auto_tab");
   } finally {

@@ -97,6 +97,17 @@
       wrap.appendChild(revoke);
       return wrap;
     }
+    // v0.3.0 P2.5: lượt tự động đã bị bỏ qua (kế hoạch / phiếu / trang không đạt, quyền hết hạn / không khớp lúc nhận) → nói rõ đã dừng,
+    // không còn nút / chữ "ĐÃ CHO PHÉP". Đã dùng quyền (claim tự động) → chỉ báo đã dùng.
+    const skipped = (s.autoRun && s.autoRun.skipped) || (s.state !== "nw_ready" && (s.log || []).some((l) => l.type === "auto_skipped"));
+    if (skipped) {
+      wrap.appendChild(el("span", "Tự động đã dừng — xử lý theo luồng thủ công (cấp phép điền + dược sĩ HOÀN THÀNH)."));
+      return wrap;
+    }
+    if (s.authorization && s.authorization.auto) {
+      wrap.appendChild(el("span", "Tự động: đã dùng quyền 1 lần cho lượt nhận này."));
+      return wrap;
+    }
     if (!env || !env.writeEnabled || s.envId !== env.id || s.state !== "nw_ready") return null;
     const epcs = expectedEpcCount(s);
     const open = el("button", "Cho phép tự điền và HOÀN THÀNH 1 lần", "sec");

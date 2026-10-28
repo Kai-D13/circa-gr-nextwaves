@@ -128,7 +128,14 @@
       return panel.show({
         tone: "ok",
         title: `${s.grCode}: Nextwaves đã nhận xong`,
-        lines: ["Phiếu nhận trên POS đang được điền / đã điền."],
+        lines: ["Phiếu nhận trên POS đang được điền / đã điền."].concat(
+          // v0.3.0 P2.5: trạng thái tự động sau lượt nhận — đã dừng thì nói rõ, không để hiểu là vẫn tự HOÀN THÀNH.
+          (s.autoRun && s.autoRun.skipped) || (s.log || []).some((l) => l.type === "auto_skipped")
+            ? ["Tự động đã dừng — POS xử lý theo luồng thủ công."]
+            : s.autoRun
+              ? ["Tự động: POS tự điền và tự HOÀN THÀNH khi đọc lại phiếu khớp hoàn toàn."]
+              : []
+        ),
         buttons: [{ label: "Về POS", onClick: () => bg("session:focusPos", { key: s.key }) }],
       });
     }

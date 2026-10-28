@@ -200,6 +200,16 @@ async function armAuto(msg, sender) {
   return g;
 }
 
+// v0.3.0 P2.5 (PM Codex AUDIT-G0-v0.2.5-G1-PRELIM §2): lượt tự động đã bị bỏ qua / không kích hoạt → THU HỒI quyền ngay, để popup / khung
+// Nextwaves không còn báo "ĐÃ CHO PHÉP" trong khi lượt nhận này đã đi đường thủ công. Trả true nếu có quyền bị thu hồi.
+async function dropAutoGrant(key) {
+  const all = await getAutoGrants();
+  if (!all[key]) return false;
+  delete all[key];
+  await chrome.storage.local.set({ autoGrants: all });
+  return true;
+}
+
 async function revokeAuto(key, sender) {
   if (sender && sender.tab) throw new Error("Chỉ thu hồi từ popup extension");
   const all = await getAutoGrants();
@@ -232,6 +242,7 @@ async function skipAuto(msg, sender) {
   requirePosTab(s, sender, "auto:skip");
   if (!s.autoRun || s.autoRun.skipped || !sender.tab || sender.tab.id !== s.autoRun.tabId) return s;
   const reason = String(msg.reason || "unknown").slice(0, 60);
+  await dropAutoGrant(s.key); // P2.5: quyết định cuối cho lượt nhận này — quyền không còn hiển thị / dùng được
   return updateSession(msg.key, { autoRun: Object.assign({}, s.autoRun, { skipped: { at: Date.now(), reason } }) }, { type: "auto_skipped", reason });
 }
 
@@ -587,7 +598,10 @@ async function received(key, payload, sender) {
     if (!autoGrantFits(g, s)) reason = "grant_invalid";
     else if (got.length !== units.length || got.length !== g.epcs.length || got.some((e, i) => e !== g.epcs[i])) reason = "epc_set";
     else if (fresh.length !== 1) reason = "receipts";
-    if (reason) log = { type: "auto_skipped", reason };
+    if (reason) {
+      log = { type: "auto_skipped", reason };
+      await dropAutoGrant(key); // P2.5: lượt nhận này không tự chạy → thu hồi quyền
+    }
     else {
       patch.autoRun = { at: Date.now(), tabId: posTabId };
       log = { type: "auto_ready", tabId: posTabId, epcs: got.length };
