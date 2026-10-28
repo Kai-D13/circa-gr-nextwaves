@@ -148,8 +148,9 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 
 0. **Hiện hành (28/10, chiều):** PM đạt gate chuẩn bị A1 (`docs/pm/AUDIT-A1-PREP-v0.2.4-20261028.md`): operator được nâng v0.2.3 → v0.2.4 cùng thư mục / Extension ID và kiểm staging **chỉ đọc** (runbook §0b–§0d). Chưa phép nhận / ghi.
    - Gói giao `C:\circa-gr-nextwaves-release\`, script nâng + diễn tập 17/17 — `docs/dev/A1-CHUAN-BI-v0.2.4-20261028.md`. Runbook §0b thêm bước 0: bấm "Mở tab Nextwaves" trên v0.2.3 để làm mới giờ phiên GR03887 (PM cho phép); "Tải từ" khác `C:\circa-gr-nextwaves-v0.2.3` → dừng, dev gửi lệnh `-Target` điền sẵn.
-   - Kế tiếp: operator gửi một bộ bằng chứng §0d → dev đối chiếu → PM xác nhận UI + phân loại hiệu năng → operator xác nhận 15 tem + cho phép một lượt GR03887.
-   - **Hạn phiên GR03887:** 24 giờ từ lần cập nhật cuối (bấm "Mở tab Nextwaves" làm mới). Mất phiên → dừng, không tạo lại.
+   - **§0 xong 28/10 13:42 — stakeholder chốt ĐẠT** (`docs/dev/A1-S0-KET-QUA-v0.2.4-20261028.md`): v0.2.4 cùng ID `bkpbpknngkmmaclhkpnnlblofcaihadd`, GR03887 `nw_ready` (13:39:57 28/10), 0 cấp phép, preflight ĐẠT ở vw 1216 (bỏ 1095 theo stakeholder). Khác runbook: thêm phiên GR03878 `waiting_nw` (23:49:46 27/10, không chạm GR03887, tự hết sau 23:49 28/10 — để yên); Errors: cảnh báo `pushState` trang prerender (pos-hook.js:113) + "Extension context invalidated" (tab cũ trước F5).
+   - Kế tiếp: PM ghi gate A1 → operator xác nhận đúng 15 tem + cho phép một lượt GR03887 → runbook §2 capture → §3 ba chặng.
+   - **Hạn phiên GR03887:** 24 giờ từ lần cập nhật cuối (13:39:57 28/10 → ~13:39 29/10; bấm "Mở tab Nextwaves" làm mới). Mất phiên → dừng, không tạo lại.
    - **P2 hiệu năng (lượt Edge 75,18 ms):** `docs/dev/PERF-75MS-v0.2.4-20261028.md` — không tái hiện. `edge-gr-page.js` nay in dòng / cột, CPU, phần con, bước của tác vụ dài và có `--baseline` (không extension). Hàm ẩn danh của `ui/panel.js` là callback 10 s nhánh lỗi (`:336`), ≤ 10,47 ms; trang tự có tác vụ layout 60–78 ms không extension.
    - **Đợt 2:** bước đầu chỉ đọc `docs/dev/DOT2-KHAO-SAT-20261028.md` (API ứng viên O1 từ mã web Nextwaves, QR sau HOÀN THÀNH là mã sinh 08–12/10, reader Web Serial). Còn D1 / D4 / B0 — đề xuất lấy một lần sau A1.
    - Phiên 27/10 dưới đây là lịch sử.
