@@ -1,5 +1,5 @@
 ﻿<#
-  Nâng circa-gr-nextwaves v0.2.4 (0BB73E2D) → v0.3.0 (08B31C6E) TRONG CÙNG thư mục Chrome đang tải: giữ Extension ID nên giữ phiên
+  Nâng circa-gr-nextwaves v0.2.4 (0BB73E2D) → v0.3.0 (45E07F60) TRONG CÙNG thư mục Chrome đang tải: giữ Extension ID nên giữ phiên
   và cấu hình (docs/pm/DECISION-ONE-STG-AUTO-FLOW-20261028 G2). Script không đụng Chrome. Chạy xong, operator bấm Reload (↻) trên thẻ
   "Circa GR ← Nextwaves" ở chrome://extensions rồi F5 mọi tab POS / Nextwaves.
 
@@ -22,7 +22,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $NewZip = Join-Path $Release 'v0.3.0\circa-gr-nextwaves-v0.3.0.zip'
 $OldZip = Join-Path $Release 'v0.2.4\circa-gr-nextwaves-v0.2.4.zip'
-$NewSha = '08B31C6E72273653FB21814A3D970E803119FE4698DC16EA40BBBCEE9321D988'
+$NewSha = '45E07F60D9E86896CBC0BD0313C4E06625FDFFC200B63C1DED98582C9C6688FC'
 $OldSha = '0BB73E2D8297840CD1796D5510BB5350302A6212FCF8386B16E9A66188C03D57'
 
 function Fail([string]$msg) { Write-Host "DỪNG: $msg" -ForegroundColor Red; exit 1 }
@@ -86,7 +86,7 @@ try {
   $new = Get-Tree (Join-Path $work 'new')
   $cur = Get-Tree $Target
   if ((Compare-Tree $new $cur).Count -eq 0) {
-    Write-Host "Thư mục $Target đã là v0.3.0 (08B31C6E) từng byte — không chép lại. Thẻ extension chưa hiện 0.3.0 thì bấm Reload." -ForegroundColor Green
+    Write-Host "Thư mục $Target đã là v0.3.0 (45E07F60) từng byte — không chép lại. Thẻ extension chưa hiện 0.3.0 thì bấm Reload." -ForegroundColor Green
     exit 0
   }
   $d = Compare-Tree $old $cur
@@ -111,7 +111,7 @@ try {
   if ($d2.Count -ne 0) { throw ("thư mục không khớp v0.3.0 sau khi chép: " + ($d2 -join '; ')) }
   $copying = $false
   $ver = (Get-Content -LiteralPath (Join-Path $Target 'manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
-  Write-Host "ĐÃ NÂNG: $Target giờ là v$ver (08B31C6E) từng byte, $($new.Count) file." -ForegroundColor Green
+  Write-Host "ĐÃ NÂNG: $Target giờ là v$ver (45E07F60) từng byte, $($new.Count) file." -ForegroundColor Green
   Write-Host "Tiếp theo: chrome://extensions → thẻ 'Circa GR ← Nextwaves' → Reload (↻) → F5 mọi tab POS / Nextwaves."
   exit 0
 } catch {
