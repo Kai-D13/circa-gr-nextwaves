@@ -251,6 +251,9 @@ test("G1 quyền: phiên bị xoá rồi tạo lại (cùng GR) → huỷ phiên
     await receive(ctx);
     await until(() => logTypes(b).includes("auto_skipped"));
     assert.equal(session(b).log.find((l) => l.type === "auto_skipped").reason, "grant_invalid");
+    // Chặn ngay ở điểm kích hoạt (không chờ tab POS hỏi auto:status mới bỏ qua): không giao lượt cho tab nào.
+    assert.ok(!session(b).autoRun, "điểm kích hoạt không giao lượt cho quyền không khớp phiên");
+    assert.ok(!logTypes(b).includes("auto_ready"));
     assert.deepEqual(autoGrants(b), [], "quyền sót bị thu hồi");
     await settle(300);
     assert.equal(srv.st.puts.length, 0);
@@ -579,6 +582,39 @@ test("G1 hook báo COMPLETED sớm (trước GET xác nhận) → không đánh 
   }
 });
 
+test("G1 tab khác GET thấy phiếu COMPLETED trong lúc lệnh tự động chưa trả về → background từ chối done (chỉ tab chủ kết thúc); tab chủ GET xác nhận rồi mới done", async () => {
+  let release;
+  const hold = new Promise((r) => (release = r));
+  const ctx = await setup({ server: { completeHook: () => hold } });
+  const { b, srv } = ctx;
+  const grGets = () => srv.st.log.filter((r) => r.method === "GET" && r.url.endsWith(GR_ID)).length;
+  try {
+    assert.equal((await arm(b)).ok, true);
+    await receive(ctx);
+    await until(() => srv.st.completes.length === 1, 8000);
+    assert.equal(session(b).state, "auto_completing");
+    // Server đã hoàn thành nhưng response chưa về tab chủ. Tab thứ hai mở phiếu: evaluateGr thấy COMPLETED → xin done.
+    srv.st.gr.data.status = "COMPLETED";
+    const n0 = grGets();
+    const pos2 = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    pos2.post(POS_AUTH);
+    await until(() => grGets() > n0, 4000);
+    pos2.post({ mark: "cgn/pos-hook", type: "gr-status", payload: { envId: "STG", grId: GR_ID, status: "COMPLETED", httpStatus: 200 } });
+    await until(() => grGets() > n0 + 1, 4000);
+    await settle(300);
+    assert.equal(session(b).state, "auto_completing", "tab khác không đóng phiên đang tự HOÀN THÀNH");
+    assert.ok(!logTypes(b).some((x) => x === "gr_completed_seen" || x === "gr_completed"));
+    release();
+    await sessionState(b, "done", 6000);
+    assert.equal(session(b).completeResult.source, "auto");
+    assert.ok(logTypes(b).includes("auto_completed"));
+    assert.equal(srv.st.completes.length, 1);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
 test("G1 claimComplete chỉ một lần, đúng tab chủ: gọi lại / tab khác / kế hoạch khác bị từ chối", async () => {
   let release;
   const hold = new Promise((r) => (release = r));
@@ -692,6 +728,7 @@ test("G1 một lần: lượt tự động bị bỏ qua (QR lỗi lúc đầu) 
   const { b, srv, pos } = ctx;
   try {
     assert.equal((await arm(b)).ok, true);
+    const g0 = H.clone(b.store.autoGrants[KEY]);
     await receive(ctx);
     await until(() => session(b).autoRun && session(b).autoRun.skipped);
     assert.equal(session(b).autoRun.skipped.reason, "plan_blocked");
@@ -711,8 +748,10 @@ test("G1 một lần: lượt tự động bị bỏ qua (QR lỗi lúc đầu) 
     pos.post(POS_AUTH);
     await settle(400);
     assert.equal(srv.st.puts.length, 0, "F5 không tự chạy lại");
+    // Lớp thứ hai: quyết định bỏ qua là cuối cùng kể cả khi kho lại có quyền khớp phiên (vd. lỗi ghi / hồi quy ở auto:arm).
+    b.store.autoGrants = { [KEY]: g0 };
     const st = await b.sendFromTab(pos, { type: "auto:status", key: KEY });
-    assert.equal(st.data.eligible, false);
+    assert.deepEqual([st.data.eligible, st.data.reason], [false, "skipped"]);
     const c = await b.sendFromTab(pos, { type: "session:claimApply", key: KEY, token: "t", grCode: "GR03887", planHash: "EF0E020C", auto: true, uids: A1.nwResult.units.map((u) => u.uid) });
     assert.equal(c.data.reason, "auto_tab");
   } finally {
