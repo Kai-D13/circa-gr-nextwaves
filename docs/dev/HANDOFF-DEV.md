@@ -151,8 +151,9 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 
 0. **Hiện hành (29/10):** chỉ còn operator + một phiên Claude Code giữ quyền ghi (`agent.md` §2 / §2.1); không còn PM Codex. **v0.3.0 G1 đạt** — `docs/dev/BATCH-v0.3.0.md`.
    - Gói `45E07F60` (src `4b79c58`): npm 222/222, đột biến 205/205 (lượt đủ 202/205 + 3 test bổ sung `0ebfa81`), Edge 108/108 ×3, edge-check 42/42; audit độc lập 0 P1 / 5 P2 / 3 P3 đã sửa (`AUDIT-v0.3.0.md`).
-   - Thư mục giao đã có v0.3.0; `-Check` trên thư mục đang tải thật ĐẠT (v0.2.4 từng byte).
-   - **Chờ operator:** G2 (cho phép cài, kiểm chỉ đọc, chọn một phiếu chưa nhận) → G3 (cho phép bằng chữ một lượt nhận + tự điền + tự HOÀN THÀNH trên đúng một phiếu). Runbook `docs/dev/RUNBOOK-G2-G3-v0.3.0.md`.
+   - **G2 đạt 29/10:** v0.3.0 đã cài staging, cùng thư mục / ID `C:\circa-gr-nextwaves-v0.2.3`.
+   - **G3 lượt 1 (GR03886):** không phải lượt tự động. Operator bấm nhầm cấp phép thủ công; phiếu đóng bằng luồng thủ công. `docs/dev/KET-QUA-G2-G3-v0.3.0.md` có finding G3-1..4 cho bản sau.
+   - **Chờ operator:** GR / PO / SO mới + tem mới → G3 lượt 2 trên chính v0.3.0, runbook đã sửa (`docs/dev/RUNBOOK-G2-G3-v0.3.0.md`).
    - Staging done + merge `batch/v0.2-rfid` → `main` chỉ khi G1–G3 đạt trên chính gói này. Production chỉ đọc; còn O1, QR lô, reader Florita, T1-PRD, W1-PRD.
    - Thư mục thử cũ `C:\circa-gr-nextwaves-v0.3.0` (gói trung gian `08B31C6E`) không dùng; operator tự xoá được.
 0b. **(lịch sử) 28/10 chiều:** PM đạt gate chuẩn bị A1 (`docs/pm/AUDIT-A1-PREP-v0.2.4-20261028.md`): operator được nâng v0.2.3 → v0.2.4 cùng thư mục / Extension ID và kiểm staging **chỉ đọc** (runbook §0b–§0d). Chưa phép nhận / ghi.

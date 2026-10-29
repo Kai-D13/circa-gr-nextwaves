@@ -1,5 +1,7 @@
 # Runbook G2 + G3 — v0.3.0 tự điền + tự HOÀN THÀNH (29/10/2026)
 
+> Sửa 29/10 tối sau G3 lượt 1 (`docs/dev/KET-QUA-G2-G3-v0.3.0.md`). G3 bước 2: chỉ đúng nút tự động trong "Phiên gần đây", không dùng ô cấp phép thủ công. Bước 3: khung Nextwaves phải ghi "ĐÃ CHO PHÉP" trước khi quét. Bước 5: khung thủ công trên POS = dừng. POS gọi phiếu COMPLETED là "Đã nhận".
+
 **Căn cứ:**
 - `docs/pm/DECISION-ONE-STG-AUTO-FLOW-20261028.md` §3 (G2, G3);
 - `agent.md` §2 (từ 29/10: operator + một phiên Claude giữ quyền ghi).
@@ -33,12 +35,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\circa-gr-nextwaves-releas
 
 4. Bấm **Reload (↻)** trên thẻ, rồi F5 mọi tab POS / Nextwaves.
 5. Service worker → Console → dán lệnh ở runbook A1 §0c. Kỳ vọng:
-   - `v` 0.3.0, cùng `id`, `mode` STG, `grants` 0;
+   - `v` 0.3.0, cùng `id`, `mode` STG, `grants` 0 (hoặc chỉ cấp phép đã hết hạn — vẫn nằm trong storage, extension bỏ qua);
    - `lastUpgrade` 0.2.4 → 0.3.0, `removedSessions` [].
 6. **Phiếu GR03887 (đã hoàn thành):**
    - mở, chờ ≥ 15 giây;
    - F12 → Console → dán `C:\circa-gr-nextwaves-release\kiem-khung-gr.js`;
-   - kỳ vọng `"khung": 0` (không còn khung đỏ của A1).
+   - kỳ vọng `"khung": 0` (không còn khung đỏ của A1), `"trangThai": "Đã nhận"`.
 7. **Chọn một phiếu chưa nhận** (ứng viên: GR03879 — phải đọc lại):
    - Trên danh sách GR, bấm **"Nhận hàng bằng RFID"** đúng dòng đó. Bước này chỉ đọc POS / Nextwaves và tạo phiên trên máy, không ghi.
    - Tab Nextwaves hiện **"Sẵn sàng nhận hàng"** với:
@@ -55,12 +57,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\circa-gr-nextwaves-releas
    - POS: F5;
    - Nextwaves: bấm "Đọc lại kết quả nhận".
 2. **Cho phép tự động:**
-   - Popup → ở đúng phiên (trạng thái "Đã khớp đơn Nextwaves") bấm **"Cho phép tự điền và HOÀN THÀNH 1 lần"**.
+   - Mở popup, **kéo xuống mục "Phiên gần đây"**, tìm dòng `STG · GR…` của đúng phiếu (trạng thái "Đã khớp đơn Nextwaves"). Trong dòng đó bấm nút **"Cho phép tự điền và HOÀN THÀNH 1 lần"**.
+   - **KHÔNG** dùng ô "Cho phép điền phiếu (từng lần)" / nút "Cho phép điền 1 lần" ở đầu popup. Đó là cấp phép **thủ công** (bài học G3 lượt 1, `docs/dev/KET-QUA-G2-G3-v0.3.0.md`).
    - Đọc khung xác nhận: môi trường Staging, cửa hàng 2222, đúng GR / SO / PO Nextwaves / số tem.
    - Đúng thì bấm **"Xác nhận cho phép"**.
-   - Kỳ vọng: popup "Tự động: ĐÃ CHO PHÉP 1 lần · hết hạn HH:MM"; khung Nextwaves "Tự động: ĐÃ CHO PHÉP".
+   - Kỳ vọng: dòng phiên trong popup ghi "Tự động: ĐÃ CHO PHÉP 1 lần · hết hạn HH:MM".
    - Quyền hết hạn sau **30 phút**.
 3. **Nhận (dược sĩ, trong 30 phút):**
+   - **Trước khi đặt tem:** khung extension trên tab Nextwaves phải ghi **"Tự động: ĐÃ CHO PHÉP 1 lần (hết hạn …)"**. Nếu ghi "Tự động: chưa cho phép" thì **DỪNG**, không quét, quay lại bước 2. Khung chưa cập nhật thì F5 tab Nextwaves.
    - đặt đủ tem;
    - chỉ khi màn quét báo **còn lại 0, ngoài phiếu 0**, mọi dòng đủ → bấm **"Xác nhận nhận hàng" đúng một lần**.
 4. **Không chạm POS:** không bấm Điền, không bấm HOÀN THÀNH, không Xoá / Huỷ phiên, không F5. Tab POS tự về phiếu và hiện lần lượt:
@@ -69,9 +73,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File C:\circa-gr-nextwaves-releas
    3. "Đang tự HOÀN THÀNH";
    4. "đã tự HOÀN THÀNH — đang tải lại phiếu".
 
-   Sau đó phiếu Hoàn thành, không còn khung extension.
+   Sau đó phiếu ở trạng thái **"Đã nhận"** (POS gọi phiếu COMPLETED là "Đã nhận"), không còn khung extension.
 5. **Dừng ngay** nếu thấy một trong các khung:
    - "Tự động KHÔNG chạy";
+   - khung luồng thủ công thay vì "Đang TỰ điền": "Chỉ xem kế hoạch — chưa có cấp phép điền" hoặc "Đã có cấp phép điền …". v0.3.0 không in lý do trên POS khi quyền bị bỏ qua lúc nhận (finding G3-2), xem popup / khung Nextwaves "Tự động đã dừng";
    - "đọc lại chưa khớp hoàn toàn";
    - "chưa rõ POS đã HOÀN THÀNH chưa";
    - "Không điền được".

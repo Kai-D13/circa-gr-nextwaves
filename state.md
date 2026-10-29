@@ -1,10 +1,10 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **29/10/2026 (lần 56, chuyển quyền ghi sang phiên `qr-code-6a`; G1 v0.3.0 đạt)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). v0.3.0 tự điền + tự HOÀN THÀNH một lần: **G1 đạt** (`docs/dev/BATCH-v0.3.0.md`), gói `45E07F60`, đã chép vào thư mục giao, **chưa cài**. Chờ operator cho phép G2 (cài gói cuối, kiểm chỉ đọc, chọn một phiếu chưa nhận) rồi G3 (một E2E staging thật, cho phép bằng chữ đúng mã phiếu) — `docs/dev/RUNBOOK-G2-G3-v0.3.0.md`. Production chỉ đọc.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **29/10/2026 (lần 57, quyền ghi về phiên "QR code scan log project (fork)"; G2 v0.3.0 đạt; G3 lượt 1 không phải lượt tự động)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). v0.3.0 tự điền + tự HOÀN THÀNH một lần: G1 đạt (`docs/dev/BATCH-v0.3.0.md`), gói `45E07F60` **đã cài staging** (G2 đạt). G3 lượt 1 trên GR03886: operator bấm nhầm cấp phép thủ công → không có quyền tự động, phiếu đóng bằng luồng thủ công, POS khớp Nextwaves. **G3 chưa đạt**: cần GR / PO / SO mới + tem mới, thử lại trên chính v0.3.0 theo runbook đã sửa — `docs/dev/KET-QUA-G2-G3-v0.3.0.md`, `docs/dev/RUNBOOK-G2-G3-v0.3.0.md`. Production chỉ đọc.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
-**Phiên giữ quyền ghi (`agent.md` §2.1):** Claude Code — phiên **`qr-code-6a`** (session `77fef381…`), operator chỉ định 29/10 trong chính phiên này, tiếp nối phiên "QR code scan log project (fork)" (session `bf911b64…`, giữ quyền từ đêm 28/10 đến khi G1 v0.3.0 đạt; transcript quá lớn nên operator mở phiên mới để tiếp). Phiên "QR code scan log project (fork)" mở lại sau đó (resume) và mọi phiên khác (gốc, `qr-code-b2`, fork mới, Codex) **chỉ đọc**. Worktree mã: `C:\QR_code\circa-gr-nextwaves-dev` (chuyển từ thư mục tạm của phiên sau khi đột biến v0.3.0 chạy xong).
+**Phiên giữ quyền ghi (`agent.md` §2.1):** Claude Code — phiên **"QR code scan log project (fork)"** (session `bf911b64…`). Operator chỉ định lại 29/10 tối trong chính phiên này (chọn "Phiên này giữ quyền ghi"), sau G2 / G3 lượt 1. Lịch sử: phiên này giữ quyền từ đêm 28/10 đến khi G1 v0.3.0 đạt; lần 56 (10:26) chuyển sang `qr-code-6a` (session `77fef381…`, không ghi gì thêm sau `34092a8`); lần 57 về lại đây. `qr-code-6a` và mọi phiên khác (gốc, `qr-code-b2`, fork mới, Codex) **chỉ đọc**. Worktree mã: `C:\QR_code\circa-gr-nextwaves-dev` (chuyển từ thư mục tạm của phiên sau khi đột biến v0.3.0 chạy xong).
 
 - Đã hiểu luồng nhận hàng trên POS hiện tại (capture production 19/10, §1).
 - Đã kiểm chuỗi khoá ba bên trên SO 38468903 (§2). Mã SO là khoá chung **ở production**. GR không có SO, nhưng PO của GR có SO.
@@ -579,6 +579,8 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
 
 - 29/10/2026 (lần 56): operator chuyển quyền ghi sang phiên `qr-code-6a` (session `77fef381…`), trả lời trong chính phiên đó, tiếp nối phiên "QR code scan log project (fork)" `bf911b64…` (transcript 98 MB). Lúc nhận: `main` = `origin/main` `8dda804`, worktree `batch/v0.2-rfid` `0ebfa81` sạch, gói v0.3.0 `45E07F60` chưa cài. Phiên "QR code scan log project (fork)" mở lại (resume) chỉ đọc.
 
+- 29/10/2026 (lần 57): operator chuyển quyền ghi về phiên "QR code scan log project (fork)" `bf911b64…`, trả lời trong chính phiên đó. Lúc nhận: `main` = `origin/main` `34092a8`, worktree `batch/v0.2-rfid` `0ebfa81`, cả hai sạch; `qr-code-6a` không ghi gì sau `34092a8`. Cùng lần: G2 đạt, G3 lượt 1 không phải lượt tự động (§9 mục 57).
+
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
 2. Operator mở session PM Codex bằng `docs/PROMPT-PM-CODEX.md`. PM chốt hướng §3 / §6 và ra spec v0.1 staging chia batch.
@@ -591,7 +593,13 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-55. **Hiện hành (G1 v0.3.0 đạt, 29/10):**
+57. **Hiện hành (G2 đạt, G3 lượt 1 không tự động, 29/10 tối):** `docs/dev/KET-QUA-G2-G3-v0.3.0.md`.
+    - **G2 đạt** (14:03–14:10): v0.3.0 `45E07F60` cài cùng thư mục / ID, `lastUpgrade` 0.2.4 → 0.3.0, `removedSessions` []. GR03887 `khung` 0. Phiếu chọn **GR03886** / SO `SOBD1594096-F` / PO Nextwaves `PO76149046`, 11 tem (1110: 3 + 3 vỉ; 2431732: 1 chai; 5451: 4 vỉ), `khung` 1 trong luồng.
+    - **G3 lượt 1:** operator bấm "Cho phép điền 1 lần" (cấp phép thủ công, 16:51:29) thay cho nút tự động trong "Phiên gần đây". Không có `auto_armed`, nên lượt nhận 16:53:12 (sạch: 11/11 EPC, 1 biên nhận mới) đi luồng thủ công đúng thiết kế. Net Capture POS: 0 PUT tới 17:07:26. Operator điền thủ công + dược sĩ HOÀN THÀNH; `kiem-khung` "Đã nhận", `khung` 0 → POS khớp Nextwaves.
+    - **G3 chưa đạt.** Lượt tự động chưa được thử; không thấy lỗi ở luồng tự động. Runbook G3 đã sửa: đúng nút, khung Nextwaves "ĐÃ CHO PHÉP" trước khi quét, khung thủ công trên POS = dừng.
+    - Finding cho bản sau: G3-1 P2 nút tự động trong popup dễ nhầm; G3-2 P2 POS không in lý do khi `received()` bỏ qua quyền; G3-3 P3; G3-4 P3. Không chặn G3 lượt 2 trên v0.3.0.
+    - **Chờ operator:** GR / PO / SO staging mới + bộ tem mới, rồi cho phép bằng chữ G3 lượt 2 (đúng GR / PO / SO / số tem). Staging done + merge chỉ khi G1–G3 đạt trên chính gói này.
+55. (cũ, thay bằng mục 57) **G1 v0.3.0 đạt, 29/10:**
     - Gói `45E07F60…` (src `4b79c58`, đóng từ `b37c509`; đầu nhánh `batch/v0.2-rfid` `0ebfa81` chỉ thêm test). Báo cáo `docs/dev/BATCH-v0.3.0.md`.
     - Kiểm: `npm test` 222/222; đột biến lượt đủ 202/205 → 3 ca sống là lớp chặn thứ hai trong background, thêm test, chạy lại 3/3 → 205/205; Edge trang phiếu 108/108 ×3 (đối chứng v0.2.5 104/108), edge-check 42/42; tác vụ extension dài nhất 11,40 ms, 0 tác vụ ≥ 50 ms; P2.5 đã sửa (bỏ qua → thu hồi quyền, popup / Nextwaves báo "Tự động đã dừng").
     - Audit độc lập bằng sub-agent: 0 P1, 5 P2, 3 P3 — đã sửa, test mới trượt 8 trên src trước sửa (`docs/dev/AUDIT-v0.3.0.md`).
