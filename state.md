@@ -1,10 +1,10 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **29/10/2026 (lần 55, G1 v0.3.0 đạt)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). v0.3.0 tự điền + tự HOÀN THÀNH một lần: **G1 đạt** (`docs/dev/BATCH-v0.3.0.md`), gói `45E07F60`, đã chép vào thư mục giao, **chưa cài**. Chờ operator cho phép G2 (cài gói cuối, kiểm chỉ đọc, chọn một phiếu chưa nhận) rồi G3 (một E2E staging thật, cho phép bằng chữ đúng mã phiếu) — `docs/dev/RUNBOOK-G2-G3-v0.3.0.md`. Production chỉ đọc.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **29/10/2026 (lần 56, chuyển quyền ghi sang phiên `qr-code-6a`; G1 v0.3.0 đạt)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). v0.3.0 tự điền + tự HOÀN THÀNH một lần: **G1 đạt** (`docs/dev/BATCH-v0.3.0.md`), gói `45E07F60`, đã chép vào thư mục giao, **chưa cài**. Chờ operator cho phép G2 (cài gói cuối, kiểm chỉ đọc, chọn một phiếu chưa nhận) rồi G3 (một E2E staging thật, cho phép bằng chữ đúng mã phiếu) — `docs/dev/RUNBOOK-G2-G3-v0.3.0.md`. Production chỉ đọc.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
-**Phiên giữ quyền ghi (`agent.md` §2.1):** Claude Code — phiên "QR code scan log project (fork)" do operator chỉ định 29/10 (chat: "bạn sẽ đảm nhận cả PM, senior Software Engineer, QC, tester, audit, review"). Mọi phiên khác (gốc, resume như `qr-code-b2`, fork mới, Codex) **chỉ đọc**. Worktree mã: `C:\QR_code\circa-gr-nextwaves-dev` (chuyển từ thư mục tạm của phiên sau khi đột biến v0.3.0 chạy xong).
+**Phiên giữ quyền ghi (`agent.md` §2.1):** Claude Code — phiên **`qr-code-6a`** (session `77fef381…`), operator chỉ định 29/10 trong chính phiên này, tiếp nối phiên "QR code scan log project (fork)" (session `bf911b64…`, giữ quyền từ đêm 28/10 đến khi G1 v0.3.0 đạt; transcript quá lớn nên operator mở phiên mới để tiếp). Phiên "QR code scan log project (fork)" mở lại sau đó (resume) và mọi phiên khác (gốc, `qr-code-b2`, fork mới, Codex) **chỉ đọc**. Worktree mã: `C:\QR_code\circa-gr-nextwaves-dev` (chuyển từ thư mục tạm của phiên sau khi đột biến v0.3.0 chạy xong).
 
 - Đã hiểu luồng nhận hàng trên POS hiện tại (capture production 19/10, §1).
 - Đã kiểm chuỗi khoá ba bên trên SO 38468903 (§2). Mã SO là khoá chung **ở production**. GR không có SO, nhưng PO của GR có SO.
@@ -576,6 +576,8 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
 - 25/10/2026 (lần 18–19):
   - PM audit sửa T1: chỉ v0.1.5 cho T1.
   - T1 lần 2 trên phiên thật đạt theo dev. Hai response tìm kiếm thật khớp mẫu đã dùng để code; giữ làm mẫu + test hồi quy.
+
+- 29/10/2026 (lần 56): operator chuyển quyền ghi sang phiên `qr-code-6a` (session `77fef381…`), trả lời trong chính phiên đó, tiếp nối phiên "QR code scan log project (fork)" `bf911b64…` (transcript 98 MB). Lúc nhận: `main` = `origin/main` `8dda804`, worktree `batch/v0.2-rfid` `0ebfa81` sạch, gói v0.3.0 `45E07F60` chưa cài. Phiên "QR code scan log project (fork)" mở lại (resume) chỉ đọc.
 
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
