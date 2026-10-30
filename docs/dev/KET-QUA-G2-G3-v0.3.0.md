@@ -1,4 +1,6 @@
-# Kết quả G2 + G3 — v0.3.0 tự điền + tự HOÀN THÀNH (29/10/2026)
+# Kết quả G2 + G3 — v0.3.0 tự điền + tự HOÀN THÀNH (29–30/10/2026)
+
+> **Kết luận (30/10): G2 ĐẠT, G3 ĐẠT ở lượt 2 trên GR03929.** Cùng G1 (29/10), cả ba gate đạt trên chính gói `45E07F60` → **staging done** cho v0.3.0. Merge `batch/v0.2-rfid` → `main` chờ operator đồng ý.
 
 **Gói:** v0.3.0, mã gói `45E07F60` (`docs/dev/BATCH-v0.3.0.md`). Runbook: `docs/dev/RUNBOOK-G2-G3-v0.3.0.md`.
 **Người chạy:** operator trên Chrome staging thật. Claude đánh giá từ số liệu operator gửi (đoạn kiểm chỉ đọc, file xuất storage, Net Capture tab POS); không mở `tokens.json` / `cookies.json` / `storage.json` / header HAR.
@@ -82,7 +84,70 @@ Thêm cho lượt cuối: một đoạn kiểm chỉ đọc chạy trong service
 
 **Operator cho phép (nguyên văn, 30/10):** "Cho phép G3: một lượt nhận + tự điền + tự HOÀN THÀNH trên GR03929 (PO00006813) / PO19854897 / SOBD1594182-F, 10 tem, đủ 10 tem vật lý."
 
-## Finding cho bản sau (không chặn G3 lượt 2 trên v0.3.0)
+**Bước B — ĐẠT.** Toàn bộ lượt tự động chạy hết khoảng 5 giây, từ lúc dược sĩ xác nhận nhận hàng (13:04:09) đến GET thấy COMPLETED (13:04:14).
+
+*Cho phép tự động và chốt chặn:*
+- Lúc 12:56:50 operator bấm đúng nút tự động trong "Phiên gần đây"; khung xác nhận đúng Staging / 2222 / GR03929 / SO / PO / 10 tem.
+- Phiên GR03929 sau đó **được tạo lại lúc 13:02:11**. Nhật ký phiên mới bắt đầu bằng `start` và không có `replaced_outdated`. Theo `startSession`, điều này nghĩa là phiên cũ đã bị Xoá / Huỷ rồi mở lại bằng "Nhận hàng bằng RFID".
+- Quyền tự động 12:56:50 bị bỏ cùng phiên cũ, **đúng thiết kế**: `session:cancel` / `startSession` gọi `dropAutoGrant` (audit F3).
+- Operator cho phép lại lúc **13:02:35** (`auto_armed` 10), hết hạn khoảng 13:32:35.
+- Đoạn chốt chặn chạy **sau** lần cho phép lại và in "SẴN SÀNG QUÉT: GR03929 · PO19854897 · 10 tem · quyền còn 29 phút". Đoạn này kiểm khớp `sessionCreatedAt` của phiên mới.
+- Trong chat, Claude ghi nhầm hạn quyền là 13:26:50 (hạn của quyền đã bị bỏ). Không ảnh hưởng lượt chạy.
+
+*Nhật ký phiên GR03929* (đoạn kiểm chỉ đọc trong service worker, operator dán sau lượt):
+
+```
+13:02:11 start · 13:02:13 nw_matched · 13:02:35 auto_armed 10
+13:04:09 receive_scan 200 · scan_ok 200 · nw_received 10 · auto_ready 10
+13:04:10 plan · auto_claimed
+13:04:11–13 apply_sending / apply_done ×4 · applied
+13:04:13 auto_complete_claimed · 13:04:14 auto_complete_sent 200 · auto_completed 200
+```
+
+| Trường | Giá trị |
+|---|---|
+| `state` | `done` |
+| `scanOkAt` / `autoRun.at` | 13:04:09 / 13:04:09, `skipped` null |
+| `authorization` | `auto` true, kế hoạch `#4DF9D34A`, cấp 13:02:35, dùng 13:04:10 |
+| `completeResult` | `source` "auto", 13:04:14 |
+| Nextwaves | 10 unit có EPC, **1** biên nhận (trước lượt: 0) |
+| Quyền còn lại | `autoGrants` còn hạn 0, `grants` còn hạn 0 → quyền đã tiêu |
+
+*Net Capture tab POS* (13:02:16 → 13:04:28). File `net-capture-2026-10-30T06-04-38.zip`, SHA-256 `00a22832b1ad231bcff91db2f3a30608a4e31f8effe1bc1ee39942293c8ffed4`. Chỉ đọc url / method / status / giờ / body.
+
+| Giờ | Việc |
+|---|---|
+| 13:02:16–28 | F5 danh sách GR, mở GR03929: `WAITING_TO_RECEIVE`, 4 detail (2 lô mỗi sản phẩm), đã nhận 0 |
+| 13:04:09–10 | GET phiếu → 10 GET `thuocsi-warehouse/qrcode` (10/10 OK) → GET PO (kiểm liên kết) → GET phiếu → kế hoạch `#4DF9D34A` |
+| 13:04:11–13 | **4 PUT detail, 4 × 200**. Mỗi PUT có GET kiểm lại. 5451 lô 261009KSDHAU: 4 vỉ → 1 hộp, 4 QR; 5451 lô 20261026FIDBU: 4 vỉ → 1 hộp, 4 QR; 2431732 lô 261016KHASUFDB: 1 chai, 1 QR; 2431732 lô 20261026FNDSUKBD: 1 chai, 1 QR |
+| 13:04:13 | `verifyFinal`: GET toàn phiếu → `RECEIVING`, đủ 4 / 4 detail đúng kế hoạch |
+| 13:04:13 | **Đúng 1 PUT `status/COMPLETED`**, 200, trả `COMPLETED` |
+| 13:04:14–17 | GET → `COMPLETED`; trang tự tải lại; POS sinh phiếu PUT |
+
+- Không có lệnh ghi nào khác của extension. 0 ghi vào phiếu khác.
+- Các POST 400 là khung chat của trang POS (`tsapi/integration/chat/*`). POST `product/search` là trang tự gọi.
+- Sau COMPLETED, số QR trên detail tăng (4 → 9, 1 → 3). POS tự thêm, giống GR03880, không phải extension.
+
+*Đối chiếu kỳ vọng G3 (runbook):*
+
+| Kỳ vọng | Kết quả |
+|---|---|
+| Đúng 1 `receive-scan` 2xx + 1 biên nhận mới | ĐẠT: 1 `receive_scan 200`, biên nhận 0 → 1 |
+| Đủ UID, kế hoạch không chặn | ĐẠT: 10 / 10 EPC có UID, `auto_ready 10`, `autoPlanCheck` qua |
+| Số PUT detail = số lô, mỗi PUT có GET kiểm | ĐẠT: 4 lô, 4 PUT 200, 4 GET kiểm |
+| GET đọc lại toàn phiếu khớp | ĐẠT: `RECEIVING`, 4 / 4 |
+| 1 PUT `status/COMPLETED`, GET cuối COMPLETED | ĐẠT |
+| Quyền đã tiêu, đủ mốc `auto_*`, 0 ghi phiếu khác | ĐẠT |
+
+Capture không có tab Nextwaves. Phía Nextwaves được chốt bằng nhật ký phiên (`receive_scan 200`, `scan_ok 200`) và `nwResult` (10 unit, 1 biên nhận), giống cách A1 đã được chấp nhận.
+
+**Kết luận G3: ĐẠT** trên gói `45E07F60`.
+- Lượt tự động chạy đúng một lần, từ đầu tới cuối, không người chạm POS.
+- G1 + G2 + G3 đạt trên cùng gói → **staging done v0.3.0**.
+- Merge `batch/v0.2-rfid` → `main` khi operator đồng ý.
+- Production vẫn chỉ đọc tới gate PRD.
+
+## Finding cho bản sau (không chặn kết luận G3)
 
 | # | Mức | Finding | Hướng sửa |
 |---|---|---|---|
@@ -90,3 +155,4 @@ Thêm cho lượt cuối: một đoạn kiểm chỉ đọc chạy trong service
 | G3-2 | P2 | POS không in lý do khi `received()` bỏ qua quyền (`grant_invalid` / `epc_set` / `receipts` / `armed_after_scan` / `grant_expired`). `autoRun` không được đặt nên `planAndOffer` không có dòng "Tự động KHÔNG chạy". Chỉ popup / khung Nextwaves báo "Tự động đã dừng", trong khi runbook bảo operator theo dõi dòng đó trên POS | Khung POS đọc `auto_skipped` cuối trong nhật ký phiên (sau `nw_received`) và in "Tự động KHÔNG chạy: <lý do>" |
 | G3-3 | P3 | Khung POS luồng thủ công không nói phiếu không có quyền tự động | Khi phiên `received` không có `autoRun` và không có `auto_skipped`: thêm dòng "Tự động: chưa cho phép ở lượt nhận này" |
 | G3-4 | P3 | Runbook / hướng dẫn: kỳ vọng `kiem-khung-gr.js` sau HOÀN THÀNH ghi "Hoàn thành". POS thực tế ghi "Đã nhận". G2 bước 5 kỳ vọng `grants` 0, nhưng cấp phép hết hạn cũ vẫn nằm trong storage | Đã sửa runbook (29/10). `kiem-khung-gr.js`: ghi chú phiếu COMPLETED hiện "Đã nhận" ở bản sau |
+| G3-5 | P3 | Lượt 2: phiên bị Xoá / Huỷ rồi mở lại sau khi đã cho phép tự động. Quyền bị bỏ đúng thiết kế, operator cho phép lại, chốt chặn bắt được. Nhưng runbook chỉ cấm Xoá / Huỷ "trong lượt", không nói phải làm gì nếu đã lỡ tạo lại phiên trước khi quét | Runbook PRD: tạo lại phiên ⇒ quyền cũ mất ⇒ cho phép lại + chạy lại chốt chặn. Đưa 3 đoạn kiểm chỉ đọc (trước / chốt chặn / sau) vào `scripts/` cho pilot PRD |
