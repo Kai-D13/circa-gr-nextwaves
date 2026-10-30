@@ -1,9 +1,13 @@
 /*
- * Trang POS (ISOLATED world). Hai đường vào:
- *   (1) /danh-sach-phieu-nhan-hang/<grId>
- *   (2) "Nhập SO thuocsi" → /chi-tiet-so/<SO>
- * GR → PO POS → thuocsi_delivery_code → SO gốc → background mở màn quét Nextwaves (/vi/purchases/receive?po=<SO>).
- * Khi phiên sang "received" (tab Nextwaves đã đọc xong kết quả nhận): tra QR từng UID trên POS → kế hoạch → bảng kế hoạch.
+ * Trang POS (ISOLATED world) — bộ điều khiển duy nhất. Ba lối vào (v0.2, PM duyệt hướng 26/10):
+ *   (1) danh sách phiếu nhận /danh-sach-phieu-nhan-hang — nút "Nhận hàng bằng RFID" trên từng dòng (DOM do pos/gr-list.js lo);
+ *   (2) trang phiếu /danh-sach-phieu-nhan-hang/<grId>;
+ *   (3) "Nhập SO thuocsi" → /chi-tiet-so/<SO>.
+ * CHỈ TẠO PHIÊN KHI DƯỢC SĨ BẤM (bỏ tự chạy khi mở phiếu). Phiên đã có thì mở phiếu vẫn tự đọc trạng thái và đi tiếp.
+ * Bấm → đọc lại GR + PO, kiểm trạng thái / cửa hàng / mã giao SO / duy nhất SO–GR → background mở màn quét Nextwaves
+ * (/vi/purchases/receive?po=<SO>). Dữ liệu dòng danh sách chỉ dùng để hiện nút, không bao giờ ghi thẳng vào phiên (Spec v0.2 S1).
+ * Cú bấm gắn với dòng + lượt danh sách + bộ lọc + route: kiểm lại sau mỗi `await` và ngay trước `session:start`, sai thì huỷ (R2).
+ * Khi phiên sang "received" (tab Nextwaves đã đọc xong kết quả nhận): tab POS về trang phiếu (background), tra QR từng UID → kế hoạch.
  * Ghi W1 chỉ khi operator đã cấp phép một lần cho đúng phiếu này (popup) VÀ bấm nút mang mã kế hoạch (PM audit 24/10 P1.3).
  * Dược sĩ tự bấm HOÀN THÀNH; extension chỉ nghe lời gọi đổi trạng thái để đóng phiên.
  * Header xác thực chỉ lấy từ hook (chính app POS gửi), giữ trong bộ nhớ tab, không ghi ra storage.
@@ -19,12 +23,21 @@
   const P = C.pos;
   const PL = C.plan;
   const A = C.apply;
-  const T = Object.assign({ pollMs: 700, qrConcurrency: 4, reloadDelayMs: 800, httpTimeoutMs: 30000, leaseRenewMs: 15000, restartGuardMs: 10000 }, C.tuning || {});
+  const L = C.grList;
+  const T = Object.assign({ pollMs: 3000, qrConcurrency: 4, reloadDelayMs: 800, httpTimeoutMs: 30000, leaseRenewMs: 15000, qrTtlMs: 10 * 60 * 1000, listSessionsDebounceMs: 300, autoAnchorWaitMs: 8000, autoCompleteGraceMs: 2 * 60 * 1000 }, C.tuning || {});
   const HOOK = "cgn/pos-hook";
   const ME = "cgn/pos-content";
-  const panel = C.ui.createPanel("GR ← Nextwaves");
+  // Khung nổi: trang /chi-tiet-so và báo lỗi giao diện khi trang phiếu không có chỗ gắn khung. Không che nút thao tác của phiếu
+  // (operator 26/10: che HOÀN THÀNH).
+  const floatPanel = C.ui.createPanel("GR ← Nextwaves", { avoidButtons: /^(hoàn thành|hủy|huỷ|hủy phiếu|huỷ phiếu)$/iu });
+  // v0.2.4 (PM P2): trên trang phiếu, khung nằm TRONG LUỒNG trang ngay trước "Danh sách sản phẩm nhập kho" (#all-receipt) của đúng
+  // phiếu đang xem — không nổi, không che cột "SL nhận" / HỦY / HOÀN THÀNH. Không có chỗ gắn → báo lỗi giao diện, W1 đóng.
+  const grPanel = C.ui.createInlinePanel("GR ← Nextwaves", { find: grAnchor, onMissing: onGrUiMissing, onFound: onGrUiFound });
   const tabToken = Math.random().toString(36).slice(2) + Date.now().toString(36);
   const lower = (s) => String(s || "").toLowerCase();
+  const ACTIVE = new Set(["waiting_nw", "nw_ready", "received", "applying", "applied", "apply_stopped", "auto_completing", "auto_complete_unknown"]);
+  const START_LABEL = "Nhận hàng bằng RFID";
+  const LIST_CHANGED = "Danh sách đã đổi — bấm lại";
 
   const LINK_MSG = {
     gr_unreadable: "Không đọc được phiếu nhận",
@@ -60,6 +73,14 @@
     cooldown: "Lần ghi trước có kết quả chưa rõ — chờ thêm rồi thử lại",
     session_outdated: "Phiên tạo bởi bản extension cũ — mở lại phiếu để tạo phiên mới",
     gr_mismatch: "Cấp phép không đúng phiếu",
+    // v0.3.0 — chế độ tự động
+    auto_state: "Phiên không còn ở bước chờ tự điền (đã giành / đã dừng) — không tự chạy lại",
+    auto_tab: "Tự động chỉ chạy ở tab POS extension đưa về sau khi nhận hàng",
+    auto_grant: "Quyền tự động không còn hiệu lực (hết hạn / đổi phiên / đổi đơn)",
+    auto_uids: "Kế hoạch không phủ đúng toàn bộ UID Nextwaves",
+    not_auto: "Lượt điền này không phải của chế độ tự động",
+    token: "Tab này không phải tab đã tự điền",
+    already_claimed: "Lệnh HOÀN THÀNH tự động đã được gửi / giữ chỗ trước đó",
   };
   const SO_CHECK_MSG = {
     search_unreadable: "Kết quả tìm phiếu nhận theo SO không đúng dạng (thiếu goods_receipts / total / page / limit)",
@@ -76,18 +97,39 @@
     applied: "Đã điền phiếu — chờ HOÀN THÀNH",
     apply_stopped: "Điền phiếu bị dừng",
     done: "Đã HOÀN THÀNH",
+    auto_completing: "Đang tự HOÀN THÀNH (đã giữ lượt gửi)",
+    auto_complete_unknown: "Chưa rõ đã HOÀN THÀNH chưa",
   };
 
   let config = null;
-  const authByEnv = {}; // envId → header (chỉ trong bộ nhớ tab)
+  // envId → {headers, confirmed}. `confirmed` = bộ header có x-store-id (Spec v0.2 S3). Chỉ trong bộ nhớ tab.
+  const authByEnv = {};
   let lastHref = "";
   let running = false;
   let again = false;
   let applying = false;
   let reloading = false;
-  let watched = { key: null, state: null }; // phiên của trang đang mở — đổi trạng thái thì đánh giá lại
-  let chosenGrId = null; // đường (2): GR dược sĩ chọn khi SO có nhiều GR
-  let lastStart = { grId: null, at: 0 }; // lần tạo phiên gần nhất trong tab (chống vòng lặp tạo phiên)
+  // Phiên của trang đang mở: đổi trạng thái / dữ liệu nhận / cấp phép của đúng phiếu này thì đánh giá lại (S6).
+  let watched = { key: null, sig: null, envId: null, grCode: null };
+  let chosenGrId = null; // đường (3): GR dược sĩ chọn khi SO có nhiều GR
+  let click = null; // cú bấm đang chuẩn bị phiên (một lúc chỉ một)
+  let clickSeq = 0;
+
+  // ---- trạng thái trang danh sách ----
+  const list = { envId: null, latestReqSeq: 0, shownSeq: 0, shownQueryKey: null, ok: false, rows: new Map() };
+  let onList = false;
+  let listCtx = null; // {env, storeId}
+  let listSessions = new Map(); // grId → phiên đang hoạt động
+  let listNote = null; // thông báo của cú bấm gần nhất trên danh sách
+  const notLinkable = new Set(); // grId đã biết không đi từ SO thuocsi (nhớ trong tab)
+  let listSessionsTimer = null;
+
+  // ---- khung trang phiếu (v0.2.4) ----
+  let uiMissing = null; // "missing" | "unstable": trang phiếu không gắn được khung → lỗi giao diện ở khung nổi, W1 đóng
+
+  // ---- tra QR: một lần mỗi phiên + lượt nhận (S6) ----
+  const qrCache = new Map(); // `${scope}|${uid}` → {at, r}
+  let qrForce = false;
 
   // ---------- tiện ích ----------
   async function bg(type, extra) {
@@ -97,11 +139,15 @@
   }
   const logTo = (key, log) => bg("session:log", { key, log }).catch(() => {});
 
-  // Lỗi mạng / hết giờ → NÉM (người gọi quyết: đọc thì báo lỗi, PUT thì "kết quả không rõ").
+  // Lỗi mạng / hết giờ / bị huỷ → NÉM (người gọi quyết: đọc thì báo lỗi, PUT thì "kết quả không rõ").
   async function http(url, opts) {
     const o = opts || {};
     const ac = typeof AbortController === "function" ? new AbortController() : null;
     const timer = ac ? setTimeout(() => ac.abort(), T.httpTimeoutMs) : null;
+    if (ac && o.signal) {
+      if (o.signal.aborted) ac.abort();
+      else o.signal.addEventListener("abort", () => ac.abort(), { once: true });
+    }
     try {
       const res = await fetch(url, { method: o.method || "GET", headers: o.headers || {}, body: o.body, cache: "no-store", signal: ac ? ac.signal : undefined });
       const text = await res.text();
@@ -118,11 +164,12 @@
   }
 
   function apiHeaders(env, withBody) {
-    const h = Object.assign({}, authByEnv[env.id] || {});
+    const a = authByEnv[env.id];
+    const h = Object.assign({}, (a && a.headers) || {});
     if (withBody) h["content-type"] = "application/json";
     return h;
   }
-  const posGet = (env, url) => http(url, { headers: apiHeaders(env, false) });
+  const posGet = (env, url, signal) => http(url, { headers: apiHeaders(env, false), signal });
   const posPut = (env, url, body) => http(url, { method: "PUT", headers: apiHeaders(env, true), body: JSON.stringify(body) });
 
   function httpError(what, r) {
@@ -131,24 +178,206 @@
     return `${what}: HTTP ${r ? r.status : "?"}${msg}.${hint}`;
   }
 
-  function showError(title, lines, buttons) {
-    panel.show({ tone: "err", title, lines: [].concat(lines || []), buttons: buttons || [] });
+  function pageNow() {
+    const env = E.envFromConfig(config);
+    return env ? E.classifyPosPage(location.href, env) : null;
   }
 
-  const dismissKey = (envId, grId) => `cgn:dismiss:${envId}:${grId}`;
-  function isDismissed(envId, grId) {
-    try {
-      return sessionStorage.getItem(dismissKey(envId, grId)) === "1";
-    } catch (_) {
-      return false;
-    }
+  // Chỗ gắn khung trang phiếu: #all-receipt (bảng đầu tiên của trang là bảng THÔNG TIN phiếu, không dùng). Có `code` thì thẻ thông
+  // tin phải hiện đúng một mã GR = `code`, breadcrumb không được mang mã khác (pos-model.grPageAnchor — PM audit rev 1 P1).
+  function grAnchor(code) {
+    return P.grPageAnchor(document, code);
   }
-  function setDismissed(envId, grId, v) {
+
+  function retryUi() {
+    uiMissing = null;
+    floatPanel.hide();
+    grPanel.hide();
+    refresh();
+  }
+
+  function onGrUiMissing(reason) {
+    uiMissing = reason;
+    if (watched.key) logTo(watched.key, { type: "ui_anchor_missing", reason });
+    if (applying) {
+      floatPanel.show({ tone: "busy", title: "Đang điền phiếu — không gắn được khung vào trang", lines: ["Không tải lại / rời trang tới khi điền xong."] });
+      return;
+    }
+    floatPanel.show({
+      tone: "err",
+      title: "Giao diện phiếu nhận đã đổi — extension không điền phiếu này",
+      lines: [
+        reason === "unstable" ? "Trang liên tục vẽ lại vùng “Danh sách sản phẩm nhập kho”, không gắn được khung." : "Không thấy vùng “Danh sách sản phẩm nhập kho” của đúng phiếu này.",
+        "Extension đã dừng, không ghi gì vào phiếu. Bấm “Kiểm tra lại” hoặc tải lại trang; vẫn lỗi thì báo dev.",
+      ],
+      buttons: [{ label: "Kiểm tra lại", onClick: retryUi }],
+    });
+  }
+
+  function onGrUiFound() {
+    uiMissing = null;
+    floatPanel.hide();
+    refresh();
+  }
+
+  // URL lúc bắt đầu lượt đánh giá (evaluate) gần nhất. View đến khi trang đã khác URL đó = kết quả của lượt cũ về muộn sau khi đổi
+  // route (SPA) → bỏ (PM audit sơ bộ v0.2.4 P2).
+  let evalHref = null;
+  // v0.2.5 (PM AUDIT-A1 P2): tăng khi phiếu đang xem vừa HOÀN THÀNH (hook báo 2xx). Lượt đánh giá bắt đầu trước đó (GET cũ về muộn,
+  // phiếu còn "đang nhận") không được vẽ nữa.
+  let statusEpoch = 0;
+  let evalEpoch = 0;
+  const fresh = () => (evalHref === null || location.href === evalHref) && evalEpoch === statusEpoch;
+
+  // Một chỗ vẽ: trang phiếu → khung trong luồng (view mang grCode thì chỉ gắn cạnh bảng của đúng phiếu đó); /chi-tiet-so → khung
+  // nổi. Danh sách dùng vùng thông báo của chính nó (F4), trang không liên quan không có khung → không vẽ gì.
+  const panel = {
+    show(view) {
+      if (!fresh()) return;
+      const page = pageNow();
+      if (!page || page.kind === "gr_list") return;
+      if (page.kind !== "gr") {
+        grPanel.hide();
+        return floatPanel.show(view);
+      }
+      if (!uiMissing) floatPanel.hide();
+      grPanel.show(view, view.grCode || null);
+    },
+    hide() {
+      uiMissing = null;
+      floatPanel.hide();
+      grPanel.hide();
+    },
+  };
+  // Trang /chi-tiet-so đang xem: URL + các phiếu nhận của SO đó (đọc ở lượt evaluateSo của CHÍNH URL này).
+  let soPage = null; // {href, grIds:Set}
+  // View của một phiếu chỉ vẽ trên trang của chính phiếu đó, hoặc trên /chi-tiet-so của đúng SO chứa phiếu đó. Ngược lại (lượt đánh
+  // giá cũ về muộn, tiến trình ghi của phiếu A khi đã sang trang phiếu / SO khác — PM audit rev 1 P2) → bỏ, không vẽ.
+  const showGr = (gr, view) => {
+    const page = pageNow();
+    const id = String(gr.id).toLowerCase();
+    if (!page) return;
+    if (page.kind === "gr" && page.grId !== id) return;
+    if (page.kind === "so" && !(soPage && soPage.href === location.href && soPage.grIds.has(id))) return;
+    return panel.show(Object.assign({}, view, { grCode: gr.code }));
+  };
+
+  function showError(title, lines, buttons, gr) {
+    const v = { tone: "err", title, lines: [].concat(lines || []), buttons: buttons || [] };
+    return gr ? showGr(gr, v) : panel.show(v);
+  }
+
+  const sessionSig = (s) => JSON.stringify([s.state, (s.nwResult && s.nwResult.at) || null, s.applyError || null, !!s.scanOk, s.retryNotBefore || null, !!s.autoRun]);
+  const unwatch = () => (watched = { key: null, sig: null, envId: null, grCode: null });
+
+  // ---------- header cửa hàng (Spec v0.2 S3) ----------
+  // Có x-store-id → bộ mới, đã xác nhận. Thiếu x-store-id: giữ bộ đã xác nhận nếu cùng authorization + x-client-id;
+  // khác token / client → bộ chưa xác nhận: mọi lượt chuẩn bị dừng tới khi POS gửi lại request đủ header.
+  function onAuth(envId, headers) {
+    const cur = authByEnv[envId] || null;
+    const before = cur ? `${cur.confirmed}|${lower(cur.headers["x-store-id"])}|${cur.headers.authorization}` : "";
+    if (headers["x-store-id"]) authByEnv[envId] = { headers, confirmed: true };
+    else if (cur && cur.confirmed && cur.headers.authorization === headers.authorization && (cur.headers["x-client-id"] || "") === (headers["x-client-id"] || "")) return false;
+    else authByEnv[envId] = { headers, confirmed: false };
+    const a = authByEnv[envId];
+    const after = `${a.confirmed}|${lower(a.headers["x-store-id"])}|${a.headers.authorization}`;
+    if (before && after !== before) cancelClick("Phiên đăng nhập / cửa hàng POS vừa đổi — bấm lại");
+    return !cur || after !== before;
+  }
+
+  function currentStore(env) {
+    const a = authByEnv[env.id];
+    return a && a.confirmed ? lower(a.headers["x-store-id"]) : "";
+  }
+
+  // ---------- cú bấm (Spec v0.2 S4 / rev 2 R2) ----------
+  const CANCELLED = new Error("cancelled");
+
+  function newClick(fields) {
+    clickSeq += 1;
+    click = Object.assign({ nonce: clickSeq, route: location.href, ac: typeof AbortController === "function" ? new AbortController() : null, cancelled: false, reason: null }, fields);
+    return click;
+  }
+
+  function cancelClick(reason) {
+    if (!click || click.cancelled) return;
+    click.cancelled = true;
+    click.reason = reason;
     try {
-      if (v) sessionStorage.setItem(dismissKey(envId, grId), "1");
-      else sessionStorage.removeItem(dismissKey(envId, grId));
+      if (click.ac) click.ac.abort();
     } catch (_) {
       /* bỏ qua */
+    }
+  }
+
+  function stillValid(tok) {
+    if (!tok || !click || click.nonce !== tok.nonce || tok.cancelled) return false;
+    const env = E.envFromConfig(config);
+    if (!env || env.id !== tok.envId || currentStore(env) !== tok.storeId) return false;
+    if (location.href !== tok.route) return false;
+    if (tok.kind === "list") {
+      if (list.latestReqSeq !== tok.reqSeq || list.shownSeq !== tok.reqSeq || list.shownQueryKey !== tok.queryKey) return false;
+      const r = list.rows.get(tok.code);
+      if (!r || r.id !== tok.grId) return false;
+      if (!L || !L.rowValid(tok.row, tok.code, tok.grId)) return false;
+    }
+    return true;
+  }
+
+  // Đọc lại GR + PO, kiểm đủ rồi mới tạo phiên. Kết quả: {status: started|existing|not_linkable|cancelled|error, …}.
+  async function startFromGr(env, storeId, grId, code, tok) {
+    const guard = () => {
+      if (!stillValid(tok)) throw CANCELLED;
+    };
+    const signal = tok.ac ? tok.ac.signal : undefined;
+    const fail = (message) => ({ status: "error", message });
+    try {
+      guard();
+      const g = await posGet(env, E.api.grDetail(env, grId), signal);
+      guard();
+      if (!g.ok) return fail(httpError("GET phiếu nhận", g));
+      const gr = P.normalizeGr(g.json);
+      if (!gr) return fail("Phiếu nhận: response không đúng dạng.");
+      if (gr.id !== grId) return fail("Phiếu nhận đọc được không đúng phiếu đã chọn.");
+      if (code && gr.code !== code) return { status: "cancelled", message: LIST_CHANGED };
+      if (!gr.posId || gr.posId !== storeId) return fail(`${gr.code}: phiếu nhận thuộc cửa hàng khác cửa hàng đang đăng nhập (hoặc thiếu cửa hàng).`);
+      if (!P.isReceivable(gr)) return fail(`${gr.code}: phiếu không còn ở trạng thái chờ nhận / đang nhận.`);
+      const s0 = await bg("session:get", { envId: env.id, grId: gr.id });
+      guard();
+      if (s0 && ACTIVE.has(s0.state)) return { status: "existing", session: s0, gr };
+      const p = await posGet(env, E.api.poDetail(env, gr.posId, gr.poId), signal);
+      guard();
+      if (!p.ok) return fail(httpError("GET PO", p));
+      const link = P.resolveDelivery(gr, P.normalizePo(p.json), storeId);
+      if (!link.ok) {
+        if (link.errors.length === 1 && link.errors[0] === "no_delivery_code") return { status: "not_linkable", gr };
+        return fail(`${gr.code}: không nối được tới SO thuocsi — ${link.errors.map((c) => LINK_MSG[c] || c).join("; ")}`);
+      }
+      // Khoá ghi phía POS (PM P3 / P1.6): SO phải có đúng một phiếu nhận (chưa huỷ) ở cửa hàng này, đọc đủ, và đó là phiếu này.
+      const found = await searchGrsOfSo(env, storeId, link.soBase, signal);
+      const lock = P.soWriteLock(found, gr.id);
+      guard(); // sau lần đọc cuối và ngay trước khi tạo phiên (giữa hai chỗ này không có await)
+      const s = await bg("session:start", {
+        envId: env.id,
+        grId: gr.id,
+        grCode: gr.code,
+        poPosId: gr.poId,
+        poPosCode: gr.poCode,
+        posId: gr.posId,
+        posName: gr.posName || "",
+        deliveryCode: link.deliveryCode,
+        soBase: link.soBase,
+        warehouseId: E.warehouseForStore(env, gr.posId),
+        fingerprint: P.grFingerprintSource(gr),
+        writeLocks: lock ? [lock] : [],
+      });
+      if (!s) return fail(`${gr.code}: không đọc lại được phiên vừa tạo.`);
+      return { status: "started", session: s, gr };
+    } catch (err) {
+      // Chỉ cú bấm bị huỷ thật mới là "danh sách đã đổi"; GET hết giờ / mất kết nối là lỗi mạng (không báo nhầm cho dược sĩ).
+      if (err === CANCELLED || (tok && tok.cancelled)) return { status: "cancelled", message: (tok && tok.reason) || LIST_CHANGED };
+      if (err && err.name === "AbortError") return fail("Hết giờ / mất kết nối khi đọc dữ liệu POS — thử lại.");
+      return fail(String((err && err.message) || err));
     }
   }
 
@@ -165,50 +394,55 @@
         await evaluate();
       } while (again);
     } catch (err) {
-      if (!applying) showError("Lỗi extension", String((err && err.message) || err), [{ label: "Thử lại", onClick: refresh }]);
+      if (onList) setListNote("err", "Lỗi extension", String((err && err.message) || err));
+      else if (!applying) showError("Lỗi extension", String((err && err.message) || err), [{ label: "Thử lại", onClick: refresh }]);
     } finally {
       running = false;
     }
   }
 
   async function evaluate() {
+    evalHref = location.href;
+    evalEpoch = statusEpoch;
     if (applying || reloading) return;
     const env = E.envFromConfig(config);
     const page = env ? E.classifyPosPage(location.href, env) : null;
+    if (!page || page.kind !== "gr_list") leaveList();
     if (!page) {
-      watched = { key: null, state: null };
+      unwatch();
       panel.hide();
       return;
     }
     if (!authByEnv[env.id]) {
-      panel.show({ tone: "busy", title: "Đang chờ POS tải dữ liệu…", lines: [] });
+      if (page.kind !== "gr_list") panel.show({ tone: "busy", title: "Đang chờ POS tải dữ liệu…", lines: [] });
       return;
     }
-    // Cửa hàng đang đăng nhập là điều kiện bắt buộc của cả hai đường vào (PM P1.4).
+    // Cửa hàng đang đăng nhập (đã xác nhận) là điều kiện bắt buộc của mọi lối vào (PM P1.4, Spec v0.2 S3).
     const storeId = currentStore(env);
     if (!storeId) {
-      watched = { key: null, state: null };
+      unwatch();
+      if (page.kind === "gr_list") return clearListButtons();
       return showError("Không xác định được cửa hàng đang đăng nhập", "POS chưa gửi x-store-id — extension không chạy.");
     }
-    if (!E.storeAllowed(env, storeId)) return showStoreNotAllowed(env);
-    if (page.kind === "gr") return evaluateGr(env, storeId, page.grId, location.href);
+    if (!E.storeAllowed(env, storeId)) {
+      if (page.kind === "gr_list") return clearListButtons();
+      return showStoreNotAllowed(env);
+    }
+    if (page.kind === "gr") return evaluateGr(env, storeId, page.grId);
+    if (page.kind === "gr_list") return evaluateGrList(env, storeId);
     return evaluateSo(env, storeId, page.so);
   }
 
-  function currentStore(env) {
-    return lower((authByEnv[env.id] || {})["x-store-id"]);
-  }
-
   function showStoreNotAllowed(env) {
-    watched = { key: null, state: null };
+    unwatch();
     panel.show({ tone: "info", title: `${env.label}: extension chỉ chạy cho cửa hàng thử`, lines: ["Cửa hàng đang đăng nhập không thuộc danh sách chạy thử của môi trường này."] });
   }
 
-  // Tìm GR theo SO + kiểm đọc đủ / rõ (pos-model.checkSoGrs — PM audit v0.1.1 P1.6). Dùng chung cho hai đường vào.
-  async function searchGrsOfSo(env, storeId, so) {
+  // Tìm GR theo SO + kiểm đọc đủ / rõ (pos-model.checkSoGrs — PM audit v0.1.1 P1.6). Dùng chung cho các lối vào.
+  async function searchGrsOfSo(env, storeId, so, signal) {
     const digits = K.soDigits(so);
     if (!digits) return { ok: false, reason: "so_unreadable", error: "Không đọc được số SO" };
-    const r = await posGet(env, E.api.grSearchBySo(env, digits, storeId));
+    const r = await posGet(env, E.api.grSearchBySo(env, digits, storeId), signal);
     if (!r.ok) return { ok: false, reason: "http", error: httpError("Tìm GR theo SO", r) };
     const check = P.checkSoGrs(r.json, storeId);
     if (!check.ok) return Object.assign({}, check, { error: soCheckText(check) });
@@ -220,30 +454,33 @@
     return (SO_CHECK_MSG[c.reason] || c.reason) + facts + (c.code ? ` — ${c.code}` : "");
   }
 
-  // Đường (2): /chi-tiet-so/<SO>
+  // Đường (3): /chi-tiet-so/<SO>
   async function evaluateSo(env, storeId, so) {
+    const href = location.href;
+    soPage = null;
     const found = await searchGrsOfSo(env, storeId, so);
+    if (found.ok) soPage = { href, grIds: new Set(found.list.map((g) => String(g.id).toLowerCase())) };
     if (!found.ok) {
-      watched = { key: null, state: null };
+      unwatch();
       return showError("Không đọc đủ danh sách phiếu nhận của SO — extension không đi tiếp", found.error, [{ label: "Thử lại", onClick: refresh }]);
     }
     const all = found.list;
-    if (chosenGrId && all.some((g) => g.id === chosenGrId)) return evaluateGr(env, storeId, chosenGrId, location.href);
+    if (chosenGrId && all.some((g) => g.id === chosenGrId)) return evaluateGr(env, storeId, chosenGrId);
     const receivable = all.filter(P.isReceivable);
-    if (receivable.length === 1) return evaluateGr(env, storeId, receivable[0].id, location.href);
+    if (receivable.length === 1) return evaluateGr(env, storeId, receivable[0].id);
     if (receivable.length === 0) {
       for (const g of all) {
         const s = await bg("session:get", { envId: env.id, grId: g.id });
-        if (s) return evaluateGr(env, storeId, g.id, location.href);
+        if (s) return evaluateGr(env, storeId, g.id);
       }
-      watched = { key: null, state: null };
+      unwatch();
       return panel.show({ tone: "info", title: `SO ${so}: không có phiếu nhận đang chờ nhận`, lines: [] });
     }
-    watched = { key: null, state: null };
+    unwatch();
     panel.show({
       tone: "warn",
       title: `SO ${so} có ${receivable.length} phiếu nhận đang chờ`,
-      lines: ["Chọn phiếu muốn nhận bằng Nextwaves (chỉ đọc; điền phiếu bị khoá khi SO có nhiều phiếu):"],
+      lines: ["Chọn phiếu muốn nhận bằng RFID (chỉ đọc; điền phiếu bị khoá khi SO có nhiều phiếu):"],
       buttons: receivable.map((g) => ({
         label: `${g.code} · ${g.poCode}`,
         onClick: () => {
@@ -254,8 +491,8 @@
     });
   }
 
-  // Đường (1) (và (2) sau khi đã chọn được GR).
-  async function evaluateGr(env, storeId, grId, returnUrl) {
+  // Đường (2) (và (3) sau khi đã chọn được GR). Không tự tạo phiên: chỉ hiện nút; phiên đã có thì đi tiếp.
+  async function evaluateGr(env, storeId, grId) {
     const g = await posGet(env, E.api.grDetail(env, grId));
     if (!g.ok) return showError("Không đọc được phiếu nhận", httpError("GET phiếu nhận", g), [{ label: "Thử lại", onClick: refresh }]);
     const gr = P.normalizeGr(g.json);
@@ -265,76 +502,252 @@
 
     let s = await bg("session:get", { envId: env.id, grId: gr.id });
     if (!P.isReceivable(gr)) {
-      if (s && gr.status === "COMPLETED" && s.state !== "done" && s.state !== "applying") s = await bg("session:update", { key: s.key, patch: { state: "done" }, log: { type: "gr_completed_seen" } });
-      if (s) return renderSession(env, gr, s);
-      watched = { key: null, state: null };
-      return panel.hide();
+      if (s && gr.status === "COMPLETED" && s.state !== "done" && s.state !== "applying") {
+        // v0.3.0: phiên đang tự HOÀN THÀNH chỉ tab chủ kết thúc (background từ chối, trừ khi tab chủ đã chết quá lâu) → giữ nguyên.
+        try {
+          s = await bg("session:update", { key: s.key, patch: { state: "done" }, log: { type: "gr_completed_seen" } });
+        } catch (_) {
+          /* giữ phiên như cũ */
+        }
+      }
+      // v0.2.5 (PM AUDIT-A1 P2): phiếu đã kết thúc. Trang phiếu COMPLETED không còn #all-receipt và không còn gì để điền → không vẽ,
+      // huỷ chờ chỗ gắn, không báo lỗi giao diện (A1 28/10: khung đỏ sai sau HOÀN THÀNH). /chi-tiet-so vẫn hiện phiên ở khung nổi.
+      if (s && !onGrPageOf(gr)) return renderSession(env, gr, s);
+      unwatch();
+      if (fresh()) panel.hide(); // lượt cũ về muộn sau khi đổi route không gỡ khung của trang mới
+      return;
     }
 
-    if (!s || s.state === "done") {
+    if (!s) {
+      unwatch();
       const p = await posGet(env, E.api.poDetail(env, gr.posId, gr.poId));
       if (!p.ok) return showError("Không đọc được PO của phiếu nhận", httpError("GET PO", p), [{ label: "Thử lại", onClick: refresh }]);
       const link = P.resolveDelivery(gr, P.normalizePo(p.json), storeId);
       if (!link.ok) {
-        watched = { key: null, state: null };
         // PO không có mã giao thuocsi: không phải phiếu từ thuocsi → không phải việc của extension.
         if (link.errors.length === 1 && link.errors[0] === "no_delivery_code") return panel.hide();
         return showError(`${gr.code}: không nối được tới SO thuocsi`, link.errors.map((c) => LINK_MSG[c] || c));
       }
-      const start = async () => {
-        setDismissed(env.id, gr.id, false);
-        lastStart = { grId: gr.id, at: Date.now() };
-        // Khoá ghi phía POS (PM P3 / P1.6): SO phải có đúng một phiếu nhận (chưa huỷ) ở cửa hàng này, đọc đủ, và đó là phiếu này.
-        const found = await searchGrsOfSo(env, storeId, link.soBase);
-        const lock = P.soWriteLock(found, gr.id);
-        const writeLocks = lock ? [lock] : [];
-        await bg("session:start", {
-          envId: env.id,
-          grId: gr.id,
-          grCode: gr.code,
-          poPosId: gr.poId,
-          poPosCode: gr.poCode,
-          posId: gr.posId,
-          deliveryCode: link.deliveryCode,
-          soBase: link.soBase,
-          warehouseId: E.warehouseForStore(env, gr.posId),
-          fingerprint: P.grFingerprintSource(gr),
-          writeLocks,
-          returnUrl,
-        });
-        refresh();
-      };
       const codes = gr.items.reduce((n, it) => n + it.details.reduce((m, d) => m + d.qrCodes.length, 0), 0);
-      if (isDismissed(env.id, gr.id) || codes > 0) {
-        watched = { key: null, state: null };
-        return panel.show({
-          tone: codes > 0 ? "warn" : "info",
-          title: `${gr.code} · ${link.deliveryCode}`,
-          lines: codes > 0 ? [`Phiếu đã có ${codes} mã quét. Kết quả Nextwaves phải chứa đúng các mã này, đúng lô, thì mới điền tiếp được.`] : ["Đã huỷ nhận bằng Nextwaves cho phiếu này trong tab."],
-          buttons: [{ label: "Nhận bằng Nextwaves", onClick: start }],
-        });
-      }
-      // Chống vòng lặp: vừa tạo phiên cho phiếu này mà background vẫn không trả lại phiên → báo lỗi, không tạo lại
-      // (tránh đọc GR / PO / tìm GR liên tục lên API POS).
-      if (lastStart.grId === gr.id && Date.now() - lastStart.at < T.restartGuardMs) {
-        watched = { key: null, state: null };
-        return showError(`${gr.code}: không đọc lại được phiên vừa tạo`, "Extension dừng để không gọi API POS lặp lại. Tải lại trang hoặc báo dev.", [
-          {
-            label: "Thử lại",
-            onClick: () => {
-              lastStart = { grId: null, at: 0 };
-              refresh();
-            },
-          },
-        ]);
-      }
-      await start();
-      return;
+      return showGr(gr, {
+        tone: codes > 0 ? "warn" : "info",
+        title: `${gr.code} · ${link.deliveryCode}`,
+        lines: [
+          codes > 0
+            ? `Phiếu đã có ${codes} mã quét. Kết quả Nextwaves phải chứa đúng các mã này, đúng lô, thì mới điền tiếp được.`
+            : "Bấm “Nhận hàng bằng RFID” để mở màn quét Nextwaves cho phiếu này.",
+        ],
+        buttons: [{ label: START_LABEL, onClick: () => startOnGrPage(env, storeId, gr) }],
+      });
     }
     if (s.posId && s.posId !== storeId) return showError("Phiên này thuộc cửa hàng khác cửa hàng đang đăng nhập", s.grCode);
+    if (s.state === "done") {
+      // v0.2.5 (PM AUDIT-A1 P2): phiên ghi "đã HOÀN THÀNH" mà POS đọc lại vẫn chờ nhận / đang nhận → phiên không phải bằng chứng POS
+      // đã hoàn thành: chỉ cảnh báo + đọc lại; không nút điền, không tạo phiên mới.
+      watched = { key: s.key, sig: sessionSig(s), envId: env.id, grCode: s.grCode };
+      return showGr(gr, {
+        tone: "warn",
+        title: `${gr.code}: POS chưa ở trạng thái hoàn thành`,
+        lines: sessionLines(s).concat([`Extension đã thấy lệnh HOÀN THÀNH, nhưng đọc lại phiếu vẫn là ${gr.status}. Không điền gì.`, "Bấm “Đọc lại”; vẫn vậy thì kiểm tra phiếu trên POS và báo dev."]),
+        buttons: [{ label: "Đọc lại", onClick: refresh }, cancelButton(env, s)],
+      });
+    }
     return renderSession(env, gr, s);
   }
 
+  async function startOnGrPage(env, storeId, gr) {
+    if (click) return;
+    const tok = newClick({ kind: "gr", grId: gr.id, code: gr.code, envId: env.id, storeId });
+    showGr(gr, { tone: "busy", title: `Đang kiểm ${gr.code}…`, lines: ["Đọc lại phiếu, PO và SO trước khi mở Nextwaves."] });
+    const res = await startFromGr(env, storeId, gr.id, gr.code, tok);
+    if (click === tok) click = null;
+    if (res.status === "started" || res.status === "existing") return refresh();
+    if (res.status === "cancelled") return refresh();
+    if (res.status === "not_linkable") return refresh();
+    showError(`${gr.code}: chưa mở được Nextwaves`, res.message, [{ label: "Thử lại", onClick: refresh }], gr);
+  }
+
+  // ---------- trang danh sách ----------
+  // v0.2.3 (PM F4): trên danh sách KHÔNG dùng khung nổi. Đang kiểm / thành công thể hiện bằng chính nút của dòng; huỷ / lỗi /
+  // phiếu không liên kết được báo trong vùng thông báo thuộc luồng trang, ở trên bảng (L.notice) — không phủ dòng, icon, nút, phân trang.
+  function showListNote() {
+    if (L) L.notice(onList ? listNote : null);
+    panel.hide();
+  }
+  function setListNote(tone, title, lines) {
+    listNote = {
+      tone,
+      title,
+      lines: [].concat(lines || []),
+      buttons: [
+        {
+          label: "Đóng",
+          onClick: () => {
+            listNote = null;
+            showListNote();
+          },
+        },
+      ],
+    };
+    showListNote();
+  }
+
+  function leaveList() {
+    if (!onList) return;
+    onList = false;
+    listCtx = null;
+    listNote = null;
+    if (listSessionsTimer) clearTimeout(listSessionsTimer);
+    listSessionsTimer = null;
+    if (L) L.deactivate(); // gỡ cả nút lẫn vùng thông báo
+  }
+
+  // Danh sách chưa được dùng (cửa hàng chưa xác nhận / không thuộc danh sách chạy thử): gỡ nút; còn lý do huỷ cú bấm thì vẫn báo.
+  function clearListButtons() {
+    listCtx = null;
+    if (onList && L) L.show(null);
+    showListNote();
+  }
+
+  async function loadListSessions(env) {
+    const all = await bg("session:list");
+    const m = new Map();
+    for (const s of all || []) if (s.envId === env.id && ACTIVE.has(s.state)) m.set(s.grId, s);
+    listSessions = m;
+  }
+
+  async function evaluateGrList(env, storeId) {
+    unwatch();
+    if (!onList) {
+      onList = true;
+      if (L) L.activate();
+    }
+    listCtx = { env, storeId };
+    await loadListSessions(env);
+    renderList();
+    showListNote();
+  }
+
+  // v0.2.3 (PM F3): nhãn nhìn thấy không dài hơn START_LABEL (bảng POS không dàn lại); nghĩa đầy đủ — mã GR + trạng thái PHIÊN
+  // extension (không phải trạng thái POS) + hành động — nằm ở title và aria-label (gr-list.js).
+  const SESSION_STATE_VI = {
+    waiting_nw: "chờ mở / nhận trên Nextwaves",
+    nw_ready: "Nextwaves đã sẵn sàng nhận",
+    received: "Nextwaves đã nhận, chờ điền POS",
+    applying: "đang điền POS",
+    applied: "đã điền POS",
+    apply_stopped: "dừng điền POS",
+  };
+  const sessionText = (s) => `phiên ${SESSION_STATE_VI[s.state] || s.state} (${s.state})`;
+  function listButton(r, s) {
+    if (click && click.kind === "list" && click.grId === r.id) return { kind: "busy", label: "Đang kiểm…", disabled: true, title: `${r.code} · đang kiểm phiếu, PO và SO trước khi mở Nextwaves` };
+    if (s && (s.state === "waiting_nw" || s.state === "nw_ready")) return { kind: "open_nw", label: "Mở Nextwaves", title: `${r.code} · ${sessionText(s)} · Mở lại tab Nextwaves của phiên này` };
+    if (s) return { kind: "open_gr", label: "Mở phiếu", title: `${r.code} · ${sessionText(s)} · Mở phiếu để lập kế hoạch / điền / HOÀN THÀNH` };
+    return { kind: "start", label: START_LABEL, disabled: !!click, title: `${r.code} · chưa có phiên · Nhận hàng bằng RFID: đọc lại phiếu, PO, SO rồi mở màn quét Nextwaves` };
+  }
+
+  function renderList() {
+    if (!L || !onList) return;
+    const ctx = listCtx;
+    if (!ctx || list.envId !== ctx.env.id || !list.ok) return L.show(null);
+    const byCode = new Map();
+    for (const r of list.rows.values()) {
+      if (!P.isReceivable({ status: r.status }) || r.posId !== ctx.storeId || notLinkable.has(r.id)) continue;
+      byCode.set(r.code, Object.assign({ grId: r.id }, listButton(r, listSessions.get(r.id))));
+    }
+    L.show({ byCode });
+  }
+
+  function scheduleListSessions() {
+    if (!onList || !listCtx) return;
+    if (listSessionsTimer) clearTimeout(listSessionsTimer);
+    listSessionsTimer = setTimeout(async () => {
+      listSessionsTimer = null;
+      if (!onList || !listCtx) return;
+      try {
+        await loadListSessions(listCtx.env);
+        renderList();
+      } catch (_) {
+        /* bỏ qua */
+      }
+    }, T.listSessionsDebounceMs);
+  }
+
+  async function onListSelect(row, grId, code, kind) {
+    const ctx = listCtx;
+    if (!ctx || !onList) return;
+    const { env, storeId } = ctx;
+    const r = list.rows.get(code);
+    if (!r || r.id !== grId) return;
+    if (kind === "open_nw") {
+      const s = listSessions.get(grId);
+      if (s) bg("session:reopenNw", { key: s.key }).catch(() => {});
+      return;
+    }
+    if (kind === "open_gr") return location.assign(E.api.posGrPage(env, grId));
+    if (kind !== "start" || click) return;
+    const tok = newClick({ kind: "list", grId, code, row, reqSeq: list.shownSeq, queryKey: list.shownQueryKey, envId: env.id, storeId });
+    listNote = null; // đang kiểm: nút của dòng thành "Đang kiểm…" (vô hiệu), không có khung / thông báo
+    showListNote();
+    renderList();
+    const res = await startFromGr(env, storeId, grId, code, tok);
+    if (click === tok) click = null;
+    if (!onList) return;
+    if (res.status === "started" || res.status === "existing") {
+      listNote = null; // thành công: nút thành "Mở Nextwaves", tab Nextwaves đã mở
+      showListNote();
+    } else if (res.status === "not_linkable") {
+      notLinkable.add(grId);
+      setListNote("info", `${code}: không nhận bằng RFID được`, "Phiếu này không đi từ SO thuocsi (PO không có mã giao).");
+    } else if (res.status === "cancelled") {
+      setListNote("warn", `${code}: ${res.message || LIST_CHANGED}`);
+    } else {
+      setListNote("err", `${code}: chưa mở được Nextwaves`, res.message);
+    }
+    refresh();
+  }
+
+  if (L)
+    L.attach({
+      onSelect: (row, grId, code, kind) => {
+        onListSelect(row, grId, code, kind).catch((err) => {
+          if (click) click = null;
+          if (onList) setListNote("err", "Lỗi extension", String((err && err.message) || err));
+          else showError("Lỗi extension", String((err && err.message) || err));
+        });
+      },
+      onDomChanged: () => {
+        if (click && click.kind === "list" && !stillValid(click)) cancelClick(LIST_CHANGED);
+      },
+    });
+
+  function onListRequest(p) {
+    if (!E.envById(p.envId) || !(p.reqSeq > 0)) return;
+    list.latestReqSeq = Math.max(list.latestReqSeq, p.reqSeq);
+    if (click && click.kind === "list" && p.reqSeq > click.reqSeq) cancelClick(LIST_CHANGED);
+  }
+
+  // Chỉ nhận response của lượt request mới nhất đã gửi (rev 2 R1). Lượt mới nhất lỗi → xoá hết nút.
+  function onListResponse(p) {
+    if (!E.envById(p.envId) || !(p.reqSeq > 0)) return;
+    list.latestReqSeq = Math.max(list.latestReqSeq, p.latestReqSeq || 0, p.reqSeq);
+    if (p.reqSeq !== list.latestReqSeq || p.reqSeq <= list.shownSeq) return;
+    list.shownSeq = p.reqSeq;
+    list.shownQueryKey = p.queryKey || null;
+    list.envId = p.envId;
+    list.ok = !!p.ok && Array.isArray(p.rows);
+    list.rows = new Map();
+    if (list.ok) {
+      for (const r of p.rows) {
+        if (!r || !r.code || !E.isUuid(r.id)) continue;
+        list.rows.set(String(r.code), { id: lower(r.id), code: String(r.code), status: String(r.status || ""), poId: lower(r.poId), posId: lower(r.posId) });
+      }
+    }
+    if (click && click.kind === "list" && !stillValid(click)) cancelClick(LIST_CHANGED);
+    renderList();
+  }
+
+  // ---------- phiên ----------
   function sessionLines(s) {
     return [`Phiếu ${s.grCode} · ${s.poPosCode} · mã giao ${s.deliveryCode}`, s.nwPoNumber ? `Nextwaves: ${s.nwPoNumber} (${s.nwRefId || s.soBase})` : `Nextwaves: tìm theo ${s.soBase}`];
   }
@@ -349,18 +762,17 @@
         } catch (err) {
           return showError("Không huỷ được phiên", String((err && err.message) || err));
         }
-        setDismissed(env.id, s.grId, true);
         refresh();
       },
     };
   }
 
   async function renderSession(env, gr, s) {
-    watched = { key: s.key, state: s.state };
+    watched = { key: s.key, sig: sessionSig(s), envId: env.id, grCode: s.grCode };
     switch (s.state) {
       case "waiting_nw":
       case "nw_ready":
-        return panel.show({
+        return showGr(gr, {
           tone: "busy",
           title: STATE_LABEL[s.state],
           lines: sessionLines(s).concat(["Trên tab Nextwaves: đặt hàng lên reader rồi bấm “Xác nhận nhận hàng”. Nhận đủ xong extension đưa về đây và lập kế hoạch điền phiếu."]),
@@ -372,19 +784,41 @@
       case "applying": {
         const expired = !(s.lease && s.lease.expiresAt > Date.now());
         if (expired) return planAndOffer(env, gr, s);
-        return panel.show({ tone: "busy", title: "Đang điền phiếu ở tab khác", lines: sessionLines(s) });
+        return showGr(gr, { tone: "busy", title: "Đang điền phiếu ở tab khác", lines: sessionLines(s) });
       }
       case "applied":
         return renderApplied(env, gr, s);
+      case "auto_completing":
+      case "auto_complete_unknown":
+        // v0.3.0 (PM §2.3 / §2.4): lệnh HOÀN THÀNH tự động đã giữ chỗ / đã gửi mà chưa xác nhận (tab chủ đã tải lại / đóng, hoặc kết
+        // quả không rõ). Chỉ đọc lại phiếu — KHÔNG bao giờ gửi lại.
+        if (s.state === "auto_completing" && s.completeClaim && Date.now() - s.completeClaim.at < T.autoCompleteGraceMs) {
+          // audit F5: tab chủ có thể đang gửi — không để dược sĩ gửi HOÀN THÀNH lần hai.
+          return showGr(gr, {
+            tone: "busy",
+            title: `${gr.code}: đang gửi HOÀN THÀNH tự động — KHÔNG bấm HOÀN THÀNH`,
+            lines: sessionLines(s).concat(["Tab POS khác đang gửi lệnh HOÀN THÀNH một lần. Chờ rồi bấm “Đọc lại”."]),
+            buttons: [{ label: "Đọc lại", onClick: refresh }],
+          });
+        }
+        return showGr(gr, {
+          tone: "warn",
+          title: `${gr.code}: chưa rõ POS đã HOÀN THÀNH chưa — extension KHÔNG gửi lại`,
+          lines: sessionLines(s).concat([
+            `Phiếu đọc lại: ${gr.status}. Extension đã giữ / gửi lệnh HOÀN THÀNH tự động một lần.`,
+            "POS có thể vẫn đang xử lý: chờ 1–2 phút rồi bấm “Đọc lại”. Đã Hoàn thành thì xong. Vẫn chờ nhận / đang nhận thì dược sĩ kiểm tra số lượng từng lô rồi mới tự bấm HOÀN THÀNH; sai thì báo dev.",
+          ]),
+          buttons: [{ label: "Đọc lại", onClick: refresh }],
+        });
       case "done":
-        return panel.show({
+        return showGr(gr, {
           tone: "ok",
           title: `${s.grCode}: đã HOÀN THÀNH`,
           lines: sessionLines(s),
           buttons: [{ label: "Đóng", secondary: true, onClick: () => panel.hide() }],
         });
       default:
-        return panel.show({ tone: "warn", title: `Trạng thái phiên lạ: ${s.state}`, lines: sessionLines(s), buttons: [cancelButton(env, s)] });
+        return showGr(gr, { tone: "warn", title: `Trạng thái phiên lạ: ${s.state}`, lines: sessionLines(s), buttons: [cancelButton(env, s)] });
     }
   }
 
@@ -392,36 +826,72 @@
     const uids = ((s.nwResult && s.nwResult.units) || []).map((u) => u.uid);
     const codes = new Set(gr.items.flatMap((it) => it.details.flatMap((d) => d.qrCodes)));
     const missing = uids.filter((u) => !codes.has(u));
-    if (missing.length) {
-      return panel.show({
+    // v0.3.0: lượt tự động dừng sau khi điền, trước khi giữ lượt HOÀN THÀNH (đọc lại lệch, tab tải lại / đóng) — không tự tiếp tục.
+    const auto = !!(s.authorization && s.authorization.auto);
+    const vf = auto ? (s.log || []).filter((l) => l.type === "auto_verify_failed").pop() : null;
+    if (auto && vf && !missing.length) {
+      return showGr(gr, {
         tone: "warn",
-        title: `${gr.code}: phiếu thiếu ${missing.length}/${uids.length} UID đã điền`,
-        lines: sessionLines(s).concat([`Thiếu: ${missing.slice(0, 20).join(", ")}${missing.length > 20 ? "…" : ""}`, "Kiểm tra phiếu trước khi bấm HOÀN THÀNH."]),
+        title: `${gr.code}: đã điền nhưng đọc lại chưa khớp hoàn toàn — KHÔNG tự HOÀN THÀNH`,
+        lines: sessionLines(s).concat([
+          `Lệch: ${(vf.diffs || []).slice(0, 6).map((d) => d.why + (d.detailId ? " " + String(d.detailId).slice(0, 8) : "")).join(", ")}.`,
+          "Dược sĩ kiểm tra số lượng / mã từng lô trên phiếu; đúng thì tự bấm HOÀN THÀNH, sai thì báo dev.",
+        ]),
       });
     }
-    return panel.show({
-      tone: "ok",
+    const stoppedAfter = (s.log || []).some((l) => l.type === "auto_skipped"); // tab chủ đã dừng sau khi điền (khung / giữ lượt)
+    if (auto && !vf && !stoppedAfter && !s.completeClaim && !missing.length && s.applyResult && Date.now() - s.applyResult.at < T.autoCompleteGraceMs) {
+      // audit F5: tab chủ vừa điền xong, đang đọc lại / sắp gửi HOÀN THÀNH — tab này không khuyên bấm.
+      return showGr(gr, {
+        tone: "busy",
+        title: `${gr.code}: đang tự HOÀN THÀNH ở tab POS khác — KHÔNG bấm HOÀN THÀNH`,
+        lines: sessionLines(s).concat(["Chờ rồi bấm “Đọc lại”."]),
+        buttons: [{ label: "Đọc lại", onClick: refresh }],
+      });
+    }
+    const autoNote = auto ? ["Chế độ tự động đã dừng trước HOÀN THÀNH — extension không tự tiếp tục."] : [];
+    if (missing.length) {
+      return showGr(gr, {
+        tone: "warn",
+        title: `${gr.code}: phiếu thiếu ${missing.length}/${uids.length} UID đã điền`,
+        lines: sessionLines(s).concat(autoNote, [`Thiếu: ${missing.slice(0, 20).join(", ")}${missing.length > 20 ? "…" : ""}`, "Kiểm tra phiếu trước khi bấm HOÀN THÀNH."]),
+      });
+    }
+    return showGr(gr, {
+      tone: autoNote.length ? "warn" : "ok",
       title: `${gr.code}: đã điền ${uids.length} UID từ Nextwaves`,
-      lines: sessionLines(s).concat(["Kiểm tra số lượng từng lô trên phiếu rồi bấm HOÀN THÀNH."]),
+      lines: sessionLines(s).concat(autoNote, ["Kiểm tra số lượng từng lô trên phiếu rồi bấm HOÀN THÀNH."]),
     });
   }
 
   // ---------- kế hoạch + ghi ----------
-  async function lookupQr(env, uids) {
+  // Tra QR có cache theo phiên + lượt nhận (`scope`), TTL qrTtlMs; kết quả lỗi không cache; "Kiểm tra lại" tra lại hết (S6).
+  async function lookupQr(env, uids, scope) {
     const out = {};
+    const force = qrForce;
+    qrForce = false;
+    const now = Date.now();
+    const need = [];
+    for (const uid of uids) {
+      const c = force ? null : qrCache.get(`${scope}|${uid}`);
+      if (c && now - c.at < T.qrTtlMs) out[uid] = c.r;
+      else need.push(uid);
+    }
+    if (qrCache.size > 5000) qrCache.clear();
     let i = 0;
     async function worker() {
-      while (i < uids.length) {
-        const uid = uids[i++];
+      while (i < need.length) {
+        const uid = need[i++];
         try {
           const r = await http(E.api.qrLookup(env, uid));
           out[uid] = r.ok ? P.normalizeQrLookup(r.json, uid) : { ok: false, reason: `http_${r.status}` };
         } catch (_) {
           out[uid] = { ok: false, reason: "network" };
         }
+        if (out[uid] && out[uid].ok) qrCache.set(`${scope}|${uid}`, { at: Date.now(), r: out[uid] });
       }
     }
-    await Promise.all(Array.from({ length: Math.min(T.qrConcurrency, uids.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(T.qrConcurrency, need.length) }, worker));
     return out;
   }
 
@@ -438,34 +908,54 @@
 
   async function planAndOffer(env, gr, s) {
     const units = (s.nwResult && s.nwResult.units) || [];
-    panel.show({ tone: "busy", title: `Đang tra ${units.length} UID trên POS…`, lines: sessionLines(s) });
+    showGr(gr, { tone: "busy", title: `Đang tra ${units.length} UID trên POS…`, lines: sessionLines(s) });
     // Tra QR MỌI UID (kể cả UID đã nằm trên phiếu — PM P1.2 / P2.2).
-    const qrByUid = await lookupQr(env, [...new Set(units.map((u) => u.uid).filter(Boolean))]);
+    const scope = `${s.key}|${(s.nwResult && s.nwResult.at) || ""}`;
+    const qrByUid = await lookupQr(env, [...new Set(units.map((u) => u.uid).filter(Boolean))], scope);
     const plan = PL.buildPlan(gr, units, qrByUid);
     logTo(s.key, { type: "plan", ok: plan.ok, complete: plan.complete, hash: plan.hash, steps: plan.steps.length, blocked: plan.blocked.map((b) => b.code), summary: plan.summary });
 
     if (plan.complete && s.state !== "applying") {
       // Mọi UID đã nằm đúng lô, lượng nhất quán: không ghi gì, chỉ đóng bước điền.
+      if (s.state === "received" && s.autoRun && !s.autoRun.skipped) await autoSkip(s, "uid_already_on_gr"); // audit F4: thu hồi quyền
       const s2 = await bg("session:update", { key: s.key, patch: { state: "applied" }, log: { type: "applied_already", hash: plan.hash } });
       return renderApplied(env, gr, s2 || s);
     }
+    // v0.3.0 (PM DECISION-ONE-STG-AUTO-FLOW §2.2): phiên vừa nhận có quyền tự động → TỰ điền khi đủ điều kiện; không thì đi đường
+    // thủ công, ghi rõ lý do.
+    let autoNote = [];
+    if (s.state === "received" && s.autoRun) {
+      const r = s.autoRun.skipped ? s.autoRun.skipped.reason : await autoTry(env, gr, s, plan, units);
+      if (r === "started") return;
+      autoNote = [`Tự động KHÔNG chạy: ${autoSkipText(r)}. Phiếu đi đường thủ công (cấp phép điền + dược sĩ HOÀN THÀNH).`];
+    }
     if (!plan.ok) {
-      return panel.show({
+      return showGr(gr, {
         tone: "err",
         title: `${gr.code}: không điền được — ${plan.blocked.length} điểm chặn`,
-        lines: sessionLines(s).concat(["Không ghi gì vào phiếu (chặn cả gói).", ...blockedLines(plan)]),
-        buttons: [{ label: "Kiểm tra lại", onClick: refresh }, cancelButton(env, s)],
+        lines: sessionLines(s).concat(autoNote, ["Không ghi gì vào phiếu (chặn cả gói).", ...blockedLines(plan)]),
+        buttons: [
+          {
+            label: "Kiểm tra lại",
+            onClick: () => {
+              qrForce = true;
+              refresh();
+            },
+          },
+          cancelButton(env, s),
+        ],
       });
     }
     const stopped = s.state === "apply_stopped" && s.applyError;
     const head = sessionLines(s).concat(
+      autoNote,
       stopped ? [`Lần điền trước dừng: ${APPLY_MSG[s.applyError.reason] || s.applyError.reason}${s.applyError.status ? ` (HTTP ${s.applyError.status})` : ""}`] : [],
       [`Kế hoạch #${plan.hash}: điền ${plan.summary.toWrite} UID vào ${plan.steps.length} lô${plan.summary.alreadyOnGr ? ` (${plan.summary.alreadyOnGr} UID đã nằm đúng lô)` : ""}.`],
       plan.warnings.map((w) => `• Sản phẩm ${w.productId}: sau khi điền mới ${w.received}/${w.quantity} — phần còn lại dược sĩ xử lý tay.`)
     );
     const blockers = await bg("session:writeBlockers", { key: s.key });
     if (blockers.length) {
-      return panel.show({
+      return showGr(gr, {
         tone: "warn",
         title: "Chỉ xem kế hoạch — chưa được điền phiếu",
         lines: head.concat(blockers.map((b) => `• ${CLAIM_MSG[b] || b}`)),
@@ -475,7 +965,7 @@
     }
     const grant = await bg("grant:get", { envId: env.id, grCode: gr.code });
     if (!grant) {
-      return panel.show({
+      return showGr(gr, {
         tone: "info",
         title: "Chỉ xem kế hoạch — chưa có cấp phép điền",
         lines: head.concat([`Muốn điền: operator mở popup extension → “Cho phép điền 1 lần” cho ${gr.code}.`]),
@@ -483,27 +973,211 @@
         buttons: [cancelButton(env, s)],
       });
     }
-    return panel.show({
+    const expires = `Cấp phép hết hạn lúc ${new Date(grant.expiresAt).toLocaleTimeString("vi-VN")}.`;
+    if (!onGrPageOf(gr)) {
+      // v0.2.4 (PM P2): nút điền chỉ nằm trong khung trong luồng của trang phiếu; trang khác (vd. /chi-tiet-so) chỉ mở phiếu.
+      return showGr(gr, {
+        tone: stopped ? "warn" : "info",
+        title: `Đã có cấp phép điền ${gr.code} (1 lần)`,
+        lines: head.concat([`${expires} Mở trang phiếu ${gr.code} để điền đúng kế hoạch #${plan.hash}.`]),
+        table: planTable(plan),
+        buttons: [{ label: `Mở phiếu ${gr.code}`, onClick: () => location.assign(E.api.posGrPage(env, gr.id)) }, cancelButton(env, s)],
+      });
+    }
+    return showGr(gr, {
       tone: stopped ? "warn" : "info",
       title: `Đã có cấp phép điền ${gr.code} (1 lần)`,
-      lines: head.concat([`Cấp phép hết hạn lúc ${new Date(grant.expiresAt).toLocaleTimeString("vi-VN")}. Bấm nút dưới để điền đúng kế hoạch #${plan.hash}.`]),
+      lines: head.concat([`${expires} Bấm nút dưới để điền đúng kế hoạch #${plan.hash}.`]),
       table: planTable(plan),
       buttons: [{ label: `Điền vào phiếu ${gr.code} · kế hoạch #${plan.hash} (${plan.summary.toWrite} UID)`, onClick: () => runApply(env, gr, s, plan) }, cancelButton(env, s)],
     });
   }
 
-  async function runApply(env, gr, s, plan) {
+  // ---------- v0.3.0: chế độ tự động (PM DECISION-ONE-STG-AUTO-FLOW-20261028) ----------
+  const AUTO_SKIP_MSG = {
+    not_armed: "chưa có quyền tự động",
+    not_triggered: "quyền tự động không được kích hoạt ở lượt nhận này",
+    grant_invalid: "quyền tự động hết hạn hoặc không còn khớp phiên / đơn",
+    other_tab: "lượt tự động được giao cho tab POS khác",
+    status_failed: "không đọc được trạng thái quyền tự động",
+    plan_blocked: "kế hoạch có điểm chặn",
+    plan_warning: "kế hoạch có cảnh báo (nhận chưa đủ)",
+    uid_already_on_gr: "phiếu đã có UID từ trước",
+    units_invalid: "dữ liệu UID Nextwaves không hợp lệ",
+    uid_set: "kế hoạch không phủ đúng toàn bộ UID Nextwaves",
+    detail_not_planned: "có lô trên phiếu không nằm trong kế hoạch",
+    detail_not_full: "phiếu không sạch hoặc lô không nhận đủ",
+    detail_set: "tập lô của phiếu không khớp kế hoạch",
+    po_read_failed: "không đọc lại được PO của phiếu",
+    link_changed: "phiếu / PO / SO / cửa hàng không còn khớp phiên",
+    ui_not_anchored: "khung extension chưa gắn đúng trang phiếu",
+    skipped: "lượt tự động đã bị bỏ qua trước đó",
+  };
+  const autoSkipText = (r) => {
+    const m = /^(blocked|claim)_(.+)$/.exec(String(r || ""));
+    if (m) return `${m[1] === "blocked" ? "phiên bị khoá điền" : "không giành được lượt tự điền"} — ${CLAIM_MSG[m[2]] || m[2]}`;
+    return AUTO_SKIP_MSG[r] || r;
+  };
+  // Báo background lượt tự động KHÔNG chạy: quyết định cuối cho lượt nhận này (background ghi auto_skipped, không cho tự chạy lại).
+  const autoSkip = (s, reason) => bg("auto:skip", { key: s.key, reason }).catch(() => {});
+
+  async function waitAnchored(gr, ms) {
+    const t0 = Date.now();
+    for (;;) {
+      if (onGrPageOf(gr) && grPanel.anchoredFor(gr.code)) return true;
+      if (Date.now() - t0 >= ms) return false;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
+
+  // §2.2: tự điền chỉ khi background xác nhận đúng lượt / đúng tab / quyền còn hiệu lực, kế hoạch sạch và đủ (lib/plan.autoPlanCheck),
+  // PO / SO / cửa hàng đọc lại vẫn khớp phiên, không khoá ghi, khung gắn đúng trang phiếu. Trả "started" hoặc mã lý do.
+  async function autoTry(env, gr, s, plan, units) {
+    let st = null;
+    try {
+      st = await bg("auto:status", { key: s.key });
+    } catch (_) {
+      st = null;
+    }
+    if (!st) return "status_failed";
+    if (!st.eligible) {
+      if (st.reason === "grant_invalid") await autoSkip(s, "grant_invalid"); // audit F4 (background chỉ nhận từ tab được giao)
+      return st.reason;
+    }
+    const skip = async (reason) => {
+      await autoSkip(s, reason);
+      return reason;
+    };
+    const chk = PL.autoPlanCheck(gr, plan, units);
+    if (!chk.ok) return skip(chk.reason);
+    let p = null;
+    try {
+      p = await posGet(env, E.api.poDetail(env, gr.posId, gr.poId));
+    } catch (_) {
+      p = null;
+    }
+    if (!p || !p.ok) return skip("po_read_failed");
+    const link = P.resolveDelivery(gr, P.normalizePo(p.json), currentStore(env));
+    if (!link.ok || link.deliveryCode !== s.deliveryCode || link.soBase !== s.soBase || gr.posId !== s.posId || gr.id !== s.grId || gr.poId !== s.poPosId) return skip("link_changed");
+    const blockers = await bg("session:writeBlockers", { key: s.key });
+    if (blockers.length) return skip(`blocked_${blockers[0]}`);
+    if (!(await waitAnchored(gr, T.autoAnchorWaitMs))) return skip("ui_not_anchored");
+    runApply(env, gr, s, plan, { auto: true, units });
+    return "started";
+  }
+
+  // §2.3: sau khi tự điền xong — đọc lại TOÀN phiếu, khớp hoàn toàn (lib/plan.verifyFinal) mới giữ lượt (claimComplete, đặt dấu trước
+  // khi gửi) và gửi PUT …/status/COMPLETED MỘT lần; GET sau đó quyết done / chưa rõ. Không bao giờ gửi lại.
+  async function autoComplete(env, gr, s, plan, units) {
+    const view = (tone, title, lines, buttons) => showGr(gr, { tone, title, lines: sessionLines(s).concat(lines || []), buttons: buttons || [] });
+    const readGr = async () => {
+      try {
+        const r = await posGet(env, E.api.grDetail(env, gr.id));
+        return r.ok ? P.normalizeGr(r.json) : null;
+      } catch (_) {
+        return null;
+      }
+    };
+    view("busy", `Đang đọc lại ${gr.code} trước khi tự HOÀN THÀNH…`, []);
+    const epoch0 = statusEpoch; // audit F5: trang (nút HOÀN THÀNH của POS) vừa hoàn thành trong lúc đọc lại → không gửi lệnh của extension
+    const fresh = await readGr();
+    const v0 = fresh ? PL.verifyFinal(plan, fresh, units) : { ok: false, diffs: [{ why: "read_failed", detailId: null }] };
+    // audit F7: phiếu đọc lại phải còn của đúng cửa hàng phiên.
+    const v = fresh && fresh.posId !== s.posId ? { ok: false, diffs: v0.diffs.concat([{ why: "store", detailId: null }]) } : v0;
+    if (!v.ok) {
+      logTo(s.key, { type: "auto_verify_failed", diffs: v.diffs.slice(0, 10) });
+      return view(
+        "warn",
+        `${gr.code}: đã điền nhưng đọc lại chưa khớp hoàn toàn — KHÔNG tự HOÀN THÀNH`,
+        [`Lệch: ${v.diffs.slice(0, 6).map((d) => d.why + (d.detailId ? " " + d.detailId.slice(0, 8) : "")).join(", ")}.`, "Dược sĩ kiểm tra số lượng / mã từng lô trên phiếu; đúng thì tự bấm HOÀN THÀNH, sai thì báo dev."],
+        [{ label: "Tải lại phiếu", onClick: () => location.reload() }]
+      );
+    }
+    if (!onGrPageOf(gr) || !grPanel.anchoredFor(gr.code)) {
+      logTo(s.key, { type: "auto_skipped", reason: "ui_not_anchored_complete" });
+      return view("warn", `${gr.code}: đã điền đủ — không tự HOÀN THÀNH vì khung không còn gắn đúng trang phiếu`, ["Dược sĩ kiểm tra rồi tự bấm HOÀN THÀNH."]);
+    }
+    let c = null;
+    try {
+      c = await bg("session:claimComplete", { key: s.key, token: tabToken, planHash: plan.hash });
+    } catch (err) {
+      c = { ok: false, reason: String((err && err.message) || err) };
+    }
+    if (!c || !c.ok) logTo(s.key, { type: "auto_skipped", reason: `complete_claim_${(c && c.reason) || "unknown"}` });
+    if (!c || !c.ok) return view("warn", `${gr.code}: đã điền đủ — không tự HOÀN THÀNH`, [CLAIM_MSG[c && c.reason] || (c && c.reason) || "?", "Dược sĩ kiểm tra rồi tự bấm HOÀN THÀNH."]);
+    const report = async (result) => {
+      try {
+        await bg("session:autoCompleteResult", { key: s.key, token: tabToken, result });
+      } catch (_) {
+        /* phiên giữ auto_completing — mở lại phiếu chỉ đọc lại, không gửi lại */
+      }
+    };
+    // Ngay trước PUT: trang / phiếu / phiên / chủ lượt còn đúng (PM §2.3).
+    let cur = null;
+    try {
+      cur = await bg("session:get", { envId: env.id, grId: gr.id });
+    } catch (_) {
+      cur = null;
+    }
+    const env2 = E.envFromConfig(config);
+    if (!cur || cur.state !== "auto_completing" || cur.autoToken !== tabToken || !onGrPageOf(gr) || !grPanel.anchoredFor(gr.code) || statusEpoch !== epoch0 || !env2 || env2.id !== s.envId || currentStore(env2) !== s.posId) {
+      await report({ done: false, httpStatus: null, grStatus: "not_sent" });
+      return view("warn", `${gr.code}: không gửi HOÀN THÀNH (trang / phiên vừa đổi)`, ["Extension đã giữ lượt nhưng KHÔNG gửi. Dược sĩ kiểm tra rồi tự bấm HOÀN THÀNH."], [{ label: "Đọc lại", onClick: refresh }]);
+    }
+    view("busy", `Đang tự HOÀN THÀNH ${gr.code}…`, []);
+    let httpStatus = null;
+    try {
+      const r = await http(E.api.grStatus(env, gr.id, "COMPLETED"), { method: "PUT", headers: apiHeaders(env, false) });
+      httpStatus = r.status;
+    } catch (_) {
+      httpStatus = null; // hết giờ / mất kết nối: kết quả không rõ
+    }
+    logTo(s.key, { type: "auto_complete_sent", httpStatus });
+    const after = await readGr();
+    const completed = !!after && after.id === gr.id && after.status === "COMPLETED";
+    const ok2xx = httpStatus >= 200 && httpStatus < 300;
+    await report(completed ? { done: true, httpStatus, grStatus: after.status, source: ok2xx ? "auto" : "khong_chac" } : { done: false, httpStatus, grStatus: after ? after.status : null });
+    if (completed) {
+      reloading = true;
+      view("ok", `${gr.code}: đã tự HOÀN THÀNH — đang tải lại phiếu…`, []);
+      setTimeout(() => location.reload(), T.reloadDelayMs);
+      return;
+    }
+    return view(
+      "warn",
+      `${gr.code}: chưa rõ POS đã HOÀN THÀNH chưa — extension KHÔNG gửi lại`,
+      [`HOÀN THÀNH: HTTP ${httpStatus === null ? "không rõ" : httpStatus}; phiếu đọc lại: ${after ? after.status : "không đọc được"}.`, "POS có thể vẫn đang xử lý: KHÔNG bấm HOÀN THÀNH ngay. Chờ 1–2 phút rồi bấm “Đọc lại”: đã Hoàn thành thì xong; vẫn chưa thì dược sĩ kiểm tra số lượng từng lô rồi mới tự bấm HOÀN THÀNH."],
+      [{ label: "Đọc lại", onClick: refresh }]
+    );
+  }
+
+  function onGrPageOf(gr) {
+    const page = pageNow();
+    return !!page && page.kind === "gr" && page.grId === String(gr.id).toLowerCase();
+  }
+
+  async function runApply(env, gr, s, plan, opts) {
+    const auto = !!(opts && opts.auto);
     if (applying) return;
+    // v0.2.4 (PM P2): chỉ ghi khi nút nằm trong khung đang gắn đúng chỗ trên trang của đúng phiếu (fail closed, chưa dùng cấp phép).
+    if (!onGrPageOf(gr) || !grPanel.anchoredFor(gr.code)) {
+      if (auto) await autoSkip(s, "ui_not_anchored");
+      showError("Không điền được", [`Khung extension chưa gắn đúng trang phiếu ${gr.code} — không ghi gì, ${auto ? "quyền tự động đã thu hồi, phiếu đi đường thủ công" : "cấp phép vẫn giữ"}.`], [{ label: "Kiểm tra lại", onClick: retryUi }], gr);
+      return;
+    }
     applying = true; // chặn vòng đánh giá vẽ lại panel trong lúc giành quyền / ghi
     let claim = null;
     try {
-      claim = await bg("session:claimApply", { key: s.key, token: tabToken, grCode: gr.code, planHash: plan.hash });
+      const msg = { key: s.key, token: tabToken, grCode: gr.code, planHash: plan.hash };
+      if (auto) Object.assign(msg, { auto: true, uids: plan.steps.flatMap((st) => st.uids) });
+      claim = await bg("session:claimApply", msg);
     } catch (err) {
       claim = { ok: false, reason: String((err && err.message) || err) };
     }
     if (!claim || !claim.ok) {
+      if (auto) await autoSkip(s, `claim_${(claim && claim.reason) || "unknown"}`);
       applying = false;
-      showError("Không điền được", [CLAIM_MSG[claim && claim.reason] || (claim && claim.reason) || "?"], [{ label: "Kiểm tra lại", onClick: refresh }]);
+      showError("Không điền được", [CLAIM_MSG[claim && claim.reason] || (claim && claim.reason) || "?"], [{ label: "Kiểm tra lại", onClick: refresh }], gr);
       return;
     }
     let leaseLost = false;
@@ -537,7 +1211,7 @@
       };
       res = await A.runPlan(plan, api, (e) => {
         if (e.type === "done" || e.type === "already") i += 1;
-        if (e.type === "sending") panel.show({ tone: "busy", title: `Đang điền ${i + 1}/${n} · kế hoạch #${plan.hash}`, lines: [`${e.step.productName || e.step.productId} · lô ${e.step.lotDate}: ${e.step.before} → ${e.step.target}`] });
+        if (e.type === "sending") showGr(gr, { tone: "busy", title: `${auto ? "Đang TỰ điền" : "Đang điền"} ${i + 1}/${n} · kế hoạch #${plan.hash}`, lines: [`${e.step.productName || e.step.productId} · lô ${e.step.lotDate}: ${e.step.before} → ${e.step.target}`] });
         logTo(s.key, { type: `apply_${e.type}`, detailId: e.step && e.step.detailId, reason: e.reason, status: e.status });
       });
     } catch (err) {
@@ -559,38 +1233,68 @@
     } catch (_) {
       finished = false;
     }
+    if (auto && res.ok && finished) {
+      // v0.3.0 (§2.3): KHÔNG tải lại trước bước xác minh cuối; đọc lại toàn phiếu rồi mới giữ lượt và gửi HOÀN THÀNH một lần.
+      try {
+        await autoComplete(env, gr, s, plan, (opts && opts.units) || []);
+      } finally {
+        applying = false;
+      }
+      return;
+    }
     applying = false;
     if (res.ok && finished) {
       // Tải lại để màn POS hiện số lượng / mã vừa điền.
       reloading = true;
-      panel.show({ tone: "ok", title: `Đã điền ${plan.summary.toWrite} UID — đang tải lại phiếu…`, lines: [] });
+      showGr(gr, { tone: "ok", title: `Đã điền ${plan.summary.toWrite} UID — đang tải lại phiếu…`, lines: [] });
       setTimeout(() => location.reload(), T.reloadDelayMs);
       return;
     }
     if (!finished) {
-      showError("Mất quyền điền phiếu", ["Tab khác đã tiếp quản hoặc quyền hết hạn. Tab này đã dừng; kiểm tra lại phiếu."], [{ label: "Kiểm tra lại", onClick: refresh }]);
+      showError("Mất quyền điền phiếu", ["Tab khác đã tiếp quản hoặc quyền hết hạn. Tab này đã dừng; kiểm tra lại phiếu."], [{ label: "Kiểm tra lại", onClick: refresh }], gr);
       return;
     }
     refresh();
   }
 
   // ---------- sự kiện ----------
+  function onRoute(href) {
+    if (href === lastHref) return;
+    lastHref = href;
+    chosenGrId = null;
+    cancelClick("Đã rời trang — huỷ lượt chuẩn bị");
+    // v0.2.4: gỡ khung của trang cũ ngay, kể cả khi đang ghi (PM audit rev 1 P2) — tiến trình ghi vẫn chạy tới hết; view của nó chỉ
+    // hiện lại nếu quay về đúng trang phiếu (showGr).
+    panel.hide();
+    refresh();
+  }
+
   window.addEventListener("message", (e) => {
     if (e.source !== window || e.origin !== location.origin) return;
     const m = e.data;
     if (!m || m.mark !== HOOK || !m.payload) return;
     if (m.type === "auth" && E.envById(m.payload.envId) && m.payload.headers && m.payload.headers.authorization) {
-      const first = !authByEnv[m.payload.envId];
-      authByEnv[m.payload.envId] = m.payload.headers;
-      if (first) refresh();
+      if (onAuth(m.payload.envId, m.payload.headers)) refresh();
     } else if (m.type === "gr-status") onGrStatus(m.payload);
+    else if (m.type === "gr-list-request") onListRequest(m.payload);
+    else if (m.type === "gr-list") onListResponse(m.payload);
+    else if (m.type === "route") onRoute(location.href);
   });
 
   async function onGrStatus(p) {
     if (p.status !== "COMPLETED" || !(p.httpStatus >= 200 && p.httpStatus < 300)) return;
+    // v0.2.5 (PM AUDIT-A1 P2): phiếu ĐANG XEM vừa HOÀN THÀNH → trang sắp bỏ vùng sản phẩm. Gỡ ngay khung, dừng chờ chỗ gắn, bỏ lỗi
+    // giao diện cũ, bỏ view của lượt đánh giá đang dở. GET lại phiếu (refresh bên dưới) mới là nguồn trạng thái cuối.
+    const page = pageNow();
+    if (page && page.kind === "gr" && page.grId === lower(p.grId)) {
+      statusEpoch += 1;
+      panel.hide();
+    }
     try {
       const s = await bg("session:get", { envId: p.envId, grId: p.grId });
-      if (s && s.state !== "done") await bg("session:update", { key: s.key, patch: { state: "done" }, log: { type: "gr_completed" } });
+      // v0.3.0 (PM §2.3): phiên của lệnh HOÀN THÀNH tự động chỉ đóng khi GET phiếu thấy COMPLETED (evaluateGr sau refresh), không theo hook.
+      const autoPending = s && (s.state === "auto_completing" || s.state === "auto_complete_unknown");
+      if (s && s.state !== "done" && !autoPending) await bg("session:update", { key: s.key, patch: { state: "done" }, log: { type: "gr_completed" } });
     } catch (_) {
       /* bỏ qua */
     }
@@ -604,22 +1308,25 @@
       refresh();
       return;
     }
-    if (changes.grants && watched.key) {
-      refresh();
-      return;
+    // Cấp phép: chỉ khi bản ghi của ĐÚNG phiếu đang xem đổi (thêm / dùng / thu hồi).
+    if (changes.grants && watched.key && watched.grCode) {
+      const k = `${watched.envId}:${String(watched.grCode).trim().toUpperCase()}`;
+      const o = (changes.grants.oldValue || {})[k] || null;
+      const n = (changes.grants.newValue || {})[k] || null;
+      if (JSON.stringify(o) !== JSON.stringify(n)) refresh();
     }
-    if (changes.sessions && watched.key) {
-      const s = (changes.sessions.newValue || {})[watched.key];
-      if (!s || s.state !== watched.state) refresh();
+    if (changes.sessions) {
+      if (watched.key) {
+        // Chỉ khi trạng thái / dữ liệu nhận / lỗi điền / lượt nhận / hạ nhiệt đổi — bỏ qua posTabId / lease / log.
+        const s = (changes.sessions.newValue || {})[watched.key];
+        if (!s || sessionSig(s) !== watched.sig) refresh();
+      } else if (onList) scheduleListSessions();
     }
   });
 
+  // Dự phòng khi hook chưa báo đổi route (vd. trang đổi URL theo cách hook không thấy).
   setInterval(() => {
-    if (location.href !== lastHref) {
-      lastHref = location.href;
-      chosenGrId = null;
-      refresh();
-    }
+    if (location.href !== lastHref) onRoute(location.href);
   }, T.pollMs);
 
   bg("config:get")

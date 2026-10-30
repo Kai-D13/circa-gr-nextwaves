@@ -19,7 +19,8 @@
   const T = Object.assign({ pollMs: 700, collectTries: 6, collectDelayMs: 1500, httpTimeoutMs: 30000 }, C.tuning || {});
   const HOOK = "cgn/nw-hook";
   const ME = "cgn/nw-content";
-  const panel = C.ui.createPanel("GR ← Nextwaves");
+  // Khung không được che nút nhận hàng của màn quét.
+  const panel = C.ui.createPanel("GR ← Nextwaves", { avoidButtons: /^xác nhận nhận hàng$/iu });
   const OPEN = new Set(["waiting_nw", "nw_ready"]);
 
   // Mã lỗi nhận hàng của Nextwaves (từ bundle web) → câu cho dược sĩ. Extension không tự xử lý, chỉ báo.
@@ -44,6 +45,8 @@
   let collecting = false;
   let ctx = null; // {env, key, po, nwPoId, nwPoNumber, shipmentIds, expected, grCode, soBase, fingerprint, receiptIdsBefore, warehouseId}
   let note = null; // thông báo gần nhất của lượt nhận (giữ khi vẽ lại)
+  let autoGrant = null; // v0.3.0: quyền tự động một lần của phiên đang mở — CHỈ để hiện (background mới là nơi kiểm)
+  let ctxCreatedAt = null; // giờ tạo phiên đang mở — quyền tự động chỉ hiện khi gắn đúng phiên này (audit F3)
   let pendingScan = null; // lượt "Xác nhận nhận hàng" đến trước khi khớp xong đơn → xử lý ngay sau khi khớp
 
   async function bg(type, extra) {
@@ -126,7 +129,7 @@
       return panel.show({
         tone: "ok",
         title: `${s.grCode}: Nextwaves đã nhận xong`,
-        lines: ["Phiếu nhận trên POS đang được điền / đã điền."],
+        lines: ["Phiếu nhận trên POS đang được điền / đã điền."].concat(autoLineAfter(s)),
         buttons: [{ label: "Về POS", onClick: () => bg("session:focusPos", { key: s.key }) }],
       });
     }
@@ -145,6 +148,8 @@
       pendingScan = null;
       return onReceiveScan(p);
     }
+    ctxCreatedAt = s.createdAt;
+    await loadAutoGrant();
     if (!note) {
       if (s.scanOk) await collect({}); // tải lại trang giữa lúc đọc kết quả của lượt 2xx đã ghi nhận
       else await peekReceived();
@@ -247,6 +252,31 @@
     return ((c && c.expected && c.expected.shipments) || []).reduce((n, s) => n + s.lines.reduce((m, l) => m + l.units.length, 0), 0);
   }
 
+  async function loadAutoGrant() {
+    try {
+      const { autoGrants } = await chrome.storage.local.get("autoGrants");
+      const g = ctx ? (autoGrants || {})[ctx.key] : null;
+      // audit v0.3.0 F3: chỉ quyền gắn ĐÚNG phiên đang mở (phiên tạo lại cùng GR không thừa hưởng).
+      autoGrant = g && g.expiresAt > Date.now() && g.sessionCreatedAt === ctxCreatedAt ? g : null;
+    } catch (_) {
+      autoGrant = null;
+    }
+  }
+
+  // v0.3.0 (P2.5, audit F4): dòng trạng thái tự động sau lượt nhận — theo trạng thái THẬT của phiên, không để hiểu nhầm là vẫn tự
+  // HOÀN THÀNH khi lượt tự động đã dừng / chưa rõ.
+  function autoLineAfter(s) {
+    const log = s.log || [];
+    const auto = !!s.autoRun || !!(s.authorization && s.authorization.auto);
+    const stopped = (s.autoRun && s.autoRun.skipped) || log.some((l) => l.type === "auto_skipped" || l.type === "auto_verify_failed");
+    if (!auto) return stopped ? ["Tự động đã dừng — POS xử lý theo luồng thủ công."] : [];
+    if (s.state === "done") return [s.completeResult ? "Tự động: POS đã tự HOÀN THÀNH." : "POS đã HOÀN THÀNH."];
+    if (s.state === "auto_completing") return ["Tự động: đang gửi HOÀN THÀNH trên POS — không bấm HOÀN THÀNH."];
+    if (s.state === "auto_complete_unknown") return ["Tự động: chưa rõ POS đã HOÀN THÀNH chưa — kiểm tra trên POS, extension không gửi lại."];
+    if (stopped || s.state === "apply_stopped") return ["Tự động đã dừng — POS xử lý theo luồng thủ công."];
+    return ["Tự động: POS tự điền và tự HOÀN THÀNH khi đọc lại phiếu khớp hoàn toàn."];
+  }
+
   function renderReady() {
     if (!ctx) return;
     const key = ctx.key;
@@ -255,6 +285,11 @@
     else lines.push("Đặt hàng lên reader rồi bấm “Xác nhận nhận hàng”. Nhận đủ xong extension đưa về POS và lập kế hoạch điền phiếu.");
     const q = ctx.nwSearch;
     if (q) lines.push(`Tìm theo ${ctx.soBase}: total ${q.total}, đã đọc ${q.read}; ứng viên Buymed cùng kho ${q.candidates}; refId đúng SO ${q.verified}.`);
+    lines.push(
+      autoGrant
+        ? `Tự động: ĐÃ CHO PHÉP 1 lần (hết hạn ${new Date(autoGrant.expiresAt).toLocaleTimeString("vi-VN")}) — nhận xong, POS sẽ tự điền và tự HOÀN THÀNH khi đọc lại khớp.`
+        : "Tự động: chưa cho phép — nhận xong, điền phiếu POS thủ công."
+    );
     if (ctx.nwWriteLocks && ctx.nwWriteLocks.length) lines.push("Lưu ý: Nextwaves có nhiều đơn cùng SO — điền phiếu POS sẽ bị khoá (chỉ xem).");
     panel.show({
       tone: note ? note.tone : "info",
@@ -429,6 +464,7 @@
       config = changes.config.newValue || null;
       refresh();
     } else if (changes.sessions && !ctx) refresh();
+    else if (changes.autoGrants && ctx) loadAutoGrant().then(renderReady);
   });
 
   setInterval(() => {

@@ -47,6 +47,7 @@ function createBrowser(server, opts = {}) {
   let nextTabId = 1;
   let bgListener = null;
   const installedListeners = [];
+  const removedListeners = []; // chrome.tabs.onRemoved (v0.3.0: tab POS được giao bị đóng)
   // Sau close(): không mở tab / nạp trang, không tạo timer, không chuyển message hay sự kiện storage.
   // (Một message background đang dở lúc test kết thúc có thể mở tab mới → timer mới không ai dọn → tiến trình test sống mãi.)
   let closed = false;
@@ -124,6 +125,7 @@ function createBrowser(server, opts = {}) {
         return { id };
       },
       create: async (props) => ({ id: openTab(props.url).id }),
+      onRemoved: { addListener: (l) => removedListeners.push(l) },
     },
     windows: { update: async () => ({}) },
   };
@@ -143,6 +145,7 @@ function createBrowser(server, opts = {}) {
   function load(t) {
     kill(t.ctx);
     t.view = null;
+    t.viewKind = null;
     if (closed) return;
     const files = isolatedScriptsFor(t.url);
     if (!files) return;
@@ -159,6 +162,9 @@ function createBrowser(server, opts = {}) {
       reload() {
         t.reloads += 1;
         setImmediate(() => load(t));
+      },
+      assign(url) {
+        setImmediate(() => !c.dead && navigate(t, String(url)));
       },
     };
     win.addEventListener = (type, fn) => {
@@ -208,6 +214,30 @@ function createBrowser(server, opts = {}) {
         },
       },
     };
+    // Khung trong luồng trang phiếu (v0.2.4): anchor có / không do test đặt bằng t.setAnchor(bool) (mặc định có).
+    // Không có anchor → view chờ chỗ gắn; hết `tuning.uiWaitMs` (mặc định 0 = lượt sự kiện kế tiếp; panel thật 10 giây) mà VẪN chờ
+    // (chưa hide, anchor chưa có lại) → onMissing("missing") một lần. hide huỷ lượt chờ như panel thật (v0.2.5). Anchor có lại sau
+    // khi đã báo thiếu → onFound(); trước khi báo → chỉ gắn khung.
+    const inline = { opts: null, view: null, code: null, waiting: false, failed: false, timer: null };
+    c.inline = inline;
+    inline.arm = () => {
+      if (inline.waiting || inline.failed) return;
+      inline.waiting = true;
+      const fire = () => {
+        inline.timer = null;
+        if (c.dead || !inline.waiting || !inline.view || t.anchor) return;
+        inline.waiting = false;
+        inline.failed = true;
+        inline.opts.onMissing("missing");
+      };
+      if (tuning.uiWaitMs) inline.timer = setTimeout(fire, tuning.uiWaitMs);
+      else setImmediate(fire);
+    };
+    inline.disarm = () => {
+      if (inline.timer) clearTimeout(inline.timer);
+      inline.timer = null;
+      inline.waiting = inline.failed = false;
+    };
     win.__CGN__ = {
       tuning,
       ui: {
@@ -216,12 +246,66 @@ function createBrowser(server, opts = {}) {
           show: (v) => {
             if (c.dead) return;
             t.view = v;
+            t.viewKind = "float";
             t.views.push(v);
+            t.floatViews.push(v);
           },
           hide: () => {
-            if (!c.dead) t.view = null;
+            if (!c.dead && t.viewKind === "float") t.view = null;
           },
         }),
+        createInlinePanel: (brand, o) => {
+          inline.opts = o;
+          return {
+            show: (v, code) => {
+              if (c.dead) return;
+              inline.view = v;
+              inline.code = code || null;
+              if (!t.anchor) return inline.arm();
+              t.view = v;
+              t.viewKind = "inline";
+              t.views.push(v);
+              t.inlineViews.push(v);
+            },
+            hide: () => {
+              inline.view = inline.code = null;
+              inline.disarm();
+              if (!c.dead && t.viewKind === "inline") t.view = null;
+            },
+            anchoredFor: (code) => !c.dead && t.anchor && !!inline.view && inline.code === (code || null) && t.viewKind === "inline",
+          };
+        },
+      },
+      // pos/gr-list.js (DOM) thay bằng bộ giả: ghi lại model nút theo mã GR; "dòng" là object {code, connected}
+      // test tự tạo / đổi để mô phỏng DOM danh sách đổi (rev 2 R2).
+      grList: {
+        attach: (ctrl) => {
+          t.grListCtrl = ctrl;
+        },
+        activate: () => {
+          if (!c.dead) t.grListActive = true;
+        },
+        deactivate: () => {
+          if (c.dead) return;
+          t.grListActive = false;
+          t.grListModel = null;
+          t.grListNotice = null;
+        },
+        show: (m) => {
+          if (c.dead) return;
+          t.grListModel = m;
+          t.grListModels.push(m);
+        },
+        // v0.2.3: vùng thông báo trong luồng trang danh sách (thay khung nổi)
+        notice: (v) => {
+          if (c.dead || !t.grListActive) return;
+          t.grListNotice = v || null;
+          if (v) t.grListNotices.push(v);
+        },
+        rowValid: (row, code, grId) => {
+          const v = t.grListModel && t.grListModel.byCode ? t.grListModel.byCode.get(code) : null;
+          return !!row && row.connected !== false && row.code === code && !!v && v.grId === grId;
+        },
       },
     };
     vm.createContext(win);
@@ -242,7 +326,25 @@ function createBrowser(server, opts = {}) {
   }
 
   function openTab(url) {
-    const t = { id: nextTabId++, url, closed: false, ctx: null, view: null, views: [], loads: 0, reloads: 0, focusCount: 0, ss: new Map(), post: () => {} };
+    const t = { id: nextTabId++, url, closed: false, ctx: null, view: null, viewKind: null, views: [], loads: 0, reloads: 0, focusCount: 0, ss: new Map(), post: () => {}, grListCtrl: null, grListActive: false, grListModel: null, grListModels: [], grListNotice: null, grListNotices: [], anchor: true, floatViews: [], inlineViews: [] };
+    // Trang phiếu có / mất chỗ gắn khung (#all-receipt của đúng phiếu). Có lại khi khung đang chờ → onFound như trình duyệt thật.
+    t.setAnchor = (on) => {
+      t.anchor = !!on;
+      const inl = t.ctx && !t.ctx.dead ? t.ctx.inline : null;
+      if (!inl || !inl.opts) return;
+      if (!on && t.viewKind === "inline") {
+        t.view = null;
+        if (inl.view) inl.arm();
+      } else if (on && inl.view && (inl.waiting || inl.failed)) {
+        const wasFailed = inl.failed;
+        inl.disarm();
+        t.view = inl.view;
+        t.viewKind = "inline";
+        t.views.push(inl.view);
+        t.inlineViews.push(inl.view);
+        if (wasFailed) setImmediate(() => !t.ctx.dead && inl.opts.onFound());
+      }
+    };
     tabs.set(t.id, t);
     load(t);
     return t;
@@ -255,9 +357,12 @@ function createBrowser(server, opts = {}) {
     closeTab: (t) => {
       t.closed = true;
       kill(t.ctx);
+      if (!closed) for (const l of removedListeners) setImmediate(() => !closed && l(t.id, {}));
     },
     setConfig: (cfg) => storage.set({ config: cfg }),
     session: (key) => clone((store.sessions || {})[key] || null),
+    // Đổi trực tiếp vài trường của một phiên trong storage (vd. state) — listener storage của content chạy như trên Chrome.
+    patchSession: (key, patch) => storage.set({ sessions: Object.assign({}, store.sessions, { [key]: Object.assign({}, (store.sessions || {})[key], patch) }) }),
     sendFromPopup: (msg) => sendMessage(null, msg),
     sendFromTab: (t, msg) => sendMessage(t, msg),
     // Như chrome.runtime.onInstalled (vd. {reason: "update", previousVersion}).

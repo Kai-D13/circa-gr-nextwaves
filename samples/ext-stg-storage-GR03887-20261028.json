@@ -1,0 +1,546 @@
+{
+  "config": {
+    "mode": "STG",
+    "url": ""
+  },
+  "grants": {
+    "STG:GR3887": {
+      "createdAt": 1793198963045,
+      "envId": "STG",
+      "expiresAt": 1793200763045,
+      "grCode": "GR3887",
+      "schema": 1
+    }
+  },
+  "lastUpgrade": {
+    "at": "2026-10-28T06:42:42.229Z",
+    "from": "0.2.3",
+    "reason": "update",
+    "removedGrants": 0,
+    "removedSessions": [],
+    "to": "0.2.4"
+  },
+  "sessions": {
+    "STG:f2ae6e25-64bc-497b-81db-2de87284ec80": {
+      "applyError": null,
+      "applyResult": {
+        "at": 1793199013382,
+        "hash": "EF0E020C",
+        "steps": 5,
+        "uids": 15
+      },
+      "applyToken": null,
+      "authorization": {
+        "grCode": "GR03887",
+        "grantedAt": 1793199002358,
+        "planHash": "EF0E020C",
+        "usedAt": 1793199008612
+      },
+      "createdAt": 1793197977829,
+      "createdBy": "0.2.4",
+      "deliveryCode": "SOBD1594095-F",
+      "envId": "STG",
+      "expected": {
+        "orderId": "ec5f4cc3-f24e-4644-8f94-0d8ddf045eb2",
+        "orderStatus": "shipped",
+        "poId": "1c5ecb09-63b2-4938-84a5-99380f33b565",
+        "poNumber": "PO13806459",
+        "poStatus": "CONFIRMED",
+        "shipments": [
+          {
+            "id": "e67cd674-92ad-4d86-be96-557d50e541f6",
+            "lines": [
+              {
+                "lineId": "4bd48657-228c-40a9-8baa-80f17cd38776",
+                "posProductId": "2431732",
+                "quantity": 1,
+                "sku": "CIRCA-2431732",
+                "tagged": true,
+                "unit": "chai",
+                "units": [
+                  {
+                    "epc": "E280F30200000000EF01C9CA",
+                    "uid": "1793004395412AA1"
+                  }
+                ]
+              },
+              {
+                "lineId": "6cb5cf38-3bd5-4b7d-81dc-1d33ac2d14f7",
+                "posProductId": "1110",
+                "quantity": 3,
+                "sku": "CIRCA-1110",
+                "tagged": true,
+                "unit": "vỉ",
+                "units": [
+                  {
+                    "epc": "E280F30200000000EF01C9C9",
+                    "uid": "1793004427746AA1"
+                  },
+                  {
+                    "epc": "E280F30200000000EF01C9C8",
+                    "uid": "1793004433637AA1"
+                  },
+                  {
+                    "epc": "E280F30200000000EF01A9CB",
+                    "uid": "1793004446301AA1"
+                  }
+                ]
+              },
+              {
+                "lineId": "1947a8d5-5fa3-4449-8b64-c367e61fd901",
+                "posProductId": "1110",
+                "quantity": 3,
+                "sku": "CIRCA-1110",
+                "tagged": true,
+                "unit": "vỉ",
+                "units": [
+                  {
+                    "epc": "E280F30200000000EF01A9CA",
+                    "uid": "1793004470506AA1"
+                  },
+                  {
+                    "epc": "E280F30200000000EF01A9C9",
+                    "uid": "1793004479430AA1"
+                  },
+                  {
+                    "epc": "E280F30200000000EF01A9C8",
+                    "uid": "1793004487129AA1"
+                  }
+                ]
+              },
+              {
+                "lineId": "b6ce0c18-8070-472a-8068-284296be4fe0",
+                "posProductId": "5451",
+                "quantity": 4,
+                "sku": "CIRCA-5451",
+                "tagged": true,
+                "unit": "vỉ",
+                "units": [
+                  {
+                    "epc": "E280F30200000000EF0189CB",
+                    "uid": "1793004506208AA1"
+                  },
+                  {
+                    "epc": "E280F30200000000EF0189CA",
+                    "uid": "1793004511259AA1"
+                  },
+                  {
+                    "epc": "E280F30200000000EF0189C9",
+                    "uid": "1793004525549AA1"
+                  },
+                  {
+                    "epc": "E280F30200000000EF0189C8",
+                    "uid": "1793004531629AA1"
+                  }
+                ]
+              },
+              {
+                "lineId": "0fc5a64e-b6a0-4aa7-a874-1a22d5e07e37",
+                "posProductId": "5451",
+                "quantity": 4,
+                "sku": "CIRCA-5451",
+                "tagged": true,
+                "unit": "vỉ",
+                "units": [
+                  {
+                    "epc": "E280F30200000000EB01E9CB",
+                    "uid": "1793004559179AA1"
+                  },
+                  {
+                    "epc": "E280F30200000000EB01E9CA",
+                    "uid": "1793004566673AA1"
+                  },
+                  {
+                    "epc": "E280F30200000000EB01E9C9",
+                    "uid": "1793004587596AA1"
+                  },
+                  {
+                    "epc": "E280F30200000000EB01E9C8",
+                    "uid": "1793004593629AA1"
+                  }
+                ]
+              }
+            ],
+            "needsAccept": true,
+            "number": "IT-BUYMED-STAG-20261026085109-4520",
+            "status": "pending"
+          }
+        ],
+        "slug": "buymed-stag",
+        "warehouseId": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57"
+      },
+      "fingerprint": [
+        {
+          "baseQuantity": 12,
+          "productId": "1110",
+          "ratesByUnitName": {
+            "hộp": 6,
+            "lốc": 12,
+            "viên": 1,
+            "vỉ": 2
+          }
+        },
+        {
+          "baseQuantity": 40,
+          "productId": "5451",
+          "ratesByUnitName": {
+            "hộp": 20,
+            "lốc": 80,
+            "túi": 10,
+            "viên": 1,
+            "vỉ": 5
+          }
+        },
+        {
+          "baseQuantity": 1,
+          "productId": "2431732",
+          "ratesByUnitName": {
+            "chai": 1,
+            "lốc": 4,
+            "thùng": 16
+          }
+        }
+      ],
+      "fpRows": [
+        {
+          "grBase": 12,
+          "nwBase": 12,
+          "productId": "1110"
+        },
+        {
+          "grBase": 40,
+          "nwBase": 40,
+          "productId": "5451"
+        },
+        {
+          "grBase": 1,
+          "nwBase": 1,
+          "productId": "2431732"
+        }
+      ],
+      "grCode": "GR03887",
+      "grId": "f2ae6e25-64bc-497b-81db-2de87284ec80",
+      "key": "STG:f2ae6e25-64bc-497b-81db-2de87284ec80",
+      "lease": null,
+      "log": [
+        {
+          "at": "2026-10-28T14:32:57.829Z",
+          "deliveryCode": "SOBD1594095-F",
+          "type": "start",
+          "writeLocks": []
+        },
+        {
+          "at": "2026-10-28T14:32:58.612Z",
+          "candidates": 1,
+          "nwPoNumber": "PO13806459",
+          "preReceived": 0,
+          "receiptsBefore": 0,
+          "refId": "SOBD1594095-1056823",
+          "shipments": 1,
+          "total": 1,
+          "type": "nw_matched",
+          "verified": 1,
+          "writeLocks": []
+        },
+        {
+          "at": "2026-10-28T14:36:59.944Z",
+          "httpStatus": 200,
+          "message": null,
+          "reason": null,
+          "sentEpcs": 15,
+          "type": "receive_scan"
+        },
+        {
+          "at": "2026-10-28T14:36:59.946Z",
+          "httpStatus": 200,
+          "scanAt": "2026-10-28T14:36:59.942Z",
+          "sentEpcs": 15,
+          "shipmentId": "e67cd674-92ad-4d86-be96-557d50e541f6",
+          "type": "scan_ok"
+        },
+        {
+          "at": "2026-10-28T14:37:00.122Z",
+          "type": "nw_received",
+          "units": 15
+        },
+        {
+          "at": "2026-10-28T14:37:02.108Z",
+          "blocked": [],
+          "complete": false,
+          "hash": "EF0E020C",
+          "ok": true,
+          "steps": 5,
+          "summary": {
+            "alreadyOnGr": 0,
+            "details": 5,
+            "toWrite": 15,
+            "uids": 15
+          },
+          "type": "plan"
+        },
+        {
+          "at": "2026-10-28T14:48:27.658Z",
+          "blocked": [],
+          "complete": false,
+          "hash": "EF0E020C",
+          "ok": true,
+          "steps": 5,
+          "summary": {
+            "alreadyOnGr": 0,
+            "details": 5,
+            "toWrite": 15,
+            "uids": 15
+          },
+          "type": "plan"
+        },
+        {
+          "at": "2026-10-28T14:50:02.925Z",
+          "blocked": [],
+          "complete": false,
+          "hash": "EF0E020C",
+          "ok": true,
+          "steps": 5,
+          "summary": {
+            "alreadyOnGr": 0,
+            "details": 5,
+            "toWrite": 15,
+            "uids": 15
+          },
+          "type": "plan"
+        },
+        {
+          "at": "2026-10-28T14:50:08.614Z",
+          "planHash": "EF0E020C",
+          "takeover": false,
+          "type": "apply_claimed"
+        },
+        {
+          "at": "2026-10-28T14:50:09.067Z",
+          "detailId": "c195ef16-17ff-4586-8139-c850d51b9f0f",
+          "type": "apply_sending"
+        },
+        {
+          "at": "2026-10-28T14:50:09.731Z",
+          "detailId": "c195ef16-17ff-4586-8139-c850d51b9f0f",
+          "type": "apply_done"
+        },
+        {
+          "at": "2026-10-28T14:50:10.252Z",
+          "detailId": "7153a624-92e7-4750-875c-8997be64e264",
+          "type": "apply_sending"
+        },
+        {
+          "at": "2026-10-28T14:50:10.890Z",
+          "detailId": "7153a624-92e7-4750-875c-8997be64e264",
+          "type": "apply_done"
+        },
+        {
+          "at": "2026-10-28T14:50:11.352Z",
+          "detailId": "c1b879eb-adde-44a9-9294-902838f1bc52",
+          "type": "apply_sending"
+        },
+        {
+          "at": "2026-10-28T14:50:11.763Z",
+          "detailId": "c1b879eb-adde-44a9-9294-902838f1bc52",
+          "type": "apply_done"
+        },
+        {
+          "at": "2026-10-28T14:50:12.129Z",
+          "detailId": "90139b9b-5fc6-4106-8e0e-99c18516ed6e",
+          "type": "apply_sending"
+        },
+        {
+          "at": "2026-10-28T14:50:12.485Z",
+          "detailId": "90139b9b-5fc6-4106-8e0e-99c18516ed6e",
+          "type": "apply_done"
+        },
+        {
+          "at": "2026-10-28T14:50:12.899Z",
+          "detailId": "a30d2e94-7e43-4164-aaff-00bd8f0b96f6",
+          "type": "apply_sending"
+        },
+        {
+          "at": "2026-10-28T14:50:13.385Z",
+          "detailId": "a30d2e94-7e43-4164-aaff-00bd8f0b96f6",
+          "type": "apply_done"
+        },
+        {
+          "at": "2026-10-28T14:50:13.389Z",
+          "type": "applied"
+        },
+        {
+          "at": "2026-10-28T14:54:25.755Z",
+          "type": "gr_completed"
+        },
+        {
+          "at": "2026-10-28T14:54:35.897Z",
+          "reason": "missing",
+          "type": "ui_anchor_missing"
+        }
+      ],
+      "nwOrderId": "ec5f4cc3-f24e-4644-8f94-0d8ddf045eb2",
+      "nwPoId": "1c5ecb09-63b2-4938-84a5-99380f33b565",
+      "nwPoNumber": "PO13806459",
+      "nwRefId": "SOBD1594095-1056823",
+      "nwResult": {
+        "at": 1793198220119,
+        "nwPoNumber": "PO13806459",
+        "receiptIds": [
+          "d1c02533-7981-455f-86a6-6bb6c7d2e782"
+        ],
+        "units": [
+          {
+            "batchExpiry": null,
+            "batchNumber": null,
+            "epc": "E280F30200000000EF01C9CA",
+            "posProductId": "2431732",
+            "uid": "1793004395412AA1",
+            "unitName": "chai"
+          },
+          {
+            "batchExpiry": "2028-12-12",
+            "batchNumber": "261009DHAUS",
+            "epc": "E280F30200000000EF01C9C9",
+            "posProductId": "1110",
+            "uid": "1793004427746AA1",
+            "unitName": "vỉ"
+          },
+          {
+            "batchExpiry": "2028-12-12",
+            "batchNumber": "261009DHAUS",
+            "epc": "E280F30200000000EF01C9C8",
+            "posProductId": "1110",
+            "uid": "1793004433637AA1",
+            "unitName": "vỉ"
+          },
+          {
+            "batchExpiry": "2028-12-12",
+            "batchNumber": "261009DHAUS",
+            "epc": "E280F30200000000EF01A9CB",
+            "posProductId": "1110",
+            "uid": "1793004446301AA1",
+            "unitName": "vỉ"
+          },
+          {
+            "batchExpiry": "2028-06-06",
+            "batchNumber": "20261026FHDOIFNDSL",
+            "epc": "E280F30200000000EF01A9CA",
+            "posProductId": "1110",
+            "uid": "1793004470506AA1",
+            "unitName": "vỉ"
+          },
+          {
+            "batchExpiry": "2028-06-06",
+            "batchNumber": "20261026FHDOIFNDSL",
+            "epc": "E280F30200000000EF01A9C9",
+            "posProductId": "1110",
+            "uid": "1793004479430AA1",
+            "unitName": "vỉ"
+          },
+          {
+            "batchExpiry": "2028-06-06",
+            "batchNumber": "20261026FHDOIFNDSL",
+            "epc": "E280F30200000000EF01A9C8",
+            "posProductId": "1110",
+            "uid": "1793004487129AA1",
+            "unitName": "vỉ"
+          },
+          {
+            "batchExpiry": "2028-12-12",
+            "batchNumber": "261009KSDHAU",
+            "epc": "E280F30200000000EF0189CB",
+            "posProductId": "5451",
+            "uid": "1793004506208AA1",
+            "unitName": "vỉ"
+          },
+          {
+            "batchExpiry": "2028-12-12",
+            "batchNumber": "261009KSDHAU",
+            "epc": "E280F30200000000EF0189CA",
+            "posProductId": "5451",
+            "uid": "1793004511259AA1",
+            "unitName": "vỉ"
+          },
+          {
+            "batchExpiry": "2028-12-12",
+            "batchNumber": "261009KSDHAU",
+            "epc": "E280F30200000000EF0189C9",
+            "posProductId": "5451",
+            "uid": "1793004525549AA1",
+            "unitName": "vỉ"
+          },
+          {
+            "batchExpiry": "2028-12-12",
+            "batchNumber": "261009KSDHAU",
+            "epc": "E280F30200000000EF0189C8",
+            "posProductId": "5451",
+            "uid": "1793004531629AA1",
+            "unitName": "vỉ"
+          },
+          {
+            "batchExpiry": "2028-06-06",
+            "batchNumber": "20261026FIDBU",
+            "epc": "E280F30200000000EB01E9CB",
+            "posProductId": "5451",
+            "uid": "1793004559179AA1",
+            "unitName": "vỉ"
+          },
+          {
+            "batchExpiry": "2028-06-06",
+            "batchNumber": "20261026FIDBU",
+            "epc": "E280F30200000000EB01E9CA",
+            "posProductId": "5451",
+            "uid": "1793004566673AA1",
+            "unitName": "vỉ"
+          },
+          {
+            "batchExpiry": "2028-06-06",
+            "batchNumber": "20261026FIDBU",
+            "epc": "E280F30200000000EB01E9C9",
+            "posProductId": "5451",
+            "uid": "1793004587596AA1",
+            "unitName": "vỉ"
+          },
+          {
+            "batchExpiry": "2028-06-06",
+            "batchNumber": "20261026FIDBU",
+            "epc": "E280F30200000000EB01E9C8",
+            "posProductId": "5451",
+            "uid": "1793004593629AA1",
+            "unitName": "vỉ"
+          }
+        ]
+      },
+      "nwSearch": {
+        "candidates": 1,
+        "read": 1,
+        "total": 1,
+        "verified": 1
+      },
+      "nwTabId": 2086615479,
+      "nwWriteLocks": [],
+      "poPosCode": "PO00006767",
+      "poPosId": "89f26d2c-326c-4f71-b33b-6742a3e09078",
+      "posId": "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d",
+      "posTabId": 2086615473,
+      "receiptIdsBefore": [],
+      "retryNotBefore": null,
+      "returnUrl": "https://pos.stg.circa-v2.buymed.tech/danh-sach-phieu-nhan-hang/f2ae6e25-64bc-497b-81db-2de87284ec80",
+      "scanOk": {
+        "at": 1793198219942,
+        "httpStatus": 200,
+        "sentEpcs": 15,
+        "shipmentId": "e67cd674-92ad-4d86-be96-557d50e541f6"
+      },
+      "schema": 1,
+      "shipmentIds": [
+        "e67cd674-92ad-4d86-be96-557d50e541f6"
+      ],
+      "soBase": "SOBD1594095",
+      "state": "done",
+      "updatedAt": 1793199275897,
+      "warehouseId": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57",
+      "writeLocks": []
+    }
+  }
+}

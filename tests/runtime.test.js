@@ -44,12 +44,24 @@ function makeServer(opts = {}) {
     if (u.origin === POS) {
       if (u.pathname === "/thuocsi-warehouse/qrcode") {
         const code = u.searchParams.get("code");
+        if (opts.qrHold) await opts.qrHold; // treo tra QR tới khi test cho chạy tiếp
+        if (opts.qrDown && opts.qrDown.has(code)) return { status: 503, json: { message: "tạm lỗi" } };
         const q = qr[code];
         return { status: 200, json: { status: "OK", data: q ? [{ uniqueId: code, shortId: code, productId: q.productId, lot: q.lot, expiredDate: q.expiredDate, status: "NORMAL" }] : [] } };
       }
       if (!u.pathname.startsWith("/backend/v1/")) return { status: 404, json: {} };
       if (req.headers.authorization !== "Bearer pos-test") return { status: 401, json: { message: "unauthorized" } };
       let m = /^\/backend\/v1\/order\/goods-receipt\/([0-9a-f-]{36})$/.exec(u.pathname);
+      if (m && req.method === "GET" && opts.grHolds && opts.grHolds[m[1]]) await opts.grHolds[m[1]]; // treo tới khi test cho chạy tiếp
+      if (m && req.method === "GET" && st.grHoldOnce && m[1] === st.gr.data.id) {
+        // v0.2.5: treo MỘT lần GET phiếu, trả ảnh chụp lúc nhận request (response cũ về muộn).
+        const h = st.grHoldOnce;
+        st.grHoldOnce = null;
+        st.grHeld = true;
+        const snap = H.clone(st.gr);
+        await h;
+        return { status: 200, json: snap };
+      }
       if (m && req.method === "GET") return m[1] === st.gr.data.id ? { status: 200, json: H.clone(st.gr) } : { status: 404, json: {} };
       m = /^\/backend\/v1\/pos\/([0-9a-f-]{36})\/po\/([0-9a-f-]{36})$/.exec(u.pathname);
       if (m && req.method === "GET") {
@@ -59,7 +71,10 @@ function makeServer(opts = {}) {
         return { status: 200, json: po };
       }
       if (u.pathname === "/backend/v1/order/goods-receipt/search" && req.method === "GET") {
+        if (opts.searchHold && decodeURIComponent(u.search).includes(`so_thuocsi=${opts.searchHold.so},`)) await opts.searchHold.p; // treo tìm theo SO đó
         const r = H.sample("pos-stg-gr-search-so-1593858.json");
+        // Tìm theo SO khác SO mẫu (1593858) → không có phiếu nhận (đơn của SO khác không có trong dữ liệu mẫu).
+        if (opts.otherSoEmpty && !decodeURIComponent(u.search).includes("so_thuocsi=1593858,")) Object.assign(r.data, { goods_receipts: [], total: 0 });
         if (opts.extraGr) {
           r.data.goods_receipts.push(Object.assign(H.clone(r.data.goods_receipts[0]), { id: "11111111-2222-4333-8444-555555555555", code: "GR03999", purchase_order_code: "PO00006999" }));
           r.data.total = 2;
@@ -130,8 +145,10 @@ const viewTitle = (t) => (t.view ? t.view.title : null);
 const fillButton = (t) => t.view && t.view.buttons && t.view.buttons.find((x) => x.label.startsWith("Điền vào phiếu GR03878 · kế hoạch #"));
 const codesOnGr = (srv) => srv.st.gr.data.items.flatMap((i) => i.details).flatMap((d) => d.thuocsi_qr_codes || []);
 const claimMsg = (token, extra) => Object.assign({ type: "session:claimApply", key: KEY, token, grCode: "GR03878", planHash: "ABCDEF12" }, extra || {});
+// v0.2: mở phiếu không tự tạo phiên — dược sĩ bấm "Nhận hàng bằng RFID".
+const startBtn = (t) => t.view && t.view.buttons && t.view.buttons.find((x) => x.label === "Nhận hàng bằng RFID");
 
-// Mở GR trên POS → chờ tab Nextwaves → khớp đơn. Trả {b, srv, pos, nw}.
+// Mở GR trên POS → bấm "Nhận hàng bằng RFID" → chờ tab Nextwaves → khớp đơn. Trả {b, srv, pos, nw}.
 // Bước dựng hỏng thì tự đóng trình duyệt giả (không thì timer của nó giữ tiến trình test chạy mãi).
 async function openToReady(opts = {}) {
   const srv = makeServer(opts.server);
@@ -140,6 +157,7 @@ async function openToReady(opts = {}) {
     await b.setConfig(opts.config || { mode: "STG", url: "" });
     const pos = b.openTab(opts.posUrl || `${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
     pos.post(POS_AUTH);
+    (await until(() => startBtn(pos))).onClick();
     const nw = await until(() => b.tabs().find((t) => t.url.startsWith(NW)));
     nw.post(NW_AUTH);
     await sessionState(b, "nw_ready");
@@ -221,7 +239,7 @@ test("E2E STG GR03878: GR → Nextwaves ?po=SOBD1593858 → khớp PO28237814 �
     srv.st.gr.data.status = "COMPLETED";
     pos.post({ mark: "cgn/pos-hook", type: "gr-status", payload: { envId: "STG", grId: GR_ID, status: "COMPLETED", httpStatus: 200 } });
     await sessionState(b, "done");
-    await until(() => viewTitle(pos) === "GR03878: đã HOÀN THÀNH");
+    await until(() => pos.view === null); // v0.2.5 (PM AUDIT-A1 P2): phiếu đã HOÀN THÀNH → không còn khung trên trang phiếu
 
     // Bất biến.
     const nwCalls = srv.st.log.filter((r) => r.url.startsWith(NWAPI));
@@ -233,6 +251,46 @@ test("E2E STG GR03878: GR → Nextwaves ?po=SOBD1593858 → khớp PO28237814 �
     assert.equal(srv.st.puts.length, 6, "không ghi thêm sau khi tải lại");
   } finally {
     b.close();
+  }
+});
+
+test("v0.2 S6: tra QR một lần mỗi phiên + lượt nhận — 12 UID = 12 GET dù cấp phép / phiên đổi; lỗi không cache; 'Kiểm tra lại' tra lại hết", async () => {
+  const qrGets = (srv) => srv.st.log.filter((r) => new URL(r.url).pathname === "/thuocsi-warehouse/qrcode").length;
+  const { b, srv, pos } = await openToReceived();
+  try {
+    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền");
+    assert.equal(qrGets(srv), 12);
+    await grant(b); // cấp phép của đúng phiếu → lập lại kế hoạch, QR lấy từ cache
+    await until(() => fillButton(pos));
+    await settle(100);
+    const grGets = () => srv.st.log.filter((r) => r.method === "GET" && new URL(r.url).pathname === `/backend/v1/order/goods-receipt/${GR_ID}`).length;
+    const g0 = grGets();
+    await grant(b, "GR09999"); // cấp phép phiếu khác → không đánh giá lại (không đọc lại GR)
+    await settle(150);
+    assert.equal(grGets(), g0, "cấp phép phiếu khác không làm đọc lại phiếu");
+    assert.equal(qrGets(srv), 12, "không tra lại khi cấp phép / phiên đổi");
+  } finally {
+    b.close();
+  }
+  // Một UID tra lỗi (503): kế hoạch chặn; lỗi không cache → lần lập lại chỉ tra UID đó; "Kiểm tra lại" tra lại cả 12.
+  const down = new Set(["1792145819958AA1"]);
+  const ctx = await openToReceived({ server: { qrDown: down } });
+  try {
+    const recheck = await until(() => ctx.pos.view && ctx.pos.view.buttons && ctx.pos.view.buttons.find((x) => x.label === "Kiểm tra lại"));
+    await settle(150);
+    // 12 lần đầu; có thể thêm 1 nếu phiên đổi ngay lúc vừa nhận (lập lại kế hoạch: UID OK lấy cache, chỉ UID lỗi tra lại).
+    const n0 = qrGets(ctx.srv);
+    assert.ok(n0 === 12 || n0 === 13, `n0=${n0}`);
+    await grant(ctx.b); // đổi cấp phép của đúng phiếu → lập lại kế hoạch
+    await until(() => qrGets(ctx.srv) === n0 + 1);
+    await settle(100);
+    assert.equal(qrGets(ctx.srv), n0 + 1, "chỉ tra lại UID lỗi");
+    down.clear();
+    recheck.onClick();
+    await until(() => qrGets(ctx.srv) === n0 + 13);
+    await until(() => fillButton(ctx.pos));
+  } finally {
+    ctx.b.close();
   }
 });
 
@@ -299,8 +357,9 @@ test("P1.3: production chỉ đọc — không cấp phép được, phiên PRD 
     assert.match(g.error, /chỉ đọc/);
     // Phiên PRD tạo từ trang POS production (cửa hàng PRD đã map kho) ở trạng thái received → claim vẫn bị chặn.
     const prd = b.openTab(`https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/${GR_ID}`);
-    const st = await b.sendFromTab(prd, { type: "session:start", envId: "PRD", grId: GR_ID, grCode: "GR03878", posId: "c476efb2-415c-429a-978e-d389b4b06607", soBase: "SOBD1", warehouseId: "eb5e2b4f-6f92-413b-90ef-6be1730b94c0", returnUrl: "https://pos.v2.circa.vn/" });
+    const st = await b.sendFromTab(prd, { type: "session:start", envId: "PRD", grId: GR_ID, grCode: "GR03878", posId: "c476efb2-415c-429a-978e-d389b4b06607", soBase: "SOBD1", warehouseId: "eb5e2b4f-6f92-413b-90ef-6be1730b94c0" });
     assert.equal(st.ok, true, st.error);
+    assert.equal(st.data.returnUrl, `https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/${GR_ID}`, "background tự dựng đích quay về");
     b.store.sessions[`PRD:${GR_ID}`].state = "received";
     const r = await b.sendFromTab(prd, claimMsg("x", { key: `PRD:${GR_ID}` }));
     assert.deepEqual(r.data, { ok: false, reason: "env_read_only" });
@@ -527,10 +586,10 @@ test("Nhận thiếu 1 UID (keep_open): giữ ở Nextwaves, báo 11/12, không 
   }
 });
 
-test("Đường (2) /chi-tiet-so/SOBD1593858: tìm GR theo SO + cửa hàng → cùng luồng, quay về trang SO", async () => {
+test("Đường /chi-tiet-so/SOBD1593858: tìm GR theo SO + cửa hàng → bấm nút → cùng luồng; đích quay về là trang phiếu (background tự dựng)", async () => {
   const { b, srv, pos } = await openToReady({ posUrl: `${POS}/chi-tiet-so/SOBD1593858` });
   try {
-    assert.equal(b.session(KEY).returnUrl, `${POS}/chi-tiet-so/SOBD1593858`);
+    assert.equal(b.session(KEY).returnUrl, `${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
     const search = srv.st.log.find((r) => r.url.includes("/goods-receipt/search"));
     assert.match(decodeURIComponent(search.url), /so_thuocsi=1593858,pos_id=64a8663b-0c9e-49c6-9626-0a4c7c4bd53d/);
     await until(() => pos.view && pos.view.title.startsWith("Đã khớp đơn Nextwaves"));
@@ -573,7 +632,7 @@ test("Chưa chọn môi trường / môi trường PRD → không làm gì trên
   }
 });
 
-test("Huỷ phiên trên POS → tải lại trang không tự mở Nextwaves; bấm 'Nhận bằng Nextwaves' → mở lại", async () => {
+test("Huỷ phiên trên POS → tải lại trang không tự mở Nextwaves; bấm 'Nhận hàng bằng RFID' → mở lại", async () => {
   const { b, pos } = await openToReady();
   try {
     const nwTabs = () => b.tabs().filter((t) => t.url.startsWith(NW)).length;
@@ -583,7 +642,7 @@ test("Huỷ phiên trên POS → tải lại trang không tự mở Nextwaves; b
     await until(() => b.session(KEY) === null);
     pos.reload();
     pos.post(POS_AUTH);
-    const start = await until(() => pos.view && pos.view.buttons && pos.view.buttons.find((x) => x.label === "Nhận bằng Nextwaves"));
+    const start = await until(() => startBtn(pos));
     await settle();
     assert.equal(nwTabs(), before, "không tự mở thêm tab");
     assert.equal(b.session(KEY), null);
@@ -714,6 +773,10 @@ test("P1.6 đường /chi-tiet-so: danh sách chưa đủ / không rõ → dừn
         const pick = await until(() => pos.view && pos.view.buttons && pos.view.buttons.find((x) => x.label.startsWith("GR03878")));
         assert.equal(pos.view.buttons.length, 2, name);
         pick.onClick();
+        // v0.2: chọn phiếu chỉ hiện nút; chưa có phiên tới khi bấm "Nhận hàng bằng RFID".
+        const start = await until(() => startBtn(pos));
+        assert.equal(b.session(KEY), null, name);
+        start.onClick();
         await sessionState(b, "waiting_nw");
         assert.deepEqual(b.session(KEY).writeLocks, ["so_many_gr"], name);
       }
@@ -766,6 +829,7 @@ test("P1.7: session:nwMatched — chỉ từ trang Nextwaves, chỉ khi phiên c
     await b.setConfig({ mode: "STG", url: "" });
     const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
     pos.post(POS_AUTH);
+    (await until(() => startBtn(pos))).onClick();
     const nw = await until(() => b.tabs().find((t) => t.url.startsWith(NW)));
     // Chưa gửi header Nextwaves → tab Nextwaves chưa tự khớp; phiên đang waiting_nw.
     await sessionState(b, "waiting_nw");
@@ -833,6 +897,7 @@ test("P2.4: phiên bản cũ (không schema, thiếu khoá) không được ghi 
     const tabsBefore = b.tabs().length;
     pos.reload();
     pos.post(POS_AUTH);
+    (await until(() => startBtn(pos))).onClick(); // v0.2: phiên bản cũ không được tìm lại → cần bấm để tạo phiên mới
     const s2 = await until(() => {
       const s = b.session(KEY);
       return s && s.schema === 1 && s;
@@ -901,7 +966,7 @@ test("P2.4: onInstalled (update, cùng extension ID) xoá phiên + cấp phép c
   }
 });
 
-test("Chống vòng lặp tạo phiên: background không trả lại phiên vừa tạo → POS tạo phiên đúng một lần rồi báo lỗi, không gọi API lặp", async () => {
+test("Không tạo phiên lặp: background không trả lại phiên vừa tạo → một lần tạo + mở Nextwaves, không gọi API lặp; chỉ còn nút để bấm lại", async () => {
   const srv = makeServer();
   // session:get luôn trả "không có phiên" (mô phỏng background / storage hỏng).
   const b = createBrowser(srv.handle, { interceptBg: (msg) => (msg.type === "session:get" ? { ok: true, data: null } : undefined) });
@@ -909,14 +974,628 @@ test("Chống vòng lặp tạo phiên: background không trả lại phiên v�
     await b.setConfig({ mode: "STG", url: "" });
     const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
     pos.post(POS_AUTH);
-    await until(() => viewTitle(pos) === "GR03878: không đọc lại được phiên vừa tạo");
-    await settle(300);
-    const poReads = srv.st.log.filter((r) => /\/backend\/v1\/pos\/.+\/po\//.test(new URL(r.url).pathname)).length;
-    const searches = srv.st.log.filter((r) => r.url.includes("/goods-receipt/search")).length;
-    assert.deepEqual([poReads, searches], [2, 1], "đọc PO 2 lần (lần tạo + lần phát hiện), tìm GR theo SO 1 lần");
+    await until(() => startBtn(pos));
+    await settle(100);
+    assert.equal(b.tabs().filter((t) => t.url.startsWith(NW)).length, 0, "mở phiếu không tự mở Nextwaves");
+    startBtn(pos).onClick();
+    await until(() => b.tabs().some((t) => t.url.startsWith(NW)));
+    await until(() => startBtn(pos)); // phiên không đọc lại được → chỉ hiện lại nút, không tự tạo
+    await settle(200);
+    const count = () => [srv.st.log.filter((r) => /\/backend\/v1\/pos\/.+\/po\//.test(new URL(r.url).pathname)).length, srv.st.log.filter((r) => r.url.includes("/goods-receipt/search")).length];
+    const c1 = count();
+    await settle(400);
+    assert.deepEqual(count(), c1, "không gọi API lặp");
+    assert.equal(c1[1], 1, "tìm GR theo SO đúng một lần (lượt bấm)");
     assert.equal(b.tabs().filter((t) => t.url.startsWith(NW)).length, 1, "chỉ mở Nextwaves một lần");
-    assert.equal(viewTitle(pos), "GR03878: không đọc lại được phiên vừa tạo");
   } finally {
+    b.close();
+  }
+});
+
+// ---------- v0.2.4 (PM P2): khung trang phiếu nằm trong luồng trang trước #all-receipt ----------
+const isFill = (v) => !!v && (v.buttons || []).some((x) => /^Điền vào phiếu/.test(x.label));
+const grantCount = async (b) => (await b.sendFromPopup({ type: "grant:list" })).data.length;
+
+test("P2: trang phiếu — mọi trạng thái (nút bắt đầu, đang kiểm, đã khớp Nextwaves, tra UID, kế hoạch chỉ xem, có cấp phép, đang điền, đã điền) vẽ vào khung TRONG LUỒNG mang mã GR03878; không khung nổi; HOÀN THÀNH → gỡ khung (v0.2.5)", async () => {
+  const { b, srv, pos } = await openToReceived();
+  try {
+    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền");
+    await grant(b);
+    (await until(() => fillButton(pos))).onClick();
+    await sessionState(b, "applied");
+    await until(() => pos.reloads >= 1 && pos.loads >= 2);
+    pos.post(POS_AUTH);
+    await until(() => viewTitle(pos) === "GR03878: đã điền 12 UID từ Nextwaves");
+    srv.st.gr.data.status = "COMPLETED";
+    pos.post({ mark: "cgn/pos-hook", type: "gr-status", payload: { envId: "STG", grId: GR_ID, status: "COMPLETED", httpStatus: 200 } });
+    await sessionState(b, "done");
+    await until(() => pos.view === null);
+    assert.equal(pos.floatViews.length, 0, "trang phiếu không dùng khung nổi");
+    const titles = pos.inlineViews.map((v) => v.title);
+    for (const t of ["GR03878 · SOBD1593858-F", "Đang kiểm GR03878…", "Đã khớp đơn Nextwaves — chờ nhận hàng", "Đang tra 12 UID trên POS…", "Chỉ xem kế hoạch — chưa có cấp phép điền", "Đã có cấp phép điền GR03878 (1 lần)", "GR03878: đã điền 12 UID từ Nextwaves"]) {
+      assert.ok(titles.includes(t), `thiếu trạng thái "${t}" trong khung trong luồng`);
+    }
+    assert.ok(titles.some((t) => /^Đang điền 1\/6 · kế hoạch #[0-9A-F]{8}$/.test(t)), "đang điền");
+    const untagged = pos.inlineViews.filter((v) => v.grCode !== "GR03878").map((v) => v.title);
+    assert.deepEqual([...new Set(untagged)].filter((t) => t !== "Đang chờ POS tải dữ liệu…"), [], "view của phiếu mang mã phiếu (chỉ gắn cạnh bảng của đúng phiếu)");
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    b.close();
+  }
+});
+
+test("P2: trang phiếu không có chỗ gắn khung → lỗi giao diện ở khung nổi CHỈ có 'Kiểm tra lại'; có cấp phép vẫn không có nút Điền, 0 PUT, cấp phép giữ, nhật ký phiên ghi chẩn đoán; chỗ gắn có lại → khung trong luồng + điền đủ", async () => {
+  const { b, srv, pos } = await openToReceived();
+  try {
+    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền");
+    pos.setAnchor(false);
+    await until(() => pos.viewKind === "float" && /^Giao diện phiếu nhận đã đổi/.test(viewTitle(pos)));
+    await grant(b);
+    await settle(150);
+    assert.equal(pos.viewKind, "float");
+    assert.match(viewTitle(pos), /^Giao diện phiếu nhận đã đổi — extension không điền phiếu này$/);
+    assert.deepEqual(Array.from(pos.view.buttons, (x) => x.label), ["Kiểm tra lại"]);
+    assert.ok(!pos.floatViews.some(isFill), "khung nổi không bao giờ có nút Điền");
+    assert.equal(srv.st.puts.length, 0);
+    assert.equal(await grantCount(b), 1, "cấp phép còn nguyên");
+    assert.equal(b.session(KEY).state, "received");
+    assert.ok(b.session(KEY).log.some((l) => l.type === "ui_anchor_missing" && l.reason === "missing"), "nhật ký phiên có chẩn đoán");
+    // "Kiểm tra lại" khi trang vẫn thiếu chỗ gắn → vẫn lỗi giao diện, vẫn 0 PUT.
+    pos.view.buttons[0].onClick();
+    await settle(150);
+    assert.match(viewTitle(pos), /^Giao diện phiếu nhận đã đổi/);
+    assert.ok(!pos.floatViews.some(isFill));
+    assert.equal(srv.st.puts.length, 0);
+    // Trang vẽ xong vùng sản phẩm → khung về trong luồng, có nút Điền; điền đủ.
+    pos.setAnchor(true);
+    const btn = await until(() => pos.viewKind === "inline" && fillButton(pos));
+    btn.onClick();
+    await sessionState(b, "applied");
+    assert.equal(srv.st.puts.length, 6);
+    assert.equal(codesOnGr(srv).length, 12);
+  } finally {
+    b.close();
+  }
+});
+
+test("P2: bấm Điền khi khung vừa mất chỗ gắn, hoặc khi URL đã sang trang khác → không giành quyền, không tiêu cấp phép, 0 PUT", async () => {
+  const { b, srv, pos } = await openToReceived();
+  try {
+    await grant(b);
+    const btn = await until(() => fillButton(pos));
+    pos.setAnchor(false);
+    btn.onClick();
+    await settle(150);
+    assert.equal(srv.st.puts.length, 0);
+    assert.equal(await grantCount(b), 1);
+    assert.equal(b.session(KEY).state, "received");
+    assert.ok(!b.session(KEY).lease, "không giành quyền ghi");
+
+    pos.setAnchor(true);
+    const btn2 = await until(() => pos.viewKind === "inline" && fillButton(pos));
+    pos.url = `${POS}/ban-hang`; // SPA đổi URL, hook chưa báo route
+    btn2.onClick();
+    await settle(150);
+    assert.equal(srv.st.puts.length, 0);
+    assert.equal(await grantCount(b), 1);
+    assert.equal(b.session(KEY).state, "received");
+  } finally {
+    b.close();
+  }
+});
+
+test("P2: đổi route trong SPA (trang phiếu → danh sách) → gỡ khung phiếu cũ ngay; quay lại phiếu → khung trong luồng + nút Điền (cấp phép chưa tiêu)", async () => {
+  const { b, srv, pos } = await openToReceived();
+  try {
+    await grant(b);
+    await until(() => fillButton(pos));
+    const LIST = `${POS}/danh-sach-phieu-nhan-hang`;
+    pos.url = LIST;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: LIST } });
+    await until(() => pos.view === null);
+    await settle(100);
+    assert.equal(pos.view, null, "danh sách không có khung");
+    const back = `${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`;
+    pos.url = back;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: back } });
+    await until(() => pos.viewKind === "inline" && fillButton(pos));
+    assert.equal(srv.st.puts.length, 0);
+    assert.equal(await grantCount(b), 1);
+  } finally {
+    b.close();
+  }
+});
+
+test("P2: trang /chi-tiet-so (khung nổi) có cấp phép → chỉ nút 'Mở phiếu GR03878', KHÔNG nút Điền; bấm → sang trang phiếu, khung trong luồng có nút Điền", async () => {
+  const { b, srv } = await openToReceived();
+  try {
+    await grant(b);
+    const so = b.openTab(`${POS}/chi-tiet-so/SOBD1593858`);
+    so.post(POS_AUTH);
+    const open = await until(() => so.view && so.view.buttons && so.view.buttons.find((x) => x.label === "Mở phiếu GR03878"));
+    assert.equal(so.viewKind, "float");
+    assert.equal(so.view.title, "Đã có cấp phép điền GR03878 (1 lần)");
+    assert.ok(!so.views.some(isFill), "trang /chi-tiet-so không bao giờ có nút Điền");
+    open.onClick();
+    await until(() => so.url === `${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    so.post(POS_AUTH);
+    await until(() => so.viewKind === "inline" && isFill(so.view));
+    assert.equal(srv.st.puts.length, 0);
+    assert.equal(await grantCount(b), 1);
+  } finally {
+    b.close();
+  }
+});
+
+test("P2: đổi route sang phiếu khác (GET phiếu mới còn chờ) → khung phiếu cũ gỡ ngay, không còn nút Điền của GR03878 trên trang phiếu khác", async () => {
+  const OTHER = "0f0f0f0f-1111-4222-8333-444455556666";
+  let release;
+  const hold = new Promise((r) => (release = r));
+  const { b, srv, pos } = await openToReceived({ server: { grHolds: { [OTHER]: hold } } });
+  try {
+    await grant(b);
+    await until(() => fillButton(pos));
+    const other = `${POS}/danh-sach-phieu-nhan-hang/${OTHER}`;
+    pos.url = other;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: other } });
+    await settle(60);
+    assert.equal(pos.view, null, "GET phiếu mới chưa về: không còn khung / nút của phiếu cũ");
+    release();
+    await until(() => viewTitle(pos) === "Không đọc được phiếu nhận");
+    assert.ok(!isFill(pos.view));
+    assert.equal(srv.st.puts.length, 0);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("P2: lượt đánh giá cũ về muộn sau khi đổi route (tra QR GR03878 còn chờ) → view của GR03878 KHÔNG vẽ lên trang phiếu khác", async () => {
+  const OTHER = "0f0f0f0f-1111-4222-8333-444455556666";
+  let releaseQr;
+  let releaseGr;
+  const qrHold = new Promise((r) => (releaseQr = r));
+  const grHold = new Promise((r) => (releaseGr = r));
+  const { b, srv, pos } = await openToReceived({ server: { qrHold, grHolds: { [OTHER]: grHold } } });
+  try {
+    await until(() => viewTitle(pos) === "Đang tra 12 UID trên POS…");
+    const other = `${POS}/danh-sach-phieu-nhan-hang/${OTHER}`;
+    pos.url = other;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: other } });
+    await until(() => pos.view === null);
+    releaseQr(); // lượt cũ (GR03878) tra xong, lập kế hoạch, vẽ — trong khi trang đã là phiếu khác
+    await until(() => srv.st.log.filter((r) => new URL(r.url).pathname === "/thuocsi-warehouse/qrcode").length >= 12);
+    await settle(150);
+    assert.equal(pos.view, null, "không vẽ view kế hoạch của GR03878 trên trang phiếu khác");
+    assert.ok(!pos.views.slice(-3).some((v) => v && v.grCode === "GR03878" && /kế hoạch/i.test(v.title)), "không có view kế hoạch GR03878 sau khi đổi route");
+    releaseGr();
+    await until(() => viewTitle(pos) === "Không đọc được phiếu nhận");
+    assert.equal(srv.st.puts.length, 0);
+  } finally {
+    releaseQr();
+    releaseGr();
+    b.close();
+  }
+});
+
+for (const [where, path] of [["danh sách phiếu nhận", "/danh-sach-phieu-nhan-hang"], ["trang không liên quan (bán hàng)", "/ban-hang"]]) {
+  test(`P2 (PM audit sơ bộ): lượt đánh giá GR03878 về muộn sau khi SPA sang ${where} → 0 khung (nổi / trong luồng), 0 nút Điền, 0 PUT; danh sách không khung nổi (F4)`, async () => {
+    let releaseQr;
+    const qrHold = new Promise((r) => (releaseQr = r));
+    const { b, srv, pos } = await openToReceived({ server: { qrHold } });
+    try {
+      await grant(b);
+      await until(() => viewTitle(pos) === "Đang tra 12 UID trên POS…");
+      const float0 = pos.floatViews.length;
+      const to = `${POS}${path}`;
+      pos.url = to;
+      pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: to } });
+      await until(() => pos.view === null);
+      releaseQr(); // lượt cũ (GR03878, đã có cấp phép) tra xong, lập kế hoạch, vẽ — trong khi trang đã đổi
+      await until(() => srv.st.log.filter((r) => new URL(r.url).pathname === "/thuocsi-warehouse/qrcode").length >= 12);
+      await settle(200);
+      assert.equal(pos.view, null, "không khung nào trên trang mới");
+      assert.equal(pos.floatViews.length, float0, "không vẽ khung nổi");
+      assert.ok(!pos.views.some((v, i) => i >= pos.views.length - 3 && isFill(v)));
+      assert.equal(srv.st.puts.length, 0);
+      assert.equal(await grantCount(b), 1, "cấp phép còn");
+    } finally {
+      releaseQr();
+      b.close();
+    }
+  });
+}
+
+test("P2 (PM audit sơ bộ): lỗi của phiếu cũ về muộn (GET phiếu A còn chờ, SPA sang phiếu GR03878) → không vẽ lên trang GR03878", async () => {
+  const OTHER = "0f0f0f0f-1111-4222-8333-444455556666";
+  let release;
+  const hold = new Promise((r) => (release = r));
+  const srv = makeServer({ grHolds: { [OTHER]: hold } });
+  const b = createBrowser(srv.handle);
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${OTHER}`);
+    pos.post(POS_AUTH);
+    await until(() => srv.st.log.some((r) => r.url.endsWith(`/goods-receipt/${OTHER}`)));
+    const to = `${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`;
+    pos.url = to;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: to } });
+    await settle(30);
+    release(); // GET phiếu A về 404 → lượt cũ báo "Không đọc được phiếu nhận" — trong khi trang đã là GR03878
+    await until(() => startBtn(pos));
+    assert.ok(!pos.views.some((v) => v && v.title === "Không đọc được phiếu nhận"), "lỗi của phiếu cũ không hiện trên trang phiếu mới");
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("P2 (PM audit sơ bộ): đang điền (PUT treo) mà SPA sang danh sách → tiến trình điền không vẽ khung nổi trên danh sách; vẫn điền đủ", async () => {
+  let release;
+  const hold = new Promise((r) => (release = r));
+  const { b, srv, pos } = await openToReceived({ server: { putHolds: { 1: hold } } });
+  try {
+    await grant(b);
+    (await until(() => fillButton(pos))).onClick();
+    await until(() => srv.st.puts.length === 1);
+    const float0 = pos.floatViews.length;
+    const LIST = `${POS}/danh-sach-phieu-nhan-hang`;
+    pos.url = LIST;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: LIST } });
+    await settle(30);
+    release();
+    await sessionState(b, "applied");
+    await settle(100);
+    assert.equal(pos.floatViews.length, float0, "không khung nổi trên danh sách (F4)");
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("P2 (PM audit rev 1): đang điền GR03878 (PUT treo) mà SPA sang /chi-tiet-so của SO KHÁC → 0 khung / nút của GR03878 trên trang SO đó; tiến trình ghi vẫn xong đúng hợp đồng (6 PUT, applied, lease trả)", async () => {
+  let release;
+  const hold = new Promise((r) => (release = r));
+  const { b, srv, pos } = await openToReceived({ server: { putHolds: { 1: hold }, otherSoEmpty: true } });
+  try {
+    await grant(b);
+    (await until(() => fillButton(pos))).onClick();
+    await until(() => srv.st.puts.length === 1);
+    const n0 = pos.views.length;
+    const to = `${POS}/chi-tiet-so/SOBD1599999`;
+    pos.url = to;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: to } });
+    await settle(30);
+    assert.equal(pos.view, null, "đổi trang: gỡ khung của GR03878 ngay, kể cả khi đang ghi");
+    release();
+    const s = await sessionState(b, "applied");
+    assert.equal(s.lease, null);
+    assert.equal(srv.st.puts.length, 6);
+    assert.equal(codesOnGr(srv).length, 12);
+    await until(() => pos.loads >= 2); // trang SO B tự tải lại sau khi ghi xong
+    pos.post(POS_AUTH);
+    await until(() => viewTitle(pos) === "SO SOBD1599999: không có phiếu nhận đang chờ nhận");
+    const shown = pos.views.slice(n0);
+    assert.ok(!shown.some((v) => v && (v.grCode === "GR03878" || /GR03878/.test(v.title || ""))), `không view nào của GR03878 trên SO B: ${shown.map((v) => v && v.title).join(" | ")}`);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("P2 (PM audit rev 1): lượt evaluateSo của SO A về muộn sau khi SPA sang SO B → không vẽ phiếu của SO A trên trang SO B", async () => {
+  let release;
+  const p = new Promise((r) => (release = r));
+  const srv = makeServer({ searchHold: { so: "1593858", p }, otherSoEmpty: true });
+  const b = createBrowser(srv.handle);
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const pos = b.openTab(`${POS}/chi-tiet-so/SOBD1593858`);
+    pos.post(POS_AUTH);
+    await until(() => srv.st.log.some((r) => decodeURIComponent(r.url).includes("so_thuocsi=1593858,")));
+    const to = `${POS}/chi-tiet-so/SOBD1599999`;
+    pos.url = to;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: to } });
+    await settle(30);
+    release(); // tìm theo SO A về → lượt cũ đọc GR03878, vẽ nút "Nhận hàng bằng RFID" của nó — trong khi trang đã là SO B
+    await until(() => viewTitle(pos) === "SO SOBD1599999: không có phiếu nhận đang chờ nhận");
+    await settle(100);
+    assert.ok(!pos.views.some((v) => v && (v.grCode === "GR03878" || /GR03878|SOBD1593858/.test(v.title || ""))), pos.views.map((v) => v && v.title).join(" | "));
+    assert.equal(b.tabs().filter((t) => t.url.startsWith(NW)).length, 0);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("P2 (PM audit rev 1): đã xem /chi-tiet-so SO A (chứa GR03878) → về phiếu, điền (PUT treo) → SPA sang SO B → không dùng danh sách phiếu cũ của SO A để vẽ GR03878 trên SO B", async () => {
+  let release;
+  const hold = new Promise((r) => (release = r));
+  const { b, srv, pos } = await openToReceived({ server: { putHolds: { 1: hold }, otherSoEmpty: true } });
+  try {
+    await grant(b);
+    await until(() => fillButton(pos));
+    const route = (href) => {
+      pos.url = href;
+      pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href } });
+    };
+    route(`${POS}/chi-tiet-so/SOBD1593858`); // SO A: phiếu GR03878 hiện ở khung nổi, chỉ nút "Mở phiếu"
+    await until(() => pos.view && pos.view.buttons && pos.view.buttons.some((x) => x.label === "Mở phiếu GR03878"));
+    route(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    (await until(() => pos.viewKind === "inline" && fillButton(pos))).onClick();
+    await until(() => srv.st.puts.length === 1);
+    const n0 = pos.views.length;
+    route(`${POS}/chi-tiet-so/SOBD1599999`);
+    await settle(30);
+    release();
+    await sessionState(b, "applied");
+    await settle(100);
+    const shown = pos.views.slice(n0).filter((v) => v && v.grCode === "GR03878");
+    assert.deepEqual(shown.map((v) => v.title), [], "không view nào của GR03878 trên SO B");
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("P2: đang điền GR03878 (PUT treo) mà SPA sang trang phiếu KHÁC → tiến trình / kết quả điền của GR03878 không vẽ trên trang phiếu đó; vẫn điền đủ", async () => {
+  const OTHER = "0f0f0f0f-1111-4222-8333-444455556666";
+  let release;
+  const hold = new Promise((r) => (release = r));
+  const { b, srv, pos } = await openToReceived({ server: { putHolds: { 1: hold } } });
+  try {
+    await grant(b);
+    (await until(() => fillButton(pos))).onClick();
+    await until(() => srv.st.puts.length === 1);
+    const n0 = pos.views.length;
+    const to = `${POS}/danh-sach-phieu-nhan-hang/${OTHER}`;
+    pos.url = to;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: to } });
+    await settle(30);
+    release();
+    await sessionState(b, "applied");
+    await settle(100);
+    const shown = pos.views.slice(n0).filter((v) => v && v.grCode === "GR03878");
+    assert.deepEqual(shown.map((v) => v.title), [], "không view nào của GR03878 trên trang phiếu khác");
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+// ---------- v0.2.5 (PM AUDIT-A1-GR03887 P2): khung sau khi phiếu kết thúc ----------
+// Panel thật chờ chỗ gắn 10 giây; trình duyệt giả thu còn tuning.uiWaitMs (WAIT). A1 thật 28/10: HOÀN THÀNH 200 → trang COMPLETED không còn #all-receipt → v0.2.4 chờ chỗ gắn 10 giây rồi hiện khung nổi đỏ
+// "Giao diện phiếu nhận đã đổi" + nhật ký ui_anchor_missing. Test đợi quá WAIT rồi mới kiểm.
+const WAIT = { tuning: { uiWaitMs: 300 } };
+const PAST_WAIT = 450;
+const COMPLETED_OK = { mark: "cgn/pos-hook", type: "gr-status", payload: { envId: "STG", grId: GR_ID, status: "COMPLETED", httpStatus: 200 } };
+const isUiError = (v) => !!v && /^Giao diện phiếu nhận đã đổi/.test(v.title || "");
+const anchorLogs = (b) => (b.session(KEY) || { log: [] }).log.filter((l) => l.type === "ui_anchor_missing").length;
+const doneSession = (extra) =>
+  Object.assign(
+    { schema: 1, createdBy: APP_VERSION, key: KEY, envId: "STG", grId: GR_ID, grCode: "GR03878", poPosId: "f7678788-28e2-47bf-b5c6-a8e10a223f7d", poPosCode: "PO00006750", posId: STORE, deliveryCode: "SOBD1593858-F", soBase: "SOBD1593858", writeLocks: [], nwWriteLocks: [], returnUrl: `${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`, state: "done", createdAt: Date.now(), updatedAt: Date.now(), log: [] },
+    extra || {},
+  );
+
+// Nhận → cấp phép → điền 6 lô → trang tải lại → khung "đã điền". Trả {b, srv, pos}.
+async function openToApplied(opts) {
+  const ctx = await openToReceived(opts);
+  const { b, pos } = ctx;
+  await grant(b);
+  (await until(() => fillButton(pos))).onClick();
+  await sessionState(b, "applied");
+  await until(() => pos.reloads >= 1 && pos.loads >= 2);
+  pos.post(POS_AUTH);
+  await until(() => viewTitle(pos) === "GR03878: đã điền 12 UID từ Nextwaves");
+  return ctx;
+}
+
+test("v0.2.5 P2: HOÀN THÀNH 200 → trang COMPLETED mất #all-receipt → khung ẩn, KHÔNG khung đỏ, KHÔNG ui_anchor_missing; phiên done; anchor đổi sau đó không vẽ lại", async () => {
+  const { b, srv, pos } = await openToApplied(WAIT);
+  try {
+    assert.equal(anchorLogs(b), 0);
+    const n0 = pos.views.length;
+    srv.st.gr.data.status = "COMPLETED";
+    pos.post(COMPLETED_OK);
+    pos.setAnchor(false); // trang POS vẽ lại phiếu đã hoàn thành: không còn vùng sản phẩm có id
+    await sessionState(b, "done");
+    await settle(PAST_WAIT);
+    assert.equal(pos.view, null, "không còn khung trên phiếu đã hoàn thành");
+    assert.deepEqual(pos.views.slice(n0).map((v) => v.title), [], "không vẽ view nào sau HOÀN THÀNH");
+    assert.ok(!pos.floatViews.some(isUiError), "không có khung đỏ lỗi giao diện");
+    assert.equal(anchorLogs(b), 0, "không ghi ui_anchor_missing cho trang kết thúc bình thường");
+    // Trang vẽ lại (anchor có / mất) sau đó: không vẽ lại khung, không lỗi.
+    pos.setAnchor(true);
+    pos.setAnchor(false);
+    await settle(PAST_WAIT);
+    assert.equal(pos.view, null);
+    assert.equal(anchorLogs(b), 0);
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.2.5 P2: mở / F5 phiếu đã COMPLETED không có #all-receipt — phiên done hoặc không có phiên → không khung, không lỗi giao diện, chỉ đọc", async () => {
+  for (const withSession of [true, false]) {
+    const srv = makeServer();
+    srv.st.gr.data.status = "COMPLETED";
+    const b = createBrowser(srv.handle, WAIT);
+    try {
+      await b.setConfig({ mode: "STG", url: "" });
+      if (withSession) await b.patchSession(KEY, doneSession());
+      const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+      pos.setAnchor(false);
+      pos.post(POS_AUTH);
+      await until(() => srv.st.log.some((r) => new URL(r.url).pathname.endsWith(GR_ID)));
+      await settle(PAST_WAIT);
+      assert.equal(pos.view, null, `phiên: ${withSession}`);
+      assert.ok(!pos.floatViews.some(isUiError), `không khung đỏ (phiên: ${withSession})`);
+      assert.equal(anchorLogs(b), 0);
+      assert.ok(srv.st.log.every((r) => r.method === "GET"), "chỉ đọc");
+    } finally {
+      b.close();
+    }
+  }
+});
+
+test("v0.2.5 P2: phiếu CÒN nhận được mà mất #all-receipt vẫn báo lỗi giao diện + khoá điền (0 PUT, cấp phép giữ) như v0.2.4", async () => {
+  const { b, srv, pos } = await openToReceived();
+  try {
+    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền");
+    await grant(b);
+    await until(() => fillButton(pos));
+    pos.setAnchor(false);
+    await until(() => pos.viewKind === "float" && isUiError(pos.view));
+    await settle(150);
+    assert.ok(!pos.floatViews.some(isFill));
+    assert.equal(srv.st.puts.length, 0);
+    assert.equal(await grantCount(b), 1);
+    assert.ok(anchorLogs(b) >= 1, "trang đang nhận mất chỗ gắn vẫn ghi chẩn đoán");
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.2.5 P2: báo COMPLETED nhưng HTTP lỗi (500) hoặc của phiếu khác → không coi là hoàn thành: phiên giữ applied, khung giữ nguyên", async () => {
+  const { b, srv, pos } = await openToApplied();
+  let release;
+  const hold = new Promise((r) => (release = r));
+  try {
+    pos.post({ mark: "cgn/pos-hook", type: "gr-status", payload: { envId: "STG", grId: GR_ID, status: "COMPLETED", httpStatus: 500 } });
+    await settle(150);
+    assert.equal(viewTitle(pos), "GR03878: đã điền 12 UID từ Nextwaves", "HTTP lỗi: khung giữ nguyên");
+    // Phiếu khác báo HOÀN THÀNH 200: GET phiếu đang xem treo → khung KHÔNG được gỡ (kể cả thoáng qua).
+    srv.st.grHoldOnce = hold;
+    srv.st.grHeld = false;
+    pos.post({ mark: "cgn/pos-hook", type: "gr-status", payload: { envId: "STG", grId: "0f0f0f0f-1111-4222-8333-444455556666", status: "COMPLETED", httpStatus: 200 } });
+    await until(() => srv.st.grHeld);
+    await settle(50);
+    assert.equal(viewTitle(pos), "GR03878: đã điền 12 UID từ Nextwaves", "HOÀN THÀNH của phiếu khác không gỡ khung phiếu đang xem");
+    release();
+    await settle(200);
+    assert.equal(b.session(KEY).state, "applied");
+    assert.equal(viewTitle(pos), "GR03878: đã điền 12 UID từ Nextwaves");
+    assert.equal(pos.viewKind, "inline");
+    assert.equal(anchorLogs(b), 0);
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("v0.2.5 P2: phiên done nhưng GET phiếu vẫn chờ nhận → không tin phiên: cảnh báo + 'Đọc lại', không nút Điền / Nhận hàng, 0 PUT", async () => {
+  const srv = makeServer();
+  const b = createBrowser(srv.handle);
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    await b.patchSession(KEY, doneSession());
+    await grant(b);
+    const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    pos.post(POS_AUTH);
+    const v = await until(() => pos.view && pos.view.tone === "warn" && pos.view);
+    assert.equal(v.grCode, "GR03878");
+    assert.match(v.title, /^GR03878: POS chưa ở trạng thái hoàn thành$/);
+    assert.deepEqual(Array.from(v.buttons, (x) => x.label), ["Đọc lại", "Huỷ phiên"]);
+    assert.ok(!startBtn(pos) && !isFill(pos.view));
+    // "Đọc lại" khi phiếu vẫn vậy → vẫn cảnh báo, vẫn không ghi.
+    v.buttons[0].onClick();
+    await settle(150);
+    assert.match(viewTitle(pos), /POS chưa ở trạng thái hoàn thành/);
+    assert.equal(srv.st.puts.length, 0);
+    assert.equal(b.session(KEY).state, "done");
+    // POS đọc lại thấy COMPLETED → khung ẩn.
+    srv.st.gr.data.status = "COMPLETED";
+    pos.view.buttons[0].onClick();
+    await until(() => pos.view === null);
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.2.5 P2: lượt đánh giá chạy dở trước HOÀN THÀNH (GET cũ về muộn, phiếu còn RECEIVING) → không vẽ view cũ, không khung đỏ; ẩn sau khi GET mới thấy COMPLETED", async () => {
+  const { b, srv, pos } = await openToApplied(WAIT);
+  let release;
+  const hold = new Promise((r) => (release = r));
+  try {
+    srv.st.grHoldOnce = hold;
+    srv.st.grHeld = false;
+    await grant(b); // cấp phép của đúng phiếu đổi → khung đánh giá lại (GET phiếu treo)
+    await until(() => srv.st.grHeld);
+    const n0 = pos.views.length;
+    srv.st.gr.data.status = "COMPLETED";
+    pos.post(COMPLETED_OK);
+    await sessionState(b, "done");
+    await settle(50);
+    release(); // GET cũ (RECEIVING) về sau khi đã HOÀN THÀNH; trang chưa vẽ lại (còn chỗ gắn) → view cũ lọt là hiện ngay
+    await settle(PAST_WAIT);
+    assert.equal(pos.view, null);
+    assert.deepEqual(pos.views.slice(n0).map((v) => v.title), [], "không vẽ view của lượt đánh giá cũ");
+    pos.setAnchor(false);
+    await settle(PAST_WAIT);
+    assert.equal(pos.view, null);
+    assert.ok(!pos.floatViews.some(isUiError));
+    assert.equal(anchorLogs(b), 0);
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("v0.2.5 P2: HOÀN THÀNH rồi SPA sang phiếu khác khi GET GR03878 còn treo → không view GR03878 trên trang mới; trang mới vẫn có view của nó", async () => {
+  const OTHER = "0f0f0f0f-1111-4222-8333-444455556666";
+  const { b, srv, pos } = await openToApplied();
+  let release;
+  const hold = new Promise((r) => (release = r));
+  try {
+    srv.st.gr.data.status = "COMPLETED";
+    srv.st.grHoldOnce = hold;
+    srv.st.grHeld = false;
+    pos.post(COMPLETED_OK);
+    await until(() => srv.st.grHeld);
+    const n0 = pos.views.length;
+    const to = `${POS}/danh-sach-phieu-nhan-hang/${OTHER}`;
+    pos.url = to;
+    pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href: to } });
+    await settle(30);
+    release();
+    await until(() => viewTitle(pos) === "Không đọc được phiếu nhận");
+    await settle(100);
+    assert.deepEqual(pos.views.slice(n0).filter((v) => v.grCode === "GR03878").map((v) => v.title), [], "không view GR03878 sau khi đổi trang");
+    assert.equal(viewTitle(pos), "Không đọc được phiếu nhận", "lượt cũ không ẩn view của trang mới");
+    assert.equal(srv.st.puts.length, 6);
+  } finally {
+    release();
+    b.close();
+  }
+});
+
+test("v0.2.5 P2: hook báo HOÀN THÀNH 2xx → gỡ khung + dừng chờ chỗ gắn NGAY, không đợi GET phiếu (GET treo quá thời gian chờ vẫn không khung đỏ)", async () => {
+  const { b, srv, pos } = await openToApplied(WAIT);
+  let release;
+  const hold = new Promise((r) => (release = r));
+  try {
+    srv.st.gr.data.status = "COMPLETED";
+    srv.st.grHoldOnce = hold;
+    srv.st.grHeld = false;
+    pos.post(COMPLETED_OK);
+    await until(() => srv.st.grHeld); // GET phiếu sau HOÀN THÀNH còn treo
+    assert.equal(pos.view, null, "khung gỡ ngay khi hook báo, trước khi GET về");
+    pos.setAnchor(false);
+    await settle(PAST_WAIT);
+    assert.ok(!pos.floatViews.some(isUiError), "không khung đỏ dù GET treo quá thời gian chờ chỗ gắn");
+    assert.equal(anchorLogs(b), 0);
+    release();
+    await settle(PAST_WAIT);
+    assert.equal(pos.view, null);
+    assert.equal(b.session(KEY).state, "done");
+  } finally {
+    release();
     b.close();
   }
 });
