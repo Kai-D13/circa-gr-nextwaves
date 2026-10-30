@@ -66,6 +66,22 @@ POS khớp Nextwaves (11 tem). Lượt điền thủ công không có capture (l
 - **Chưa đạt.** Lượt tự động chưa được thử. Không thấy lỗi ở điểm kích hoạt hay luồng tự động.
 - Thử lại cần **GR / PO / SO mới cùng bộ tem mới**. Đề nghị thử **trên chính gói v0.3.0**: đổi gói thì phải làm lại G1 / G2. Runbook G3 đã sửa (bước 2–3).
 
+## G3 lượt 2 — GR03929 (30/10). Operator báo đây là PO staging cuối cùng
+
+**Bước A, kiểm trước (chỉ đọc), ĐẠT.** Phiên tạo 12:29:56 bằng "Nhận hàng bằng RFID":
+- v0.3.0 STG, cửa hàng 2222, `nw_ready`;
+- SO `SOBD1594182-F`, PO Nextwaves `PO19854897` (tìm 1 / 1, refId đúng SO);
+- PO chưa có biên nhận, chưa quét, không khoá;
+- 1 phiếu gửi pending (`needsAccept` true, giống GR03880 / GR03887 / GR03886);
+- dòng: 5451 vỉ 4 / 4 tem, 5451 vỉ 4 / 4 tem, 2431732 chai 2 / 2 tem → 10 EPC không trùng, đủ UID;
+- SL GR = SL Nextwaves (5451: 40 = 40; 2431732: 2 = 2);
+- 0 quyền tự động, 0 cấp phép còn hạn;
+- trang GR03929: Chờ nhận, `khung` 1 trong luồng, `allReceipt` true.
+
+Thêm cho lượt cuối: một đoạn kiểm chỉ đọc chạy trong service worker, ngay trước khi quét. Đoạn này đối chiếu quyền tự động với phiên theo đúng các trường của `autoGrantFits`, cùng hạn quyền ≥ 10 phút và tập EPC. Kết quả in "SẴN SÀNG QUÉT" hoặc "DỪNG: lý do". Đã chạy thử trên dữ liệu giả, bắt đúng 5 ca: chưa có quyền, phiên tạo lại, sắp hết hạn, tem lệch, đã quét.
+
+**Operator cho phép (nguyên văn, 30/10):** "Cho phép G3: một lượt nhận + tự điền + tự HOÀN THÀNH trên GR03929 (PO00006813) / PO19854897 / SOBD1594182-F, 10 tem, đủ 10 tem vật lý."
+
 ## Finding cho bản sau (không chặn G3 lượt 2 trên v0.3.0)
 
 | # | Mức | Finding | Hướng sửa |
