@@ -16,8 +16,8 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
   - PM: Codex; spec / audit, không sửa mã. Làm việc trên cùng thư mục local.
 - **v0.2 (đang audit):** chỉ tạo phiên khi dược sĩ **bấm** nút "Nhận hàng bằng RFID" (trên từng dòng danh sách `/danh-sach-phieu-nhan-hang`, trong khung trang phiếu, hoặc ở `/chi-tiet-so`). Mở phiếu không còn tự chạy. Spec hiệu lực: `docs/dev/BATCH-v0.2.0.md` §1.
 - **Repo:** https://github.com/Kai-D13/circa-gr-nextwaves (public). Tài liệu push thẳng `main`.
-  - `main` có mã v0.1.5 (merge `aa42dcc`, sau gate T3/W1).
-  - v0.1.6 ở nhánh `batch/v0.1.6-ui`; v0.2.0 ở nhánh `batch/v0.2-rfid` (tách từ `b4017d7`). Chưa merge, chờ PM.
+  - **`main` có mã v0.3.0** (merge `7bff255` 30/10 sau G1–G3 staging; trước đó v0.1.5 merge `aa42dcc`).
+  - Nhánh `batch/v0.2-rfid` (v0.2.0 → v0.3.0, tách từ `b4017d7`) đã merge; `batch/v0.1.6-ui` nằm trong lịch sử nhánh đó. Batch mới tách từ `main`.
 - **Quy ước commit:**
   - File PM viết: commit nguyên trạng, tiền tố `PM:`.
   - File dev viết: tiền tố `Dev:` (tài liệu) hoặc mô tả mã.
@@ -42,7 +42,7 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
 | K1 | 24/10: PO28237814 nhận bị `400 … tagged_unit_unsupported`. **25/10 23:46: Nextwaves đã sửa** — `receive-scan` 200, 12/12, biên nhận PO GRN96438872 `7bec38d2…` (`docs/dev/T3-KET-QUA-PO28237814-20261025.md`) |
 | Production | Chỉ đọc (`PRD.writeEnabled=false`). Bảng kho mới có Florita `c476efb2…` → `eb5e2b4f…` |
 
-## 3. Mã (v0.1.5 trên `main`; phần v0.2.0 ghi chú ở cuối bảng)
+## 3. Mã (bảng viết cho v0.1.5; phần v0.2.0 ghi chú ở cuối bảng; `main` hiện có v0.3.0 — xem `docs/dev/BATCH-v0.3.0.md`)
 
 | File | Vai trò |
 |---|---|
@@ -154,7 +154,7 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
    - **G2 đạt 29/10:** v0.3.0 đã cài staging, cùng thư mục / ID `C:\circa-gr-nextwaves-v0.2.3`.
    - **G3 lượt 1 (GR03886):** không phải lượt tự động. Operator bấm nhầm cấp phép thủ công; phiếu đóng bằng luồng thủ công. `docs/dev/KET-QUA-G2-G3-v0.3.0.md` có finding G3-1..4 cho bản sau.
    - **G3 lượt 2 (GR03929 / PO19854897 / SOBD1594182-F, 10 tem) ĐẠT 30/10:** cho phép tự động 13:02:35 → nhận 13:04:09 → 4 PUT detail 200 → `verifyFinal` khớp → 1 PUT `status/COMPLETED` 200 → GET COMPLETED 13:04:14; `completeResult.source` auto, quyền đã tiêu. Finding mới G3-5 P3 (tạo lại phiên sau khi cho phép ⇒ phải cho phép lại + chạy lại chốt chặn).
-   - **Chờ operator:** đồng ý merge `batch/v0.2-rfid` → `main`. Hết PO staging.
+   - **Đã merge** `batch/v0.2-rfid` → `main` `7bff255` (operator đồng ý 30/10). Hết PO staging.
    - **Tiếp theo:** plan bản production. Production chỉ đọc tới gate PRD; còn O1, QR lô, reader Florita, T1-PRD, W1-PRD, finding G3-1..5.
    - Thư mục thử cũ `C:\circa-gr-nextwaves-v0.3.0` (gói trung gian `08B31C6E`) không dùng; operator tự xoá được.
 0b. **(lịch sử) 28/10 chiều:** PM đạt gate chuẩn bị A1 (`docs/pm/AUDIT-A1-PREP-v0.2.4-20261028.md`): operator được nâng v0.2.3 → v0.2.4 cùng thư mục / Extension ID và kiểm staging **chỉ đọc** (runbook §0b–§0d). Chưa phép nhận / ghi.
