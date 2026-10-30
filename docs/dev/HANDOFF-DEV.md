@@ -155,7 +155,7 @@ File này giữ đủ ngữ cảnh để session dev mới làm tiếp không c�
    - **G3 lượt 1 (GR03886):** không phải lượt tự động. Operator bấm nhầm cấp phép thủ công; phiếu đóng bằng luồng thủ công. `docs/dev/KET-QUA-G2-G3-v0.3.0.md` có finding G3-1..4 cho bản sau.
    - **G3 lượt 2 (GR03929 / PO19854897 / SOBD1594182-F, 10 tem) ĐẠT 30/10:** cho phép tự động 13:02:35 → nhận 13:04:09 → 4 PUT detail 200 → `verifyFinal` khớp → 1 PUT `status/COMPLETED` 200 → GET COMPLETED 13:04:14; `completeResult.source` auto, quyền đã tiêu. Finding mới G3-5 P3 (tạo lại phiên sau khi cho phép ⇒ phải cho phép lại + chạy lại chốt chặn).
    - **Đã merge** `batch/v0.2-rfid` → `main` `7bff255` (operator đồng ý 30/10). Hết PO staging.
-   - **Tiếp theo:** plan bản production. Production chỉ đọc tới gate PRD; còn O1, QR lô, reader Florita, T1-PRD, W1-PRD, finding G3-1..5.
+   - **Tiếp theo:** `docs/dev/PLAN-PRD-FLORITA-v0.3.x-20261030.md` — v0.3.1 (PRD chỉ đọc chỉ Florita + G3-1..5, lõi ghi = `4b79c58`) → T1-PRD → v0.3.2 (chỉ bật ghi PRD) → W1-PRD thủ công → G3-PRD tự động → Go. Batch mới tách từ `main`. Production chỉ đọc tới gate PRD.
    - Thư mục thử cũ `C:\circa-gr-nextwaves-v0.3.0` (gói trung gian `08B31C6E`) không dùng; operator tự xoá được.
 0b. **(lịch sử) 28/10 chiều:** PM đạt gate chuẩn bị A1 (`docs/pm/AUDIT-A1-PREP-v0.2.4-20261028.md`): operator được nâng v0.2.3 → v0.2.4 cùng thư mục / Extension ID và kiểm staging **chỉ đọc** (runbook §0b–§0d). Chưa phép nhận / ghi.
    - Gói giao `C:\circa-gr-nextwaves-release\`, script nâng + diễn tập 17/17 — `docs/dev/A1-CHUAN-BI-v0.2.4-20261028.md`. Runbook §0b thêm bước 0: bấm "Mở tab Nextwaves" trên v0.2.3 để làm mới giờ phiên GR03887 (PM cho phép); "Tải từ" khác `C:\circa-gr-nextwaves-v0.2.3` → dừng, dev gửi lệnh `-Target` điền sẵn.
