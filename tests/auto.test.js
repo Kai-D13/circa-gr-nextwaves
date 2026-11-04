@@ -1101,3 +1101,58 @@ test("v0.3.1 G3-3: lượt tự động đã chạy (đã dùng quyền) → khu
     b.close();
   }
 });
+
+// ---------- v0.3.1 (G3-5): ba đoạn kiểm chỉ đọc cho operator (scripts/kiem-*.js) chạy trên DỮ LIỆU THẬT của background ----------
+// Đoạn kiểm đọc đúng tên trường mà background ghi; tên trường đổi mà đoạn kiểm không đổi thì test này trượt.
+const vm = require("node:vm");
+const fs = require("node:fs");
+const path = require("node:path");
+async function runKiem(file, b, gr = "GR03887") {
+  const src = fs.readFileSync(path.join(__dirname, "..", "scripts", file), "utf8");
+  assert.equal(src.split('"GR?????"').length, 2, `${file}: đúng một chỗ sửa mã phiếu`);
+  const out = [];
+  const chrome = { runtime: { getManifest: () => ({ version: "0.3.1" }) }, storage: { local: { get: async (keys) => Object.fromEntries([].concat(keys).filter((k) => k in b.store).map((k) => [k, H.clone(b.store[k])])) } } };
+  vm.runInContext(src.replace('"GR?????"', JSON.stringify(gr)), vm.createContext({ chrome, console: { log: (x) => out.push(String(x)) }, JSON, Date, Object, Set, Math }), { filename: file });
+  await until(() => out.length > 0);
+  return out.join("\n");
+}
+
+test("v0.3.1 G3-5: kiem-truoc / kiem-quet / kiem-sau trên lượt tự động A1 giả lập: trước → SẴN SÀNG QUÉT → done source auto; phiên tạo lại → DỪNG", async () => {
+  const ctx = await setup();
+  const { b, pos } = ctx;
+  try {
+    const truoc = JSON.parse(await runKiem("kiem-truoc.js", b));
+    assert.deepEqual([truoc.gr, truoc.state, truoc.so, truoc.nwPo, truoc.kho, truoc.scanOk, truoc.bienNhanTruoc, truoc.tem, truoc.temKhongTrung, truoc.thieuUid, truoc.autoGrants], ["GR03887", "nw_ready", "SOBD1594095-F", "PO13806459", true, false, 0, 15, 15, 0, 0]);
+    assert.ok(truoc.phieuGui.every((x) => x.dong.every((d) => d[3] === "có tem")));
+    assert.match(await runKiem("kiem-quet.js", b), /^DỪNG: .*CHƯA có quyền tự động/);
+    assert.equal((await arm(b)).ok, true);
+    assert.match(await runKiem("kiem-quet.js", b), /^SẴN SÀNG QUÉT: GR03887 · PO13806459 · 15 tem · quyền còn (29|30) phút$/);
+    assert.match(await runKiem("kiem-quet.js", b, "GR00000"), /^DỪNG: không có phiên GR00000/);
+    await receive(ctx);
+    await sessionState(b, "done", 8000);
+    const sau = JSON.parse(await runKiem("kiem-sau.js", b));
+    assert.deepEqual([sau.state, sau.hoanThanh.source, sau.quyenDaDung.auto, sau.quyenDaDung.plan, sau.nwUnits, sau.nwReceipts, sau.autoGrantsConLai, sau.dungDien], ["done", "auto", true, "EF0E020C", 15, 1, 0, null]);
+    assert.deepEqual(
+      sau.log.map((l) => l.split(" ")[1]).filter((x) => !/^apply_(sending|done)$/.test(x) && x !== "plan"),
+      ["start", "nw_matched", "auto_armed", "scan_ok", "nw_received", "auto_ready", "auto_claimed", "applied", "auto_complete_claimed", "auto_complete_sent", "auto_completed"]
+    );
+    assert.ok(!/Bearer|authorization/i.test(JSON.stringify(sau)), "không in token");
+  } finally {
+    b.close();
+  }
+  // Phiên bị Xoá rồi mở lại sau khi cho phép (G3 lượt 2, 30/10): quyền cũ bị bỏ → chốt chặn báo DỪNG, cho phép lại thì SẴN SÀNG.
+  const c2 = await setup();
+  try {
+    assert.equal((await arm(c2.b)).ok, true);
+    assert.equal((await c2.b.sendFromPopup({ type: "session:cancel", key: KEY })).ok, true);
+    (await until(() => startBtn(c2.pos))).onClick();
+    await sessionState(c2.b, "waiting_nw");
+    assert.equal((await c2.b.sendFromTab(c2.nw, { type: "session:nwMatched", key: KEY, match: matchFromA1(), log: { type: "nw_matched" } })).ok, true);
+    await sessionState(c2.b, "nw_ready");
+    assert.match(await runKiem("kiem-quet.js", c2.b), /^DỪNG: .*CHƯA có quyền tự động/);
+    assert.equal((await arm(c2.b)).ok, true);
+    assert.match(await runKiem("kiem-quet.js", c2.b), /^SẴN SÀNG QUÉT: GR03887/);
+  } finally {
+    c2.b.close();
+  }
+});

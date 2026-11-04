@@ -1,7 +1,8 @@
 // v0.2.5 (PM AUDIT-A1-GR03887 §2) — đoạn kiểm CHỈ ĐỌC trên Chrome staging thật sau khi cài v0.2.5 cùng Extension ID.
 // Mở một trang phiếu POS (/danh-sach-phieu-nhan-hang/<id>), chờ ≥ 15 giây (quá 10 giây chờ chỗ gắn khung), F12 → Console → dán
 // toàn bộ đoạn này → Enter. Chỉ đọc DOM: không bấm, không gõ, không gọi mạng, không in tên người.
-//  - Phiếu ĐÃ HOÀN THÀNH (vd. GR03887): kỳ vọng "khung": 0 (không khung trong luồng, không khung nổi đỏ).
+//  - Phiếu ĐÃ HOÀN THÀNH (vd. GR03887): kỳ vọng "khung": 0 (không khung trong luồng, không khung nổi đỏ), "trangThai": "Đã nhận"
+//    (POS gọi phiếu COMPLETED là "Đã nhận", không phải "Hoàn thành" — G3-4, 29/10).
 //  - Phiếu CÒN chờ nhận có mã giao thuocsi (vd. GR03879): kỳ vọng "khung": 1, "trongLuong": 1, "noi": 0, "allReceipt": true.
 (() => {
   const text = document.body.innerText;
