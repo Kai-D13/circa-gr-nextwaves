@@ -121,7 +121,7 @@ Không xin ảnh Nextwaves trừ khi có rủi ro cụ thể.
 | Lỗi trước PUT đầu (kế hoạch chặn, tra QR lỗi, phiếu lệch, "Tự động KHÔNG chạy") | GR chưa bị ghi → dược sĩ nhận tay trên POS như hiện nay |
 | Dừng giữa chừng (`apply_stopped`, PUT một phần) | Không tự thử lại. Dược sĩ xem phiếu, quét tay phần còn thiếu rồi HOÀN THÀNH |
 | `auto_complete_unknown` | Mở phiếu: nếu "Đã nhận" thì xong; nếu còn RECEIVING và đủ lô thì dược sĩ bấm HOÀN THÀNH **một lần** |
-| Cần tắt extension ngay | Popup → chế độ STG (PRD ngừng hẳn), hoặc tắt extension ở `chrome://extensions`. Quay về v0.3.1 = chỉ đọc |
+| Cần tắt extension ngay | Popup → Môi trường "— Chưa chọn —" (hoặc Staging) → Lưu: extension không chạy trên trang production. Hoặc tắt thẻ ở `chrome://extensions`. (Sửa 05/11: không còn bản "chỉ đọc" để quay về; không cấp phép / không cho phép tự động thì extension cũng không ghi gì.) |
 | Nhật ký | Phiên tự xoá sau 24 giờ không cập nhật → xuất storage ngay sau mỗi lượt |
 
 ## 6. Thứ tự làm

@@ -10,7 +10,11 @@ Plan: `docs/dev/PLAN-PRD-FLORITA-v0.3.x-20261030.md` (bản sửa 05/11). Báo c
 
 ## 0. Cài (một lần, trên máy POS Florita)
 
-1. Chép thư mục giao `circa-gr-nextwaves-v0.3.1` (ZIP + `SHA256SUMS.txt` + 3 file `kiem-*.js`) sang máy POS, như cách vẫn cài QR Scan Log.
+1. Chép thư mục giao `C:\circa-gr-nextwaves-release\v0.3.1` sang máy POS, như cách vẫn cài QR Scan Log. Thư mục gồm:
+   - `circa-gr-nextwaves-v0.3.1.zip`: gói cài, **mã gói 3E44C1DC**;
+   - `kiem-truoc.js`, `kiem-quet.js`, `kiem-sau.js`, `kiem-khung-gr.js`;
+   - hướng dẫn này;
+   - `SHA256SUMS.txt`.
 2. Giải nén ZIP vào **`C:\circa-gr-nextwaves`**. Đây là thư mục cố định: Chrome nạp extension từ đây, không xoá / đổi tên. Bản sau sẽ chép đè đúng thư mục này để giữ phiên.
 3. `chrome://extensions` → "Load unpacked" (Tải tiện ích đã giải nén) → chọn `C:\circa-gr-nextwaves`.
    - Kết quả: thẻ **"Circa GR ← Nextwaves" 0.3.1**.

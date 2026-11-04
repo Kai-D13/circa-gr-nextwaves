@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **30/10/2026 (lần 58, G3 v0.3.0 ĐẠT trên GR03929 → staging done v0.3.0)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). v0.3.0 tự điền + tự HOÀN THÀNH một lần, gói `45E07F60`: G1 đạt 29/10 (`docs/dev/BATCH-v0.3.0.md`), G2 đạt 29/10 (đã cài staging), **G3 đạt 30/10** ở lượt 2 trên GR03929 / PO19854897 / SOBD1594182-F, 10 tem: 1 lượt nhận, 4 PUT detail, đọc lại khớp, đúng 1 PUT `status/COMPLETED`, `completeResult.source` auto, quyền đã tiêu (`docs/dev/KET-QUA-G2-G3-v0.3.0.md`). **Staging done v0.3.0**; operator đồng ý, đã merge `batch/v0.2-rfid` → `main` (`7bff255`). Hết PO staging. Bước tiếp: bản production (plan PRD). Production chỉ đọc tới gate PRD.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **05/11/2026 (lần 59, v0.3.1 production Florita đóng gói xong — gói 3E44C1DC, chờ operator cài + đơn thật)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). Staging done v0.3.0 (G1–G3 đạt, `main` `7bff255`). Operator chốt 05/11: production **một bản v0.3.1, cài một lần** trên máy POS Florita rồi xử lý ngay đơn thật, đơn đầu chạy **tự động** có Net Capture (`agent.md` §3). v0.3.1 = PRD được ghi chỉ ở Florita + sửa G3-1..5, lõi ghi = `4b79c58` từng byte; 231/231 test, đột biến 213/215 + 2 ca sống đã có test bắt, Edge 108/108, audit độc lập 0 P1 (2 P2 đã sửa) — `docs/dev/BATCH-v0.3.1.md`. Thư mục giao `C:\circa-gr-nextwaves-release\v0.3.1\`, hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md`. Nhánh `batch/v0.3.1-prd` chưa merge (sau đơn thật). Ghi production chỉ khi operator cho phép bằng chữ đúng phiếu.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -583,6 +583,8 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
 
 - 30/10/2026 (lần 58): **G3 v0.3.0 ĐẠT** ở lượt 2 trên GR03929 (PO00006813) / PO19854897 / SOBD1594182-F, 10 tem, có phép bằng chữ của operator. Lượt tự động 13:04:09 → 13:04:14: 1 `receive_scan 200`, 1 biên nhận, 4 PUT detail 200, `verifyFinal` khớp, 1 PUT `status/COMPLETED` 200, `auto_completed` source auto, quyền đã tiêu. G1–G3 đạt trên cùng gói `45E07F60` → staging done v0.3.0. Đây là PO staging cuối cùng (operator 30/10). Operator đồng ý merge → `7bff255`: mã / test lấy nguyên từ nhánh (`src/` = `4b79c58` = thư mục đang cài, 19 file), 4 file tài liệu gốc giữ bản `main`, `node --test` 222/222 trên cây đã gộp.
 
+- 05/11/2026 (lần 59): operator chốt production một bản v0.3.1 cài một lần + đơn thật đầu chạy tự động; trả lời B0 (máy Florita có QR Scan Log, đã có tài khoản Nextwaves production); D1–D5 chốt (`agent.md` §3). Claude build v0.3.1 trên `batch/v0.3.1-prd` (`7719715`), gói 3E44C1DC, gate offline đủ + audit độc lập (`docs/dev/BATCH-v0.3.1.md`). Sự thật: hook POS gắn môi trường theo URL API (lời gọi API staging trên trang production báo envId STG, khung chỉ dùng header đúng môi trường).
+
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
 2. Operator mở session PM Codex bằng `docs/PROMPT-PM-CODEX.md`. PM chốt hướng §3 / §6 và ra spec v0.1 staging chia batch.
@@ -595,7 +597,12 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-58. **Hiện hành (G3 đạt → staging done v0.3.0, 30/10):** `docs/dev/KET-QUA-G2-G3-v0.3.0.md` mục "G3 lượt 2".
+59. **Hiện hành (v0.3.1 production Florita đóng gói, 05/11):** `docs/dev/BATCH-v0.3.1.md`, hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md`.
+    - Gói **3E44C1DC** (`batch/v0.3.1-prd` `7719715`): PRD ghi chỉ Florita (`c476efb2…` → kho `eb5e2b4f…`); popup hỏi lại trước cấp phép thủ công khi phiếu còn tự động được; khung POS ghi trạng thái tự động; 3 đoạn kiểm `scripts/kiem-*.js`. Lõi ghi = `4b79c58`.
+    - Gate: 231/231; đột biến 213/215 lượt đủ, 2 ca sống → thêm test, chạy lại 13/13; Edge 108/108 (≤ 15,12 ms); audit độc lập 0 P1, P2-1 bấm đúp + P2-2 tài liệu đã sửa.
+    - **Chờ operator:** chép `C:\circa-gr-nextwaves-release\v0.3.1\` sang máy POS Florita, cài theo hướng dẫn §0, khi có đơn: gửi kết quả `kiem-truoc.js` + số tem + câu cho phép bằng chữ; chạy tự động; gửi `kiem-sau.js` + 2 capture.
+    - Sau đơn thật đạt: merge `batch/v0.3.1-prd` → `main` khi operator đồng ý. Mở thêm cửa hàng = thêm cặp cửa hàng → kho (hoặc API Nextwaves nếu có).
+58. (cũ, thay bằng mục 59) **G3 đạt → staging done v0.3.0, 30/10:** `docs/dev/KET-QUA-G2-G3-v0.3.0.md` mục "G3 lượt 2".
     - **G3 đạt trên gói `45E07F60`.** GR03929 / PO19854897 / SOBD1594182-F, 10 tem (5451: 4 + 4 vỉ, hai lô; 2431732: 1 + 1 chai, hai lô). Cho phép tự động 13:02:35, nhận 13:04:09, COMPLETED 13:04:14. Không người chạm POS.
     - Bằng chứng: nhật ký phiên + `nwResult` (operator dán từ service worker: 10 unit, 1 biên nhận, `authorization.auto` true, kế hoạch `#4DF9D34A`, `completeResult.source` auto, `autoGrants` / `grants` còn hạn 0); Net Capture tab POS SHA-256 `00a22832…` (10 QR OK, 4 PUT detail 200 + GET kiểm, `verifyFinal` RECEIVING 4 / 4, 1 PUT `status/COMPLETED` 200, GET COMPLETED). Không có capture tab Nextwaves; phía Nextwaves chốt bằng nhật ký phiên như A1.
     - Ghi chú: phiên GR03929 bị Xoá / Huỷ rồi tạo lại lúc 13:02:11 sau lần cho phép đầu (12:56:50). Quyền cũ bị bỏ đúng thiết kế, operator cho phép lại, chốt chặn chạy sau đó và khớp phiên mới. Thành finding G3-5 P3 (runbook PRD).
