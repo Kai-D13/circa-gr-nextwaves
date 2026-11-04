@@ -263,7 +263,7 @@ test("G1 quyền: phiên bị xoá rồi tạo lại (cùng GR) → huỷ phiên
   }
 });
 
-test("G1 quyền: arm chỉ từ popup, chỉ khi nw_ready, xác nhận phải khớp phiên (mã / PO / số tem), PRD không arm được", async () => {
+test("G1 quyền: arm chỉ từ popup, chỉ khi nw_ready, xác nhận phải khớp phiên (mã / PO / số tem), phiên PRD của cửa hàng chưa khai kho không arm được", async () => {
   const ctx = await setup();
   const { b, pos } = ctx;
   try {
@@ -274,10 +274,10 @@ test("G1 quyền: arm chỉ từ popup, chỉ khi nw_ready, xác nhận phải k
       assert.match(r.error, /không khớp phiên hiện tại/, JSON.stringify(bad));
     }
     assert.deepEqual(autoGrants(b), []);
-    // Phiên PRD giả (cùng dữ liệu) → môi trường chỉ đọc.
+    // Phiên PRD giả (cùng dữ liệu, cửa hàng 2222 của staging) → v0.3.1: PRD được ghi nhưng chỉ ở cửa hàng đã khai kho (Florita).
     await b.patchSession("PRD:" + GR_ID, Object.assign(H.clone(session(b)), { key: "PRD:" + GR_ID, envId: "PRD" }));
     const prd = await b.sendFromPopup({ type: "auto:arm", key: "PRD:" + GR_ID, confirm: CONFIRM });
-    assert.match(prd.error, /chỉ đọc/);
+    assert.match(prd.error, /Cửa hàng không thuộc danh sách/);
     await receive(ctx);
     await sessionState(b, "received");
     const late = await arm(b);
@@ -1041,6 +1041,62 @@ test("audit F6: thu hồi sau khi lượt tự động đã dùng quyền → ba
     await sessionState(b, "done", 8000);
     const r = await b.sendFromPopup({ type: "auto:revoke", key: KEY });
     assert.deepEqual([r.ok, r.data], [true, false]);
+  } finally {
+    b.close();
+  }
+});
+
+// ---------- v0.3.1 (G3-2 / G3-3): khung POS nói rõ vì sao lượt nhận này đi đường thủ công ----------
+// G3 lượt 1 (29/10): không có quyền tự động → khung POS chỉ "Chỉ xem kế hoạch", không nói gì về tự động. Bỏ qua lúc nhận (received())
+// cũng chỉ popup / Nextwaves báo. Chỉ hiển thị: 0 PUT / 0 COMPLETED như cũ.
+test("v0.3.1 G3-2/G3-3: khung POS ghi trạng thái tự động của lượt nhận — chưa cho phép / quyền hết hạn / tem lệch / biên nhận lệch; mỗi lý do một dòng, 0 ghi", async () => {
+  const cases = [
+    ["chưa cho phép", null, null, /^Tự động: chưa cho phép ở lượt nhận này — phiếu đi đường thủ công/],
+    ["hết hạn", { bgTuning: { autoTtlMs: 80 } }, "expire", /^Tự động KHÔNG chạy: quyền tự động đã hết hạn hoặc bị thu hồi trước khi nhận\./],
+    // EPC lạ, giữ nguyên tập UID → kế hoạch vẫn hợp lệ (bớt hẳn một tem thì kế hoạch bị chặn vì quy đổi ra số lẻ).
+    ["tem lệch", null, (p) => (p.units[0].epc = "E280F302000000000000DEAD"), /^Tự động KHÔNG chạy: tem Nextwaves nhận khác tập tem lúc cho phép\./],
+    ["2 biên nhận", null, (p) => p.receiptIds.push("00000000-0000-4000-8000-00000000beef"), /^Tự động KHÔNG chạy: PO Nextwaves không có đúng một biên nhận mới\./],
+  ];
+  for (const [name, opts, mut, want] of cases) {
+    const ctx = await setup(opts || {});
+    const { b, srv, pos } = ctx;
+    try {
+      let payload;
+      if (mut) {
+        assert.equal((await arm(b)).ok, true, name);
+        if (mut === "expire") await sleep(150);
+        else mut((payload = H.clone(A1.nwResult)));
+      }
+      await receive(ctx, payload);
+      await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền");
+      const lines = pos.view.lines.filter((l) => /^Tự động/.test(l));
+      assert.equal(lines.length, 1, `${name}: ${JSON.stringify(pos.view.lines)}`);
+      assert.match(lines[0], want, name);
+      await settle(200);
+      assert.equal(srv.st.puts.length, 0, name);
+      noComplete(srv, name);
+      // Có cấp phép thủ công: dòng vẫn còn trong khung "Đã có cấp phép điền".
+      assert.equal((await b.sendFromPopup({ type: "grant:create", envId: "STG", grCode: "GR03887" })).ok, true);
+      pos.reload();
+      pos.post(POS_AUTH);
+      await until(() => /^Đã có cấp phép điền GR03887/.test(viewTitle(pos) || ""));
+      assert.ok(pos.view.lines.some((l) => want.test(l)), `${name}: còn dòng tự động khi đã cấp phép`);
+      assert.equal(srv.st.puts.length, 0, `${name}: chưa bấm Điền thì không ghi`);
+    } finally {
+      b.close();
+    }
+  }
+});
+
+test("v0.3.1 G3-3: lượt tự động đã chạy (đã dùng quyền) → khung KHÔNG thêm dòng 'chưa cho phép'", async () => {
+  const ctx = await setup();
+  const { b, pos } = ctx;
+  try {
+    assert.equal((await arm(b)).ok, true);
+    await receive(ctx);
+    await sessionState(b, "done", 8000);
+    assert.ok(!(pos.view && (pos.view.lines || []).some((l) => /chưa cho phép ở lượt nhận này/.test(l))));
+    assert.ok(!pos.floatViews.some((v) => (v.lines || []).some((l) => /chưa cho phép ở lượt nhận này/.test(l))));
   } finally {
     b.close();
   }

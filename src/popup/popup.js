@@ -20,6 +20,10 @@
   const expectedEpcCount = (s) =>
     new Set(((s.expected && s.expected.shipments) || []).flatMap((sh) => (sh.lines || []).flatMap((l) => (l.units || []).map((u) => String(u.epc || "").toUpperCase()))).filter(Boolean)).size;
   const hhmm = (ms) => new Date(ms).toLocaleTimeString("vi-VN");
+  // v0.3.1 (G3-1): phiên còn cho phép tự động được (như điều kiện hiện nút trong autoBlock / auto:arm của background).
+  const autoPossible = (env, s) => !!env && env.writeEnabled && s.envId === env.id && s.state === "nw_ready" && !s.scanOk && !(s.receiptIdsBefore || []).length;
+  // Mã phiếu operator đã được hỏi lại "vẫn cấp phép THỦ CÔNG?" — bấm lần hai cùng mã mới cấp.
+  let manualConfirmed = null;
 
   async function bg(type, extra) {
     const r = await chrome.runtime.sendMessage(Object.assign({ type }, extra || {}));
@@ -234,6 +238,13 @@
         const odd = /[^A-Z0-9]/.test(code) ? " Mã có ký tự lạ (khoảng trắng / ký tự ẩn, thường do dán) — hãy gõ tay." : "";
         throw new Error(`Mã phiếu không khớp phiên đang có — chưa cấp phép.${odd} ${codes.length ? `Phiên đang mở (${env.label}): ${codes.join(", ")}.` : `Không có phiên đang mở ở ${env.label}.`}`);
       }
+      // v0.3.1 (G3-1): G3 lượt 1 bấm nhầm ô này thay cho nút tự động → mất một lượt tự động. Phiếu còn tự động được thì hỏi lại;
+      // bấm lần hai cùng mã mới cấp phép thủ công.
+      if (open.some((s) => String(s.grCode || "").toUpperCase() === code && autoPossible(env, s)) && manualConfirmed !== code) {
+        manualConfirmed = code;
+        throw new Error(`${code} chưa nhận hàng và CÓ THỂ chạy tự động: dùng nút “Cho phép tự điền và HOÀN THÀNH 1 lần” trong dòng phiên ở trên. Vẫn muốn điền THỦ CÔNG thì bấm “Cho phép điền 1 lần” lần nữa.`);
+      }
+      manualConfirmed = null;
       const g = await bg("grant:create", { envId: env.id, grCode: $("grCode").value });
       say("grantMsg", `Đã cho phép điền 1 lần: ${g.grCode} (${env.label}).`);
       $("grCode").value = "";

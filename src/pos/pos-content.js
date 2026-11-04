@@ -928,6 +928,10 @@
       const r = s.autoRun.skipped ? s.autoRun.skipped.reason : await autoTry(env, gr, s, plan, units);
       if (r === "started") return;
       autoNote = [`Tự động KHÔNG chạy: ${autoSkipText(r)}. Phiếu đi đường thủ công (cấp phép điền + dược sĩ HOÀN THÀNH).`];
+    } else if (s.state === "received" && !(s.authorization && s.authorization.auto)) {
+      // v0.3.1 (G3-2 / G3-3): background không giao lượt tự động lúc nhận (quyền không khớp / hết hạn / chưa cho phép) → nói rõ trên
+      // POS. Chỉ hiển thị, không đổi điều kiện chạy.
+      autoNote = [receivedAutoNote(s)];
     }
     if (!plan.ok) {
       return showGr(gr, {
@@ -1012,7 +1016,22 @@
     link_changed: "phiếu / PO / SO / cửa hàng không còn khớp phiên",
     ui_not_anchored: "khung extension chưa gắn đúng trang phiếu",
     skipped: "lượt tự động đã bị bỏ qua trước đó",
+    // v0.3.1 (G3-2): lý do background ghi lúc nhận (received()).
+    epc_set: "tem Nextwaves nhận khác tập tem lúc cho phép",
+    receipts: "PO Nextwaves không có đúng một biên nhận mới",
+    armed_after_scan: "quyền được cấp sau lượt xác nhận nhận hàng",
+    grant_expired: "quyền tự động đã hết hạn hoặc bị thu hồi trước khi nhận",
   };
+  // v0.3.1 (G3-2 / G3-3): dòng trạng thái tự động của phiên vừa nhận mà không có lượt tự động — lấy auto_skipped của lượt nhận cuối.
+  function receivedAutoNote(s) {
+    const log = s.log || [];
+    let i = log.length - 1;
+    while (i >= 0 && log[i].type !== "nw_received") i--;
+    const skip = log.slice(i + 1).filter((l) => l.type === "auto_skipped").pop();
+    return skip
+      ? `Tự động KHÔNG chạy: ${autoSkipText(skip.reason)}. Phiếu đi đường thủ công (cấp phép điền + dược sĩ HOÀN THÀNH).`
+      : "Tự động: chưa cho phép ở lượt nhận này — phiếu đi đường thủ công (cấp phép điền + dược sĩ HOÀN THÀNH).";
+  }
   const autoSkipText = (r) => {
     const m = /^(blocked|claim)_(.+)$/.exec(String(r || ""));
     if (m) return `${m[1] === "blocked" ? "phiên bị khoá điền" : "không giành được lượt tự điền"} — ${CLAIM_MSG[m[2]] || m[2]}`;

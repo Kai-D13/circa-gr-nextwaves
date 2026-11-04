@@ -73,13 +73,31 @@ test("đường dẫn API đúng từng môi trường (staging /backend/v1, pro
   }
 });
 
-test("phạm vi cửa hàng: STG chỉ 2222; PRD theo phiên; bảng kho", () => {
+test("phạm vi cửa hàng: STG chỉ 2222; PRD (v0.3.1) chỉ cửa hàng đã khai kho = Florita; bảng kho", () => {
   assert.ok(env.storeAllowed(STG, "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d"));
   assert.ok(!env.storeAllowed(STG, "c476efb2-415c-429a-978e-d389b4b06607"));
   assert.ok(!env.storeAllowed(STG, ""));
-  assert.ok(env.storeAllowed(PRD, "bat-ky"));
+  assert.ok(env.storeAllowed(PRD, "c476efb2-415c-429a-978e-d389b4b06607"));
+  assert.ok(env.storeAllowed(PRD, "C476EFB2-415C-429A-978E-D389B4B06607"), "so không phân biệt hoa / thường");
+  assert.ok(!env.storeAllowed(PRD, "bat-ky"));
+  assert.ok(!env.storeAllowed(PRD, "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d"), "cửa hàng staging không chạy ở PRD");
+  assert.ok(!env.storeAllowed(PRD, ""));
   assert.equal(env.warehouseForStore(STG, "64A8663B-0C9E-49C6-9626-0A4C7C4BD53D"), "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57");
+  assert.equal(env.warehouseForStore(PRD, "c476efb2-415c-429a-978e-d389b4b06607"), "eb5e2b4f-6f92-413b-90ef-6be1730b94c0");
   assert.equal(env.warehouseForStore(PRD, "khong-co"), null);
+});
+
+test("v0.3.1: cả hai môi trường được ghi (vẫn cần cấp phép từng lần); mọi cửa hàng được phép đều có kho Nextwaves, chữ thường", () => {
+  for (const e of [STG, PRD]) {
+    assert.equal(e.writeEnabled, true, e.id);
+    assert.ok(Array.isArray(e.storeAllowlist) && e.storeAllowlist.length > 0, `${e.id}: phải có danh sách cửa hàng, không mở cho mọi cửa hàng`);
+    assert.deepEqual([...e.storeAllowlist].sort(), Object.keys(e.warehouseByStore).sort(), `${e.id}: danh sách cửa hàng = các cửa hàng đã khai kho`);
+    for (const [store, wh] of Object.entries(e.warehouseByStore)) {
+      assert.equal(store, store.toLowerCase(), store);
+      assert.ok(env.isUuid(store) && env.isUuid(wh), `${e.id}: ${store} → ${wh}`);
+    }
+  }
+  assert.deepEqual(PRD.storeAllowlist, ["c476efb2-415c-429a-978e-d389b4b06607"], "đợt đầu production chỉ Florita");
 });
 
 test("nhận dạng lời gọi xác nhận nhận hàng Nextwaves và hoàn tất GR POS", () => {

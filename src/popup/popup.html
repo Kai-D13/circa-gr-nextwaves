@@ -36,23 +36,24 @@
       <select id="mode">
         <option value="">— Chưa chọn (extension không chạy) —</option>
         <option value="STG">Staging</option>
-        <option value="PRD">Production (chỉ đọc)</option>
+        <option value="PRD">Production</option>
         <option value="URL">Theo URL…</option>
       </select>
       <input id="url" type="url" placeholder="Dán một URL POS hoặc Nextwaves của môi trường" hidden />
       <p class="note" id="envInfo"></p>
       <div class="row"><button id="save">Lưu</button><span class="msg" id="msg"></span></div>
 
+      <!-- v0.3.1 (G3-1): phiên (có nút cho phép TỰ ĐỘNG) đứng trước ô cấp phép THỦ CÔNG — G3 lượt 1 bấm nhầm ô thủ công ở đầu popup. -->
+      <h2>Phiên gần đây</h2>
+      <div id="sessions"><p class="note">Chưa có phiên.</p></div>
+
       <section id="grantBox" hidden>
-        <h2>Cho phép điền phiếu (từng lần)</h2>
-        <p class="note warn">Mỗi cấp phép chỉ dùng cho MỘT lượt điền của MỘT phiếu, hết hạn sau 30 phút. Chỉ cấp khi operator cho phép lượt thử đó.</p>
+        <h2>Cấp phép điền THỦ CÔNG (từng lần)</h2>
+        <p class="note warn">Chỉ dùng khi KHÔNG chạy tự động. Muốn tự động: bấm “Cho phép tự điền và HOÀN THÀNH 1 lần” trong dòng phiên ở trên. Mỗi cấp phép chỉ dùng cho MỘT lượt điền của MỘT phiếu, hết hạn sau 30 phút.</p>
         <div class="row"><input id="grCode" placeholder="Mã phiếu nhận, ví dụ GR03878" /><button id="grant">Cho phép điền 1 lần</button></div>
         <p class="msg" id="grantMsg"></p>
         <div id="grants"></div>
       </section>
-
-      <h2>Phiên gần đây</h2>
-      <div id="sessions"><p class="note">Chưa có phiên.</p></div>
     </main>
     <script src="../lib/env.js"></script>
     <script src="popup.js"></script>

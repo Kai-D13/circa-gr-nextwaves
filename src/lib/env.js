@@ -33,10 +33,10 @@
       nwUiOrigin: "https://circa.nextwaves.app",
       nwApiBase: "https://api-circa.nextwaves.app/api",
       buymedSlug: "buymed",
-      // Production chỉ đọc cho tới gate production (PM audit 24/10 P1.3 / P7).
-      writeEnabled: false,
-      // Production: theo tài khoản đang đăng nhập, không giới hạn cửa hàng.
-      storeAllowlist: null,
+      // v0.3.1 (operator chốt 05/11, sau staging done v0.3.0): production được ghi, vẫn chỉ khi operator cấp phép từng phiếu.
+      writeEnabled: true,
+      // Chỉ cửa hàng đã khai kho Nextwaves bên dưới (Florita). Thêm cửa hàng = thêm cặp cửa hàng → kho ở cả hai dòng.
+      storeAllowlist: Object.freeze(["c476efb2-415c-429a-978e-d389b4b06607"]),
       warehouseByStore: Object.freeze({ "c476efb2-415c-429a-978e-d389b4b06607": "eb5e2b4f-6f92-413b-90ef-6be1730b94c0" }),
     }),
   });

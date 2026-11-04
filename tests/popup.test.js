@@ -67,8 +67,10 @@ test("P3: mã gõ nhầm 'GR3887' khi phiên là GR03887 → cảnh báo không 
 });
 
 test("P3: mã đúng GR03887 + phiên STG đang hoạt động → đúng một cấp phép như cũ (30 phút, một lần)", async () => {
-  for (const state of ["received", "apply_stopped", "nw_ready"]) {
-    const p = await openPopup({ sessions: [session({ state })] });
+  // nw_ready còn tự động được → v0.3.1 hỏi lại trước (test riêng bên dưới); ở đây nw_ready đã ghi nhận lượt nhận nên chỉ còn thủ công.
+  for (const extra of [{ state: "received" }, { state: "apply_stopped" }, { state: "nw_ready", scanOk: { httpStatus: 200 } }, { state: "nw_ready", receiptIdsBefore: ["r-cu"] }]) {
+    const state = JSON.stringify(extra);
+    const p = await openPopup({ sessions: [session(extra)] });
     try {
       const r = await p.press("GR03887");
       assert.equal(r.err, false, state);
@@ -79,6 +81,50 @@ test("P3: mã đúng GR03887 + phiên STG đang hoạt động → đúng một 
     } finally {
       p.b.close();
     }
+  }
+});
+
+// ---------- v0.3.1 (G3-1): ô cấp phép THỦ CÔNG hỏi lại khi phiếu còn chạy tự động được ----------
+test("v0.3.1 G3-1: phiếu nw_ready còn tự động được → bấm 'Cho phép điền 1 lần' lần đầu chỉ cảnh báo (0 grant:create), lần hai cùng mã mới cấp; đổi mã thì hỏi lại", async () => {
+  const other = session({ key: "STG:2de6c0ec-2ea8-4038-8616-659fa3f5820a", grId: "2de6c0ec-2ea8-4038-8616-659fa3f5820a", grCode: "GR03878", state: "nw_ready" });
+  const p = await openPopup({ sessions: [session({ state: "nw_ready" }), other] });
+  try {
+    const r1 = await p.press("GR03887");
+    assert.equal(r1.err, true);
+    assert.match(r1.text, /^GR03887 chưa nhận hàng và CÓ THỂ chạy tự động/);
+    assert.match(r1.text, /Cho phép tự điền và HOÀN THÀNH 1 lần/);
+    assert.ok(!p.sent.includes("grant:create"));
+    // Đổi sang mã khác (cũng tự động được) → hỏi lại cho mã đó, chưa cấp gì.
+    const r2 = await p.press("GR03878");
+    assert.match(r2.text, /^GR03878 chưa nhận hàng/);
+    assert.ok(!p.sent.includes("grant:create"));
+    // Bấm lần hai đúng mã vừa được hỏi → cấp phép thủ công như cũ.
+    const r3 = await p.press("GR03878");
+    assert.equal(r3.err, false, r3.text);
+    assert.match(r3.text, /^Đã cho phép điền 1 lần: GR03878 \(Staging\)\.$/);
+    assert.deepEqual((await p.grants()).map((x) => x.grCode), ["GR03878"]);
+    // Sau khi cấp, lần sau với GR03887 vẫn phải hỏi lại từ đầu.
+    const r4 = await p.press("GR03887");
+    assert.match(r4.text, /^GR03887 chưa nhận hàng/);
+    assert.equal(p.sent.filter((t) => t === "grant:create").length, 1);
+  } finally {
+    p.b.close();
+  }
+});
+
+test("v0.3.1: popup ở Production với phiên Florita nw_ready → có nút cho phép tự động; ô thủ công hỏi lại như staging; nhãn môi trường không còn 'CHỈ ĐỌC'", async () => {
+  const PRD_ID = "c476efb2-415c-429a-978e-d389b4b06607";
+  const s = session({ key: `PRD:${GR_ID}`, envId: "PRD", state: "nw_ready", posId: PRD_ID, posName: "Florita", nwPoNumber: "PO11111111", nwPoId: "p1", warehouseId: "eb5e2b4f-6f92-413b-90ef-6be1730b94c0", expected: { shipments: [{ lines: [{ units: [{ epc: "E1" }, { epc: "E2" }] }] }] } });
+  const p = await openPopup({ sessions: [s], config: { mode: "PRD", url: "" } });
+  try {
+    await until(() => buttons(p.dom, "Cho phép tự điền và HOÀN THÀNH 1 lần").length === 1);
+    assert.doesNotMatch(p.$("envInfo").textContent, /CHỈ ĐỌC/);
+    assert.match(p.$("envInfo").textContent, /^Production:/);
+    const r = await p.press("GR03887");
+    assert.match(r.text, /^GR03887 chưa nhận hàng và CÓ THỂ chạy tự động/);
+    assert.ok(!p.sent.includes("grant:create"));
+  } finally {
+    p.b.close();
   }
 });
 

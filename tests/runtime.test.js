@@ -347,23 +347,35 @@ test("P1.3: cấp phép cho phiếu khác / đã hết hạn → 0 PUT; content 
   }
 });
 
-test("P1.3: production chỉ đọc — không cấp phép được, phiên PRD không giành được quyền ghi", async () => {
+test("v0.3.1: production chỉ ở cửa hàng đã khai kho (Florita) — cửa hàng khác không tạo được phiên; phiên Florita hết khoá 'chỉ đọc' nhưng vẫn cần cấp phép từng lần", async () => {
   const srv = makeServer();
   const b = createBrowser(srv.handle);
+  const FLORITA = "c476efb2-415c-429a-978e-d389b4b06607";
   try {
     await b.setConfig({ mode: "STG", url: "" });
-    const g = await grant(b, "GR03878", "PRD");
-    assert.equal(g.ok, false);
-    assert.match(g.error, /chỉ đọc/);
-    // Phiên PRD tạo từ trang POS production (cửa hàng PRD đã map kho) ở trạng thái received → claim vẫn bị chặn.
     const prd = b.openTab(`https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/${GR_ID}`);
-    const st = await b.sendFromTab(prd, { type: "session:start", envId: "PRD", grId: GR_ID, grCode: "GR03878", posId: "c476efb2-415c-429a-978e-d389b4b06607", soBase: "SOBD1", warehouseId: "eb5e2b4f-6f92-413b-90ef-6be1730b94c0" });
+    const start = (posId, warehouseId) => b.sendFromTab(prd, { type: "session:start", envId: "PRD", grId: GR_ID, grCode: "GR03878", posId, soBase: "SOBD1", warehouseId });
+    // Cửa hàng production chưa khai kho Nextwaves (vd. id cửa hàng staging, hay một cửa hàng PRD bất kỳ) → không có phiên.
+    for (const other of ["64a8663b-0c9e-49c6-9626-0a4c7c4bd53d", "11111111-2222-4333-8444-555555555555"]) {
+      const r = await start(other, "eb5e2b4f-6f92-413b-90ef-6be1730b94c0");
+      assert.equal(r.ok, false, other);
+      assert.match(r.error, /store/, other);
+    }
+    assert.equal(b.store.sessions && b.store.sessions[`PRD:${GR_ID}`], undefined);
+    const st = await start(FLORITA.toUpperCase(), "eb5e2b4f-6f92-413b-90ef-6be1730b94c0");
     assert.equal(st.ok, true, st.error);
     assert.equal(st.data.returnUrl, `https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/${GR_ID}`, "background tự dựng đích quay về");
+    assert.deepEqual((await b.sendFromTab(prd, { type: "session:writeBlockers", key: `PRD:${GR_ID}` })).data, [], "không còn env_read_only");
     b.store.sessions[`PRD:${GR_ID}`].state = "received";
+    // Chưa cấp phép → không giành được lượt ghi; cấp phép STG không dùng được cho PRD.
+    assert.equal((await grant(b, "GR03878", "STG")).ok, true);
+    assert.deepEqual((await b.sendFromTab(prd, claimMsg("x", { key: `PRD:${GR_ID}` }))).data, { ok: false, reason: "no_grant" });
+    // Cấp phép PRD đúng mã → giành được đúng một lượt, cấp phép bị tiêu.
+    assert.equal((await grant(b, "GR03878", "PRD")).ok, true);
     const r = await b.sendFromTab(prd, claimMsg("x", { key: `PRD:${GR_ID}` }));
-    assert.deepEqual(r.data, { ok: false, reason: "env_read_only" });
-    assert.equal(srv.st.puts.length, 0);
+    assert.equal(r.data.ok, true, JSON.stringify(r.data));
+    assert.ok(!(await b.sendFromPopup({ type: "grant:list" })).data.some((g) => g.envId === "PRD"), "cấp phép PRD đã tiêu");
+    assert.equal(srv.st.puts.length, 0, "claim không tự ghi gì");
   } finally {
     b.close();
   }
