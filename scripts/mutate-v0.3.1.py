@@ -55,8 +55,7 @@ muts += [
      "v0.3.1 G3-2 lý do hết hạn in mã thô"),
     ("src/pos/pos-content.js", '    const skip = log.slice(i + 1).filter((l) => l.type === "auto_skipped").pop();', '    const skip = null;',
      "v0.3.1 G3-2 bỏ qua lý do lúc nhận"),
-    ("src/popup/popup.js", "    if (grantBusy) return;
-", "", "v0.3.1 audit P2-1 bấm đúp lọt bước hỏi lại"),
+    ("src/popup/popup.js", "    if (grantBusy) return;\n", "", "v0.3.1 audit P2-1 bấm đúp lọt bước hỏi lại"),
 ]
 # Chạy lại một phần: CGN_MUT_FILTER="chuỗi 1|chuỗi 2" → chỉ các ca có tên chứa một trong các chuỗi (vd. ca từng sống + ca v0.3.1).
 if os.environ.get("CGN_MUT_FILTER"):
