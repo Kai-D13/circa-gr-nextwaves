@@ -58,5 +58,22 @@ muts += [
 ]
 m030.muts = muts
 
+
+# Test v0.3.1 G3-5 chạy scripts/kiem-*.js → bản sao tạm cần cả scripts/ (main() của v0.3.0 chỉ chép src / tests / samples).
+class _ShutilWithScripts:
+    def __getattr__(self, name):
+        return getattr(m030_shutil, name)
+
+    @staticmethod
+    def copytree(srcdir, dst, *a, **k):
+        out = m030_shutil.copytree(srcdir, dst, *a, **k)
+        if os.path.basename(srcdir) == "samples":
+            m030_shutil.copytree(os.path.join(os.path.dirname(srcdir), "scripts"), os.path.join(os.path.dirname(dst), "scripts"))
+        return out
+
+
+m030_shutil = m030.shutil
+m030.shutil = _ShutilWithScripts()
+
 if __name__ == "__main__":
     sys.exit(m030.main())
