@@ -104,10 +104,10 @@ test("v0.3.1 G3-1: phiếu nw_ready còn tự động được → bấm 'Cho ph
     assert.match(r3.text, /^Đã cho phép điền 1 lần: GR03878 \(Staging\)\.$/);
     assert.deepEqual((await p.grants()).map((x) => x.grCode), ["GR03878"]);
     // Sau khi cấp, lần hỏi đã dùng: bấm lại CÙNG mã cũng phải hỏi lại từ đầu; mã khác cũng vậy.
-    const r4 = await p.press("GR03887");
-    assert.match(r4.text, /^GR03887 chưa nhận hàng/);
-    const r5 = await p.press("GR03878");
-    assert.match(r5.text, /^GR03878 chưa nhận hàng/, "lần hỏi trước đã dùng cho lần cấp trước");
+    const r4 = await p.press("GR03878");
+    assert.match(r4.text, /^GR03878 chưa nhận hàng/, "lần hỏi trước đã dùng cho lần cấp trước");
+    const r5 = await p.press("GR03887");
+    assert.match(r5.text, /^GR03887 chưa nhận hàng/);
     assert.equal(p.sent.filter((t) => t === "grant:create").length, 1);
   } finally {
     p.b.close();
