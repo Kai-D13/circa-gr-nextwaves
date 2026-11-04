@@ -21,7 +21,7 @@
     new Set(((s.expected && s.expected.shipments) || []).flatMap((sh) => (sh.lines || []).flatMap((l) => (l.units || []).map((u) => String(u.epc || "").toUpperCase()))).filter(Boolean)).size;
   const hhmm = (ms) => new Date(ms).toLocaleTimeString("vi-VN");
   // v0.3.1 (G3-1): phiên còn cho phép tự động được (như điều kiện hiện nút trong autoBlock / auto:arm của background).
-  const autoPossible = (env, s) => !!env && env.writeEnabled && s.envId === env.id && s.state === "nw_ready" && !s.scanOk && !(s.receiptIdsBefore || []).length;
+  const autoPossible = (env, s) => !!env && env.writeEnabled && env.id === s.envId && s.state === "nw_ready" && !s.scanOk && !(s.receiptIdsBefore || []).length;
   // Mã phiếu operator đã được hỏi lại "vẫn cấp phép THỦ CÔNG?" — bấm lần hai cùng mã mới cấp.
   let manualConfirmed = null;
 
