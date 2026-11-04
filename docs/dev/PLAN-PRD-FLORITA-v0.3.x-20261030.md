@@ -1,5 +1,23 @@
 # Kế hoạch production Florita — từ staging done v0.3.0 tới pilot (30/10/2026)
 
+> **Sửa 05/11 theo operator — thay các phần tương ứng bên dưới:**
+> - **Một bản duy nhất v0.3.1, cài một lần trên máy POS Florita, rồi xử lý ngay một đơn thật.** Bỏ việc tách v0.3.1 chỉ đọc / v0.3.2 bật ghi và bỏ lượt T1-PRD riêng.
+>   - An toàn giữ nguyên: không ghi gì khi chưa có cấp phép đúng phiếu.
+>   - Bước kiểm chỉ đọc (khớp PO / SO / số lượng, `kiem-truoc.js`) thành bước đầu của chính đơn thật.
+> - **Đơn đầu chạy TỰ ĐỘNG**, operator bật Net Capture hai tab.
+> - **B0:**
+>   - máy có QR Scan Log ⇒ thêm hai bước nhả / trả đầu đọc ("Ngắt" trước khi quét Nextwaves, "Kết nối RFID" sau);
+>   - đã có tài khoản Nextwaves production.
+>
+>   Bỏ câu hỏi bản Chrome và người trực: không đổi gì trong mã / vận hành.
+> - **D1–D5:**
+>   - D1 chấp nhận (lặp mã do máy chủ POS);
+>   - D2 fail closed + làm tay;
+>   - D3 tự động;
+>   - D4 chỉ Florita; mở rộng = thêm cặp cửa hàng → kho, hoặc tự lấy nếu Nextwaves có API "kho thuộc cửa hàng Circa nào";
+>   - D5 bỏ.
+> - Hướng dẫn đơn thật: `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md`. Báo cáo gói: `docs/dev/BATCH-v0.3.1.md`.
+
 **Căn cứ:**
 - staging done v0.3.0: G1–G3 đạt trên gói `45E07F60`, `main` `7bff255` (`docs/dev/KET-QUA-G2-G3-v0.3.0.md`);
 - plan cũ + PM review 27/10 (`docs/dev/PLAN-STG-DONE-PRD-20261027.md`, `docs/pm/REVIEW-PLAN-STG-DONE-PRD-20261027.md`) — các yêu cầu P1 của PM cho production vẫn giữ;

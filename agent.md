@@ -72,6 +72,8 @@ Báo cáo tách ba mức bằng chứng: **đã kiểm từ source / gói**, **�
 | 24/10 | **Dược sĩ bấm HOÀN THÀNH** trên POS; extension chỉ điền sẵn UID đã map (chế độ thủ công — vẫn giữ khi không bật tự động, xem dòng 28/10) |
 | 28/10 | **Chế độ tự động (mặc định TẮT):** operator cấp **một quyền riêng cho đúng một phiên** (GR/PO/SO/cửa hàng/EPC dự kiến, 30 phút) trong popup, sau khi khớp PO Nextwaves và trước khi dược sĩ xác nhận nhận hàng. Khi đó extension tự điền (đủ UID, kế hoạch 0 chặn / 0 cảnh báo) rồi đọc lại toàn phiếu, khớp hoàn toàn mới gửi `PUT …/status/COMPLETED` **một lần**; lỗi / chưa rõ thì dừng, không tự thử lại. Thay dòng 24/10 **chỉ trong chế độ này**. Production vẫn chỉ đọc tới gate PRD. Nguồn: `docs/pm/DECISION-ONE-STG-AUTO-FLOW-20261028.md` |
 | 28/10 | Kiểm từng phiên bản bằng fixture A1 / server giả / Node / Edge / trang GR đã COMPLETED chỉ đọc; **một** lượt E2E staging thật chỉ trên gói cuối (G3), operator cấp phép theo mã phiếu cụ thể |
+| 30/10 | **Staging done v0.3.0** (G1–G3 đạt trên gói `45E07F60`), merge `main` `7bff255`. Hết PO staging |
+| 05/11 | **Production:** một bản v0.3.1 cài một lần trên máy POS Florita rồi xử lý ngay đơn thật, đơn đầu chạy **tự động** có Net Capture. <br>• PRD được ghi, chỉ ở cửa hàng đã khai kho Nextwaves (Florita `c476efb2…` → kho `eb5e2b4f…`). <br>• Ghi vẫn chỉ khi operator cấp phép / cho phép tự động đúng phiếu. <br>• D1: lặp mã QR sau HOÀN THÀNH do máy chủ POS, chấp nhận. <br>• D2: mất phiên sau khi Nextwaves đã nhận → fail closed, làm tay. <br>• Mở thêm cửa hàng = thêm cặp cửa hàng → kho. <br>Thay dòng 24/10 "production theo tài khoản, không giới hạn cửa hàng" và phần "Production vẫn chỉ đọc" của dòng 28/10. Nguồn: `docs/dev/PLAN-PRD-FLORITA-v0.3.x-20261030.md` (sửa 05/11) |
 
 Hệ quả của "một gói":
 - `manifest.json` phải khai quyền cho host của **cả hai** môi trường.
@@ -116,7 +118,8 @@ Hệ quả của "một gói":
 - Header POS gửi (từ 24/10): `authorization: Bearer <token>`, `x-client-id: 1`, `x-store-id: <pos_id>`, `grpc-timeout: 30S`.
   Staging còn có cookie `session_token` (cùng giá trị token) + `session_expires_at`.
 - **Phạm vi cửa hàng:**
-  - Production: extension làm việc theo phiên đăng nhập sẵn có. Tài khoản thuộc cửa hàng A thì chỉ thấy và thao tác dữ liệu cửa hàng A. **Không viết cứng cửa hàng nào**; lấy cửa hàng từ phiên (`x-store-id` / `pos_id`).
+  - Production: extension làm việc theo phiên đăng nhập sẵn có. Tài khoản thuộc cửa hàng A thì chỉ thấy và thao tác dữ liệu cửa hàng A. Cửa hàng lấy từ phiên (`x-store-id` / `pos_id`).
+    - **Từ v0.3.1 (05/11):** chỉ chạy ở cửa hàng có trong bảng cửa hàng → kho Nextwaves (`src/lib/env.js`, hiện chỉ Florita). Cửa hàng khác: không nút, không phiên.
   - Staging: chỉ bật cho POS **2222**. Phiên staging thuộc cửa hàng khác thì extension không làm gì.
 - Web Nextwaves của mỗi tenant có `https://<tenant>.nextwaves.app/config.js` khai `window.__NWC_CONFIG__.NEXT_PUBLIC_API_URL`.
   Phiên Nextwaves dùng access token Bearer (JWT sống 1 giờ) + refresh token (`POST /auth/refresh`).
