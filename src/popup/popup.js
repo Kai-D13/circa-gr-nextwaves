@@ -20,10 +20,14 @@
   const expectedEpcCount = (s) =>
     new Set(((s.expected && s.expected.shipments) || []).flatMap((sh) => (sh.lines || []).flatMap((l) => (l.units || []).map((u) => String(u.epc || "").toUpperCase()))).filter(Boolean)).size;
   const hhmm = (ms) => new Date(ms).toLocaleTimeString("vi-VN");
-  // v0.3.1 (G3-1): phiên còn cho phép tự động được (như điều kiện hiện nút trong autoBlock / auto:arm của background).
-  const autoPossible = (env, s) => !!env && env.writeEnabled && env.id === s.envId && s.state === "nw_ready" && !s.scanOk && !(s.receiptIdsBefore || []).length;
-  // Mã phiếu operator đã được hỏi lại "vẫn cấp phép THỦ CÔNG?" — bấm lần hai cùng mã mới cấp.
+  // v0.3.1 (G3-1): phiên còn cho phép tự động được — chưa xác nhận nhận hàng, PO chưa có biên nhận (như autoBlock / auto:arm của
+  // background). Gồm cả phiên đang chờ khớp đơn Nextwaves (nút tự động hiện khi khớp xong).
+  const autoPossible = (env, s) =>
+    !!env && env.writeEnabled && env.id === s.envId && (s.state === "nw_ready" || s.state === "waiting_nw") && !s.scanOk && !(s.receiptIdsBefore || []).length;
+  // "<môi trường>:<mã phiếu>" operator đã được hỏi lại "vẫn cấp phép THỦ CÔNG?" — bấm lần hai cùng mã, cùng môi trường mới cấp.
   let manualConfirmed = null;
+  // Audit v0.3.1 P2-1: bấm đúp — lượt thứ hai chạy chen khi lượt đầu còn chờ background sẽ lọt qua bước hỏi lại. Đang xử lý thì bỏ qua.
+  let grantBusy = false;
 
   async function bg(type, extra) {
     const r = await chrome.runtime.sendMessage(Object.assign({ type }, extra || {}));
@@ -218,6 +222,8 @@
     }
   });
   $("grant").addEventListener("click", async () => {
+    if (grantBusy) return;
+    grantBusy = true;
     try {
       const c = await bg("config:get");
       const env = E.envFromConfig(c);
@@ -240,9 +246,9 @@
       }
       // v0.3.1 (G3-1): G3 lượt 1 bấm nhầm ô này thay cho nút tự động → mất một lượt tự động. Phiếu còn tự động được thì hỏi lại;
       // bấm lần hai cùng mã mới cấp phép thủ công.
-      if (open.some((s) => String(s.grCode || "").toUpperCase() === code && autoPossible(env, s)) && manualConfirmed !== code) {
-        manualConfirmed = code;
-        throw new Error(`${code} chưa nhận hàng và CÓ THỂ chạy tự động: dùng nút “Cho phép tự điền và HOÀN THÀNH 1 lần” trong dòng phiên ở trên. Vẫn muốn điền THỦ CÔNG thì bấm “Cho phép điền 1 lần” lần nữa.`);
+      if (open.some((s) => String(s.grCode || "").toUpperCase() === code && autoPossible(env, s)) && manualConfirmed !== `${env.id}:${code}`) {
+        manualConfirmed = `${env.id}:${code}`;
+        throw new Error(`${code} chưa nhận hàng và CÓ THỂ chạy tự động: dùng nút “Cho phép tự điền và HOÀN THÀNH 1 lần” trong dòng phiên ở trên (nút hiện khi phiên “Đã khớp đơn Nextwaves”). Vẫn muốn điền THỦ CÔNG thì bấm “Cho phép điền 1 lần” lần nữa.`);
       }
       manualConfirmed = null;
       const g = await bg("grant:create", { envId: env.id, grCode: $("grCode").value });
@@ -251,6 +257,8 @@
       renderGrants(env);
     } catch (err) {
       say("grantMsg", String((err && err.message) || err), true);
+    } finally {
+      grantBusy = false;
     }
   });
 

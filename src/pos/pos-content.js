@@ -1021,6 +1021,11 @@
     receipts: "PO Nextwaves không có đúng một biên nhận mới",
     armed_after_scan: "quyền được cấp sau lượt xác nhận nhận hàng",
     grant_expired: "quyền tự động đã hết hạn hoặc bị thu hồi trước khi nhận",
+    // Audit v0.3.1 P3: lý do khác có thể tới khung — không in mã thô.
+    tab_closed: "tab POS được giao lượt tự động đã đóng",
+    no_plan: "chưa có kế hoạch điền",
+    no_session: "không còn phiên",
+    ui_not_anchored_complete: "khung extension không gắn đúng trang phiếu lúc HOÀN THÀNH",
   };
   // v0.3.1 (G3-2 / G3-3): dòng trạng thái tự động của phiên vừa nhận mà không có lượt tự động — lấy auto_skipped của lượt nhận cuối.
   function receivedAutoNote(s) {

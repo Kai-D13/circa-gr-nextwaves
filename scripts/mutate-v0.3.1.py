@@ -38,15 +38,15 @@ muts += [
     ("src/lib/env.js", 'warehouseByStore: Object.freeze({ "c476efb2-415c-429a-978e-d389b4b06607": "eb5e2b4f-6f92-413b-90ef-6be1730b94c0" }),',
      'warehouseByStore: Object.freeze({}),', "v0.3.1 PRD mất cặp kho Florita"),
     # G3-1 popup
-    ("src/popup/popup.js", "&& autoPossible(env, s)) && manualConfirmed !== code) {", "&& autoPossible(env, s)) && false) {",
+    ("src/popup/popup.js", "&& autoPossible(env, s)) && manualConfirmed !== `${env.id}:${code}`) {", "&& autoPossible(env, s)) && false) {",
      "v0.3.1 G3-1 cấp phép thủ công không hỏi lại"),
     ("src/popup/popup.js", "      manualConfirmed = null;\n", "", "v0.3.1 G3-1 lần hỏi cũ dùng lại cho lần sau"),
-    ("src/popup/popup.js", 's.state === "nw_ready" && !s.scanOk && !(s.receiptIdsBefore || []).length;', 's.state === "nw_ready" && !(s.receiptIdsBefore || []).length;',
+    ("src/popup/popup.js", 's.state === "waiting_nw") && !s.scanOk && !(s.receiptIdsBefore || []).length;', 's.state === "waiting_nw") && !(s.receiptIdsBefore || []).length;',
      "v0.3.1 G3-1 hỏi lại cả khi Nextwaves đã ghi nhận lượt nhận"),
-    ("src/popup/popup.js", 's.state === "nw_ready" && !s.scanOk && !(s.receiptIdsBefore || []).length;', 's.state === "nw_ready" && !s.scanOk;',
+    ("src/popup/popup.js", 's.state === "waiting_nw") && !s.scanOk && !(s.receiptIdsBefore || []).length;', 's.state === "waiting_nw") && !s.scanOk;',
      "v0.3.1 G3-1 hỏi lại cả khi PO đã có biên nhận"),
-    ("src/popup/popup.js", 'const autoPossible = (env, s) => !!env && env.writeEnabled && env.id === s.envId && s.state === "nw_ready"',
-     'const autoPossible = (env, s) => !!env && env.writeEnabled && env.id === s.envId && s.state !== "done"',
+    ("src/popup/popup.js", '!!env && env.writeEnabled && env.id === s.envId && (s.state === "nw_ready" || s.state === "waiting_nw")',
+     '!!env && env.writeEnabled && env.id === s.envId && s.state !== "done"',
      "v0.3.1 G3-1 hỏi lại cả phiếu đã nhận"),
     # G3-2 / G3-3 khung POS
     ("src/pos/pos-content.js", '} else if (s.state === "received" && !(s.authorization && s.authorization.auto)) {', '} else if (false) {',
@@ -55,6 +55,8 @@ muts += [
      "v0.3.1 G3-2 lý do hết hạn in mã thô"),
     ("src/pos/pos-content.js", '    const skip = log.slice(i + 1).filter((l) => l.type === "auto_skipped").pop();', '    const skip = null;',
      "v0.3.1 G3-2 bỏ qua lý do lúc nhận"),
+    ("src/popup/popup.js", "    if (grantBusy) return;
+", "", "v0.3.1 audit P2-1 bấm đúp lọt bước hỏi lại"),
 ]
 m030.muts = muts
 

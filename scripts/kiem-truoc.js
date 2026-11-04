@@ -6,8 +6,10 @@
 {
   const GR = "GR?????"; // ← mã phiếu, ví dụ GR03929
   chrome.storage.local.get(["sessions", "autoGrants", "grants", "config"]).then(({ sessions = {}, autoGrants = {}, grants = {}, config = {} }) => {
-    const s = Object.values(sessions).find((x) => x.grCode === GR);
-    if (!s) return console.log(`KHÔNG có phiên ${GR} — bấm “Nhận hàng bằng RFID” trên dòng ${GR} trước`);
+    // Chọn phiên theo mã phiếu + môi trường đang chọn trong popup (Production / Staging), mới nhất; có hơn một phiên trùng mã thì báo.
+    const cands = Object.values(sessions).filter((x) => x.grCode === GR && (!config.mode || x.envId === config.mode)).sort((a, b) => b.updatedAt - a.updatedAt);
+    const s = cands[0];
+    if (!s) return console.log(`KHÔNG có phiên ${GR}${config.mode ? ` (${config.mode})` : ""} — bấm “Nhận hàng bằng RFID” trên dòng ${GR} trước`);
     const sh = (s.expected && s.expected.shipments) || [];
     const us = sh.flatMap((x) => x.lines.flatMap((l) => l.units));
     const t = (v) => (v ? new Date(v).toLocaleString("vi-VN") : null);
@@ -15,6 +17,8 @@
       JSON.stringify({
         v: chrome.runtime.getManifest().version,
         mode: config.mode,
+        env: s.envId,
+        phienTrungMa: cands.length - 1,
         gr: s.grCode,
         state: s.state,
         schema: s.schema,

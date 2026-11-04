@@ -4,14 +4,18 @@
 // Phiên bị Xoá / Huỷ rồi mở lại (G3 lượt 2, 30/10) → quyền cũ mất → in DỪNG: cho phép lại rồi chạy lại đoạn này.
 {
   const GR = "GR?????"; // ← mã phiếu, ví dụ GR03929
-  chrome.storage.local.get(["sessions", "autoGrants"]).then(({ sessions = {}, autoGrants = {} }) => {
-    const s = Object.values(sessions).find((x) => x.grCode === GR);
+  chrome.storage.local.get(["sessions", "autoGrants", "config"]).then(({ sessions = {}, autoGrants = {}, config = {} }) => {
+    // Chọn phiên theo mã phiếu + môi trường đang chọn trong popup (Production / Staging), mới nhất; có hơn một phiên trùng mã thì báo.
+    const cands = Object.values(sessions).filter((x) => x.grCode === GR && (!config.mode || x.envId === config.mode)).sort((a, b) => b.updatedAt - a.updatedAt);
+    const s = cands[0];
     const g = s && autoGrants[s.key];
     const epcs = s ? [...new Set(((s.expected && s.expected.shipments) || []).flatMap((x) => x.lines.flatMap((l) => l.units.map((u) => String(u.epc || "").toUpperCase()))).filter(Boolean))].sort() : [];
     const phut = g ? Math.floor((g.expiresAt - Date.now()) / 60000) : 0;
     const loi = [];
-    if (!s) loi.push(`không có phiên ${GR}`);
+    if (!s) loi.push(`không có phiên ${GR}${config.mode ? ` ở ${config.mode}` : " (popup chưa chọn môi trường)"}`);
     else {
+      if (!config.mode) loi.push("popup chưa chọn môi trường (Production)");
+      if (cands.length > 1) loi.push(`có ${cands.length} phiên trùng mã ${GR} — Xoá phiên cũ trong popup`);
       if (s.state !== "nw_ready") loi.push(`phiên không ở trạng thái Đã khớp đơn Nextwaves (${s.state})`);
       if (s.scanOk) loi.push("Nextwaves đã ghi nhận lượt xác nhận nhận hàng");
       if ((s.receiptIdsBefore || []).length) loi.push("PO đã có biên nhận");
