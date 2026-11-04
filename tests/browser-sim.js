@@ -33,8 +33,11 @@ function isolatedScriptsFor(url) {
   return isolated.filter((f) => f !== "ui/panel.js");
 }
 
-function run(ctx, file) {
-  vm.runInContext(fs.readFileSync(path.join(SRC, file), "utf8"), ctx, { filename: file });
+// patch: {file: (mã) => mã} — chỉ test công tắc tắt ghi (v0.3.1) vá env.js của background; mặc định chạy đúng file trong src/.
+function run(ctx, file, patch) {
+  let code = fs.readFileSync(path.join(SRC, file), "utf8");
+  if (patch && patch[file]) code = patch[file](code);
+  vm.runInContext(code, ctx, { filename: file });
 }
 
 function createBrowser(server, opts = {}) {
@@ -103,7 +106,7 @@ function createBrowser(server, opts = {}) {
   const bg = Object.assign({ console, URL, URLSearchParams }, timerApi(bgTimers));
   bg.self = bg;
   bg.__CGN__ = { tuning: bgTuning };
-  bg.importScripts = (...files) => files.forEach((f) => run(bg, f));
+  bg.importScripts = (...files) => files.forEach((f) => run(bg, f, opts.bgSrcPatch));
   bg.chrome = {
     storage: { local: storage, onChanged: { addListener: (l) => storageListeners.push(l) } },
     runtime: {

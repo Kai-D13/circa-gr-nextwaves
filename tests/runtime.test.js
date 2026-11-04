@@ -381,6 +381,39 @@ test("v0.3.1: production chỉ ở cửa hàng đã khai kho (Florita) — cửa
   }
 });
 
+// Audit v0.3.1 P3: cả hai môi trường đều writeEnabled → hàng rào "chỉ đọc" của background không còn cấu hình thật nào chạm tới.
+// Giữ nó sống: vá env.js của background cho PRD writeEnabled false (công tắc tắt ghi) → mọi đường ghi bị chặn.
+test("v0.3.1 công tắc tắt ghi: PRD writeEnabled false → không cấp phép, không cho phép tự động, phiên khoá env_read_only, claim bị chặn", async () => {
+  const srv = makeServer();
+  const ON = "      writeEnabled: true,\n      // Chỉ cửa hàng đã khai kho Nextwaves";
+  const b = createBrowser(srv.handle, {
+    bgSrcPatch: {
+      "lib/env.js": (code) => {
+        assert.equal(code.split(ON).length, 2, "neo công tắc PRD");
+        return code.replace(ON, ON.replace("true", "false"));
+      },
+    },
+  });
+  try {
+    await b.setConfig({ mode: "PRD", url: "" });
+    const g = await grant(b, "GR03878", "PRD");
+    assert.equal(g.ok, false);
+    assert.match(g.error, /chỉ đọc/);
+    const prd = b.openTab(`https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    const st = await b.sendFromTab(prd, { type: "session:start", envId: "PRD", grId: GR_ID, grCode: "GR03878", posId: "c476efb2-415c-429a-978e-d389b4b06607", soBase: "SOBD1", warehouseId: "eb5e2b4f-6f92-413b-90ef-6be1730b94c0" });
+    assert.equal(st.ok, true, st.error);
+    assert.ok((await b.sendFromTab(prd, { type: "session:writeBlockers", key: `PRD:${GR_ID}` })).data.includes("env_read_only"));
+    b.store.sessions[`PRD:${GR_ID}`].state = "nw_ready";
+    const a = await b.sendFromPopup({ type: "auto:arm", key: `PRD:${GR_ID}`, confirm: {} });
+    assert.match(a.error, /chỉ đọc/);
+    b.store.sessions[`PRD:${GR_ID}`].state = "received";
+    assert.deepEqual((await b.sendFromTab(prd, claimMsg("x", { key: `PRD:${GR_ID}` }))).data, { ok: false, reason: "env_read_only" });
+    assert.equal(srv.st.puts.length, 0);
+  } finally {
+    b.close();
+  }
+});
+
 test("P1.3: PUT lỗi → dừng; cấp phép đã tiêu nên thử lại cần cấp phép MỚI, rồi điền tiếp đủ", async () => {
   const { b, srv, pos } = await openToReceived({ server: { putFailures: 1 } });
   try {

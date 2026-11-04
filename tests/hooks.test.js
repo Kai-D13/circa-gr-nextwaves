@@ -59,6 +59,47 @@ test("pos-hook: PUT …/status/COMPLETED (XHR và fetch) → báo gr-status kèm
   assert.equal(h.posted.filter((m) => m.type === "gr-status").length, 2);
 });
 
+// ---------- v0.3.1: production — API POS ở origin khác (https://api.v2.circa.vn/v1/…), staging là /backend cùng origin ----------
+// Audit v0.3.1 P3: mọi test hook trước đây chỉ dùng URL staging. Production gửi header Bearer (capture POS-02 19/10), không cần cookie.
+test("v0.3.1 pos-hook production: API api.v2.circa.vn → báo header envId PRD + gr-status khi HOÀN THÀNH (XHR, fetch); API staging / tra QR không báo", async () => {
+  const FLORITA = "c476efb2-415c-429a-978e-d389b4b06607";
+  const h = loadHook("https://pos.v2.circa.vn", "pos/pos-hook.js", `/danh-sach-phieu-nhan-hang/${GR_ID}`);
+  const x = h.xhr();
+  x.open("GET", `https://api.v2.circa.vn/v1/order/goods-receipt/${GR_ID}`);
+  x.setRequestHeader("Authorization", "Bearer prd");
+  x.setRequestHeader("x-store-id", FLORITA);
+  x.setRequestHeader("x-client-id", "1");
+  x.send();
+  const auths = () => h.posted.filter((m) => m.type === "auth");
+  assert.deepEqual(auths().map((m) => m.payload), [{ envId: "PRD", headers: { authorization: "Bearer prd", "x-client-id": "1", "x-store-id": FLORITA } }]);
+  // Đường /backend của origin trang và tra QR (origin trang) không phải API POS production → không báo.
+  for (const url of [`https://pos.v2.circa.vn/backend/v1/order/goods-receipt/${GR_ID}`, "https://pos.v2.circa.vn/thuocsi-warehouse/qrcode?code=X"]) {
+    const y = h.xhr();
+    y.open("GET", url);
+    y.setRequestHeader("authorization", "Bearer khac");
+    y.send();
+  }
+  assert.equal(auths().length, 1);
+  // Hook gắn môi trường theo URL API (lõi, từ v0.1): lời gọi API staging (không xảy ra trên trang thật) được báo với envId STG, KHÔNG
+  // thành header của PRD — khung POS chỉ dùng header đúng môi trường đang chọn.
+  const z = h.xhr();
+  z.open("GET", `https://pos.stg.circa-v2.buymed.tech/backend/v1/order/goods-receipt/${GR_ID}`);
+  z.setRequestHeader("authorization", "Bearer stg");
+  z.send();
+  assert.deepEqual(auths().map((m) => [m.payload.envId, m.payload.headers.authorization]), [["PRD", "Bearer prd"], ["STG", "Bearer stg"]]);
+  const c = h.xhr();
+  c.open("PUT", `https://api.v2.circa.vn/v1/order/goods-receipt/${GR_ID}/status/COMPLETED`);
+  c.setRequestHeader("authorization", "Bearer prd");
+  c.send();
+  c.finish(200, "{}");
+  await h.fetch(`https://api.v2.circa.vn/v1/order/goods-receipt/${GR_ID}/status/COMPLETED`, { method: "PUT", headers: { authorization: "Bearer prd" } });
+  await flush();
+  assert.deepEqual(h.posted.filter((m) => m.type === "gr-status").map((m) => m.payload), [
+    { envId: "PRD", grId: GR_ID, status: "COMPLETED", httpStatus: 200 },
+    { envId: "PRD", grId: GR_ID, status: "COMPLETED", httpStatus: 200 },
+  ]);
+});
+
 // ---------- v0.2: danh sách phiếu nhận + route (Spec S5 / rev 2 R1) ----------
 const POS_ORIGIN = "https://pos.stg.circa-v2.buymed.tech";
 const LIST_PATH = "/danh-sach-phieu-nhan-hang";

@@ -58,6 +58,10 @@ muts += [
     ("src/popup/popup.js", "    if (grantBusy) return;
 ", "", "v0.3.1 audit P2-1 bấm đúp lọt bước hỏi lại"),
 ]
+# Chạy lại một phần: CGN_MUT_FILTER="chuỗi 1|chuỗi 2" → chỉ các ca có tên chứa một trong các chuỗi (vd. ca từng sống + ca v0.3.1).
+if os.environ.get("CGN_MUT_FILTER"):
+    keys = [k for k in os.environ["CGN_MUT_FILTER"].split("|") if k]
+    muts = [m for m in muts if any(k in m[3] for k in keys)]
 m030.muts = muts
 
 

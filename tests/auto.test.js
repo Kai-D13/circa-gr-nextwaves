@@ -1122,7 +1122,7 @@ test("v0.3.1 G3-5: kiem-truoc / kiem-quet / kiem-sau trên lượt tự động 
   const { b, pos } = ctx;
   try {
     const truoc = JSON.parse(await runKiem("kiem-truoc.js", b));
-    assert.deepEqual([truoc.gr, truoc.state, truoc.so, truoc.nwPo, truoc.kho, truoc.scanOk, truoc.bienNhanTruoc, truoc.tem, truoc.temKhongTrung, truoc.thieuUid, truoc.autoGrants], ["GR03887", "nw_ready", "SOBD1594095-F", "PO13806459", true, false, 0, 15, 15, 0, 0]);
+    assert.deepEqual([truoc.env, truoc.phienTrungMa, truoc.gr, truoc.state, truoc.so, truoc.nwPo, truoc.kho, truoc.scanOk, truoc.bienNhanTruoc, truoc.tem, truoc.temKhongTrung, truoc.thieuUid, truoc.autoGrants], ["STG", 0, "GR03887", "nw_ready", "SOBD1594095-F", "PO13806459", true, false, 0, 15, 15, 0, 0]);
     assert.ok(truoc.phieuGui.every((x) => x.dong.every((d) => d[3] === "có tem")));
     assert.match(await runKiem("kiem-quet.js", b), /^DỪNG: .*CHƯA có quyền tự động/);
     assert.equal((await arm(b)).ok, true);
@@ -1131,12 +1131,17 @@ test("v0.3.1 G3-5: kiem-truoc / kiem-quet / kiem-sau trên lượt tự động 
     await receive(ctx);
     await sessionState(b, "done", 8000);
     const sau = JSON.parse(await runKiem("kiem-sau.js", b));
-    assert.deepEqual([sau.state, sau.hoanThanh.source, sau.quyenDaDung.auto, sau.quyenDaDung.plan, sau.nwUnits, sau.nwReceipts, sau.autoGrantsConLai, sau.dungDien], ["done", "auto", true, "EF0E020C", 15, 1, 0, null]);
+    assert.deepEqual([sau.env, sau.state, sau.hoanThanh.source, sau.quyenDaDung.auto, sau.quyenDaDung.plan, sau.nwUnits, sau.nwReceipts, sau.autoGrantsConLai, sau.dungDien, sau.soLoDaDien], ["STG", "done", "auto", true, "EF0E020C", 15, 1, 0, null, 5]);
     assert.deepEqual(
       sau.log.map((l) => l.split(" ")[1]).filter((x) => !/^apply_(sending|done)$/.test(x) && x !== "plan"),
       ["start", "nw_matched", "auto_armed", "scan_ok", "nw_received", "auto_ready", "auto_claimed", "applied", "auto_complete_claimed", "auto_complete_sent", "auto_completed"]
     );
     assert.ok(!/Bearer|authorization/i.test(JSON.stringify(sau)), "không in token");
+    // Popup đang chọn môi trường khác (Production) → không lấy phiên staging; chưa chọn → chốt chặn báo.
+    await b.setConfig({ mode: "PRD", url: "" });
+    assert.match(await runKiem("kiem-sau.js", b), /^KHÔNG có phiên GR03887/);
+    await b.setConfig({ mode: "", url: "" });
+    assert.match(await runKiem("kiem-quet.js", b), /^DỪNG: .*popup chưa chọn môi trường/);
   } finally {
     b.close();
   }
@@ -1152,6 +1157,9 @@ test("v0.3.1 G3-5: kiem-truoc / kiem-quet / kiem-sau trên lượt tự động 
     assert.match(await runKiem("kiem-quet.js", c2.b), /^DỪNG: .*CHƯA có quyền tự động/);
     assert.equal((await arm(c2.b)).ok, true);
     assert.match(await runKiem("kiem-quet.js", c2.b), /^SẴN SÀNG QUÉT: GR03887/);
+    // Hai phiên trùng mã phiếu cùng môi trường → báo, không đoán.
+    await c2.b.patchSession("STG:00000000-0000-4000-8000-000000000001", Object.assign(H.clone(session(c2.b)), { key: "STG:00000000-0000-4000-8000-000000000001", updatedAt: 1 }));
+    assert.match(await runKiem("kiem-quet.js", c2.b), /^DỪNG: .*có 2 phiên trùng mã GR03887/);
   } finally {
     c2.b.close();
   }

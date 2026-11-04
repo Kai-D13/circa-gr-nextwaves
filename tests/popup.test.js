@@ -103,12 +103,36 @@ test("v0.3.1 G3-1: phiếu nw_ready còn tự động được → bấm 'Cho ph
     assert.equal(r3.err, false, r3.text);
     assert.match(r3.text, /^Đã cho phép điền 1 lần: GR03878 \(Staging\)\.$/);
     assert.deepEqual((await p.grants()).map((x) => x.grCode), ["GR03878"]);
-    // Sau khi cấp, lần sau với GR03887 vẫn phải hỏi lại từ đầu.
+    // Sau khi cấp, lần hỏi đã dùng: bấm lại CÙNG mã cũng phải hỏi lại từ đầu; mã khác cũng vậy.
     const r4 = await p.press("GR03887");
     assert.match(r4.text, /^GR03887 chưa nhận hàng/);
+    const r5 = await p.press("GR03878");
+    assert.match(r5.text, /^GR03878 chưa nhận hàng/, "lần hỏi trước đã dùng cho lần cấp trước");
     assert.equal(p.sent.filter((t) => t === "grant:create").length, 1);
   } finally {
     p.b.close();
+  }
+});
+
+test("audit v0.3.1 P2-1: bấm đúp 'Cho phép điền 1 lần' (lượt hai chen khi lượt đầu còn chờ background) → chỉ cảnh báo, 0 grant:create; phiên chờ khớp đơn (waiting_nw) cũng hỏi lại", async () => {
+  for (const state of ["nw_ready", "waiting_nw"]) {
+    const p = await openPopup({ sessions: [session({ state })] });
+    try {
+      p.$("grantMsg").textContent = "";
+      p.$("grCode").value = "GR03887";
+      p.$("grant").click();
+      p.$("grant").click();
+      await until(() => p.$("grantMsg").textContent !== "");
+      await settle(120);
+      assert.match(p.$("grantMsg").textContent, /^GR03887 chưa nhận hàng và CÓ THỂ chạy tự động/, state);
+      assert.ok(!p.sent.includes("grant:create"), `${state}: bấm đúp không lọt bước hỏi lại`);
+      assert.deepEqual(await p.grants(), [], state);
+      const r = await p.press("GR03887");
+      assert.equal(r.err, false, `${state}: ${r.text}`);
+      assert.deepEqual((await p.grants()).map((x) => x.grCode), ["GR03887"], state);
+    } finally {
+      p.b.close();
+    }
   }
 });
 
