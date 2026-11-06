@@ -600,7 +600,8 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
 60. **Hiện hành (06/11): gói v0.3.1 C7D1641F sẵn sàng cài** — `docs/dev/BATCH-v0.3.1.md` (mục 06/11), hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md`, plan `docs/dev/PLAN-TRIEN-KHAI-PRD-20261106.md`.
-    - **Chờ operator:** cài `C:\circa-gr-nextwaves-release\v0.3.1\` (KHÔNG cài gói trong `khong-dung`) trên máy POS Florita; đơn đầu **GR84674** tự động — gửi `kiem-truoc.js` + số tem (39) + câu cho phép; sau đó `kiem-sau.js` + 2 capture.
+    - **06/11 16:43 — đã chép đè (operator yêu cầu):** `nang-cap-v0.3.1.ps1` nâng `C:\circa-gr-nextwaves-v0.2.3` (thư mục Chrome máy này đang tải, giữ Extension ID → giữ phiên / cấu hình) từ v0.3.0 45E07F60 lên **v0.3.1 C7D1641F**, khớp từng byte 19 file; sao lưu `C:\circa-gr-nextwaves-release\backup\v0.3.0-dang-tai-20261106-164347`. Operator bấm Reload + chọn Production.
+    - **Chờ operator:** đơn đầu **GR84674** tự động — gửi `kiem-truoc.js` + số tem (39) + câu cho phép; sau đó `kiem-sau.js` + 2 capture.
     - Sau GR84674 đạt: GR84673; merge `batch/v0.3.1-prd` → `main` khi operator đồng ý.
     - Bản sau (v0.3.2): trường mã giao POS từ Nextwaves (khớp chính xác); P2-1 (hai phiên cùng SO tách giao); kiểm hình dạng response production SAU khi nhận (chưa có mẫu thật).
 59. (cũ, thay bằng mục 60) **v0.3.1 production Florita đóng gói, 05/11:** `docs/dev/BATCH-v0.3.1.md`, hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md`.
