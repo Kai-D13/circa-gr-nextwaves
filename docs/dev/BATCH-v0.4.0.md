@@ -10,14 +10,20 @@ Hướng dẫn cài / vận hành: `docs/dev/RUNBOOK-v0.4.0.md` (thay `RUNBOOK-P
 
 **Chưa cài máy POS nào, chưa ghi thật bằng v0.4.0.** Cài / nâng và lượt đầu chỉ khi operator cho phép bằng chữ.
 
+> **07/11 rạng sáng — mã gói 79D4269C thay BA779823** (BA779823 chưa cài đâu; theo luật "sửa trước khi cài máy POS giữ số" → vẫn 0.4.0).
+> - Operator: cài máy dev → QA / QC (`docs/dev/QA-v0.4.0-MAY-DEV.md`) → mới cài máy POS; chỉ hai cửa hàng Florita + Lumina (tenant `circa`); **hoãn mượn đầu đọc với QR Scan Log**.
+> - Rà luồng không có QR Scan Log: hết 3 lần bấm "Kết nối đầu đọc", khung bảo "Ngắt RFID ở tab bán hàng, extension tự kết nối lại" nhưng extension không bấm thêm → dược sĩ chờ mãi. **Sửa** (`src/nw/nw-content.js` `readerTick`, nhánh `8a28fc4`): dược sĩ rời tab Nextwaves rồi quay lại → một lượt bấm mới (vẫn tối đa 3, không bấm khi tab ẩn); chữ "sang tab bán hàng bấm Ngắt RFID rồi quay lại tab này, extension tự kết nối lại". Chỉ file này đổi so với BA779823.
+> - Đột biến lượt đủ trên BA779823 thấy ca cũ **"S6 cache cả kết quả tra QR lỗi" sống** (test cũ bắt nó qua "đổi cấp phép → lập lại kế hoạch", v0.4.0 đã bỏ cấp phép) → test mới: tra lỗi → rời phiếu rồi quay lại (SPA) → chỉ tra lại UID lỗi → tự điền.
+> - Máy dev: `C:\circa-gr-nextwaves-v0.2.3` = 79D4269C (sao lưu v0.3.1 ở `C:\circa-gr-nextwaves-release\backup\v0.2.3-truoc-v0.4.0-20261107\`).
+
 ## 1. Gói
 
 | Mục | Giá trị |
 |---|---|
-| Nhánh | `batch/v0.4-moi-pos`, tách từ `2d35a8c` (= v0.3.1 `AEE4447F`). src đổi lần cuối ở `bd37f35`; sau đó chỉ test / script |
+| Nhánh | `batch/v0.4-moi-pos`, tách từ `2d35a8c` (= v0.3.1 `AEE4447F`). src đổi lần cuối ở `8a28fc4` |
 | ZIP | `circa-gr-nextwaves-v0.4.0.zip`, 19 file |
-| SHA-256 | `BA779823BBCE13D068BD684441EEDD4BA0BA5413997005BE13A9C27C3DB0E3FD` (mã gói **BA779823**) |
-| Thư mục giao | `C:\circa-gr-nextwaves-release\v0.4.0\`: ZIP + `kiem-truoc.js` / `kiem-sau.js` / `kiem-khung-gr.js` + `HUONG-DAN-v0.4.0.md` (= runbook) + `SHA256SUMS.txt` |
+| SHA-256 | `79D4269CF189251A745515DAAE8166AFE1C41589D37047665C35F78A98328C88` (mã gói **79D4269C**). Đóng lại từ `git archive HEAD` ra cùng mã; giải nén `diff -r` với `src/` không khác. Gói trước `BA779823…` (src `bd37f35`) không dùng |
+| Thư mục giao | `C:\circa-gr-nextwaves-release\v0.4.0\`: ZIP + `kiem-truoc.js` / `kiem-sau.js` / `kiem-khung-gr.js` + `HUONG-DAN-v0.4.0.md` (= runbook) + `QA-v0.4.0-MAY-DEV.md` + `SHA256SUMS.txt`; `khong-dung\` giữ BA779823 |
 | Cài | Máy đã có v0.3.1 (Florita): chép đè đúng thư mục đang nạp (`C:\circa-gr-nextwaves`), Reload, giữ Extension ID. Máy mới: Load unpacked. Popup: Production + tenant Nextwaves của máy (trống = `circa`) |
 | Nâng từ v0.3.1 | Phiên schema 1 bị xoá khi nâng (cùng khoá cấp phép cũ). Hoàn tất phiếu đang nhận dở trước khi nâng |
 
@@ -80,10 +86,10 @@ Hướng dẫn cài / vận hành: `docs/dev/RUNBOOK-v0.4.0.md` (thay `RUNBOOK-P
 
 | Gate | Kết quả |
 |---|---|
-| `node --test --test-timeout=60000 tests/*.test.js` | **216/216**. `tests/auto.test.js` (chế độ tự động v0.3.x) thay bằng `tests/v04.test.js` 26 test; `runtime.test.js` chuyển sang luồng tự điền |
+| `node --test --test-timeout=60000 tests/*.test.js` | **217/217** trên `8a28fc4` (BA779823: 216/216). `tests/auto.test.js` (chế độ tự động v0.3.x) thay bằng `tests/v04.test.js` 27 test; `runtime.test.js` chuyển sang luồng tự điền |
 | Test mới (chọn lọc) | <ul><li>A1 trên dữ liệu thật GR03887: mượn đầu đọc → nhận → tự điền 5 PUT → không COMPLETED → trả đầu đọc; `kiem-truoc` / `kiem-sau` chạy trên dữ liệu đó</li><li>GR84570: không có đơn → đúng **1** lần tìm, `no_nw_order`, trả đầu đọc; lỗi 500 / 401 giữ khung, token mới sau 401 tìm lại</li><li>PUT 503 giữa chừng → chưa rõ, nút điền tiếp; tab chết; kế hoạch chặn; phiếu đã đủ</li><li>A2 / A3 / A4 / A7 / A8, B6 tenant, C1 một tab, C2 tối đa 3 lần bấm, QR Scan Log không hỗ trợ / bận / chậm trả lời</li><li>khung Nextwaves không bị đánh thức khi chỉ nhật ký đổi (lớp 2 của A1)</li><li>resolve: không có đơn / khác kho; env tenant; popup tenant</li><li>mỗi finding review P2 / P3 có test</li></ul> |
-| Đột biến `python -I scripts/mutate-v0.4.0.py` | **(đang chạy — điền khi xong)** 195 ca = 145 ca v0.3.x còn neo + 50 ca v0.4.0. Lượt ca mới trước review: 29/32. Ba ca sống → thêm test lớp 2 A1 (khung không bị đánh thức khi chỉ nhật ký đổi) và test bấm lại phiếu không có đơn; ca "coi trang UI Nextwaves là API" là đột biến tương đương → bỏ phép kiểm thừa trong `nwApiEnvOf` |
-| Edge thật `node scripts/edge-v040.js <bản giải nén BA779823>` | **43/43** trên Edg/156.0.4314.58: khung đúng chỗ ở 3 cỡ; tự điền 5 PUT đúng kế hoạch #E33C777A, không COMPLETED; "Đọc lại và điền tiếp" bằng bàn phím; trang thiếu `#all-receipt` → không tự điền, 0 PUT; HOÀN THÀNH do trang gửi → phiên done. Tác vụ extension dài nhất **15,20 ms** |
+| Đột biến `python -I scripts/mutate-v0.4.0.py` | **198 ca** = 145 ca v0.3.x còn neo + 53 ca v0.4.0. **Ca 0–87 trên `bd37f35`: 87/88** (sống: "S6 cache cả kết quả tra QR lỗi" → test mới). Lúc ~00:35 lỡ chạy `node --test` song song khoảng ca 6–8; ba ca đó bị bắt bởi đúng test của chúng (không phải hết giờ). **Chạy lại trên `8a28fc4`:** 7 ca liên quan (S6 + 3 ca 07/11 + C2 ×2 + P3-8) **7/7**; ca 88–197 **(đang chạy — điền khi xong)**. Lượt ca mới trước review: 29/32. Ba ca sống → thêm test lớp 2 A1 (khung không bị đánh thức khi chỉ nhật ký đổi) và test bấm lại phiếu không có đơn; ca "coi trang UI Nextwaves là API" là đột biến tương đương → bỏ phép kiểm thừa trong `nwApiEnvOf` |
+| Edge thật `node scripts/edge-v040.js <bản giải nén>` | BA779823: **43/43** trên Edg/156.0.4314.58: khung đúng chỗ ở 3 cỡ; tự điền 5 PUT đúng kế hoạch #E33C777A, không COMPLETED; "Đọc lại và điền tiếp" bằng bàn phím; trang thiếu `#all-receipt` → không tự điền, 0 PUT; HOÀN THÀNH do trang gửi → phiên done. Tác vụ extension dài nhất **15,20 ms** |
 | Review độc lập v0.4.0 (sub-agent, chỉ đọc) | **0 P1, 3 P2, 11 P3 — đã sửa hết, mỗi điểm một test** (mục 2: P2-1 trả đầu đọc thử lại, P2-2 sản phẩm chưa nhận đủ, P2-3 thứ tự đóng tab / trả + lượt mượn mới; P3-1..P3-11) |
 | Quét bí mật + tên nhân viên | 0 kết quả mỗi commit |
 
