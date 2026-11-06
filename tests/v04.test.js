@@ -474,3 +474,48 @@ test("v0.4.0 C1: mở phiếu khác khi tab nhận hàng Nextwaves của phiếu
     b.close();
   }
 });
+
+// ---------- B6 / A8 ----------
+test("v0.4.0 B6: phiên gắn tenant Nextwaves — tab Nextwaves của tenant khác không tìm thấy phiên (số PO Nextwaves chỉ duy nhất trong một tenant)", async () => {
+  const srv = makeServer();
+  const b = createBrowser(srv.handle);
+  try {
+    await b.setConfig({ mode: "PRD", url: "", nwTenant: "circa-medly" });
+    const prd = b.openTab("https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/" + GR_ID);
+    const st = await b.sendFromTab(prd, { type: "session:start", envId: "PRD", nwTenant: "circa-medly", grId: GR_ID, grCode: "GR03887", posId: STORE, soBase: "SOBD1594095" });
+    assert.equal(st.ok, true, st.error);
+    const medly = b.tabs().find((t) => t.url.startsWith("https://circa-medly.nextwaves.app/"));
+    const circa = b.openTab("https://circa.nextwaves.app/vi/purchases/receive?po=SOBD1594095");
+    const find = (t, tenant) => b.sendFromTab(t, { type: "session:findByNw", envId: "PRD", tenant, po: "SOBD1594095" });
+    assert.equal((await find(medly, "circa-medly")).data.key, "PRD:" + GR_ID);
+    assert.equal((await find(circa, "circa")).data, null, "tenant khác → không có phiên");
+    // Tab tenant khác không đặt được kết quả khớp đơn cho phiên.
+    const r = await b.sendFromTab(circa, { type: "session:nwMatched", key: "PRD:" + GR_ID, match: matchFromA1() });
+    assert.match(r.error, /nguồn gửi không hợp lệ/);
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.4.0 A8: tab chết ngay sau PUT cuối (phiên kẹt applying) → hết lease, mở lại phiếu → thấy đã đủ → applied, không ghi thêm", async () => {
+  let release;
+  const hold = new Promise((r) => (release = r));
+  const ctx = await setup({ server: { putHold: { 5: hold } }, bgTuning: { leaseMs: 200 } });
+  const { b, srv, pos } = ctx;
+  try {
+    await receive(ctx);
+    await until(() => srv.st.puts.length === 5);
+    pos.reload(); // tab chết khi PUT 5 còn đang đi; máy chủ vẫn lưu
+    release();
+    await sleep(260);
+    assert.equal(session(b).state, "applying");
+    pos.post(POS_AUTH);
+    await sessionState(b, "applied", 4000);
+    assert.ok(session(b).log.some((l) => l.type === "applied_already"));
+    await until(() => viewTitle(pos) === APPLIED_TITLE);
+    assert.equal(srv.st.puts.length, 5);
+  } finally {
+    release();
+    b.close();
+  }
+});

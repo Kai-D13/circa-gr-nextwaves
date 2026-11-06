@@ -141,3 +141,21 @@ test("loại rõ ràng: bên bán khác / kho khác / đơn huỷ; còn đơn c�
   assert.deepEqual(r2.writeLocks, [], "v0.3.1: đúng một đơn khớp số lượng → không khoá (trước: nw_many_orders)");
   assert.equal(r2.reports.length, 1);
 });
+
+test("v0.4.0 kho lấy từ đơn đã khớp (ctx không có kho): không ứng viên cùng SO → no_order; đơn cùng SO khác kho → warehouse_inconsistent, không chọn", async () => {
+  const noWh = (args) => Object.assign({}, args, { ctx: Object.assign({}, CTX, { warehouseId: null }) });
+  const w1 = world([target()]);
+  const r1 = await resolve.resolveNwOrder(noWh(w1.args));
+  assert.equal(r1.ok, true, r1.reason);
+  assert.equal(r1.warehouseId, H.STG_CTX.warehouseId, "kho = kho của đơn đã khớp");
+  const w0 = world([decoy(1), decoy(2)]); // chỉ đơn SO khác
+  const r0 = await resolve.resolveNwOrder(noWh(w0.args));
+  assert.deepEqual([r0.ok, r0.reason, r0.verified], [false, "no_order", 0]);
+  const twin = decoy(3, { refId: "SOBD1593858-777" }); // cùng SO, lệch số lượng, KHO KHÁC
+  const otherWh = { id: uuid(9999), name: "Kho khác" };
+  twin.order.warehouse = otherWh;
+  const w2 = world([target(), twin]);
+  w2.args.search.json.items[1].warehouse = otherWh;
+  const r2 = await resolve.resolveNwOrder(noWh(w2.args));
+  assert.deepEqual([r2.ok, r2.reason, r2.chosen], [false, "warehouse_inconsistent", null]);
+});
