@@ -50,7 +50,7 @@
         lines: (Array.isArray(s.lines) ? s.lines : []).map((l) => ({
           lineId: lower(l.lineId),
           sku: String((l.product && l.product.sku) || ""),
-          posProductId: keys.posProductIdFromSku(l.product && l.product.sku),
+          posProductId: keys.posProductIdOf(l.product),
           unit: unitName(l.unit),
           quantity: Number(l.quantity),
           tagged: !!l.tagged,
@@ -87,7 +87,7 @@
       poId: lower(json.purchaseOrder && json.purchaseOrder.id),
       lines: json.lines.map((l) => ({
         lineId: lower(l.lineId),
-        posProductId: keys.posProductIdFromSku(l.product && l.product.sku),
+        posProductId: keys.posProductIdOf(l.product),
         unit: unitName(l.unit),
         quantity: Number(l.quantity),
         batch: l.batch && l.batch.batchNumber ? { number: String(l.batch.batchNumber), expiry: String(l.batch.expiryDate || "") } : null,
@@ -107,7 +107,7 @@
       warehouseId: lower(json.warehouseId),
       items: json.items.map((it) => ({
         id: lower(it.id),
-        posProductId: keys.posProductIdFromSku(it.productSku || (it.product && it.product.sku)),
+        posProductId: keys.posProductIdOf(it.product, it.productSku || (it.product && it.product.sku)),
         quantity: Number(it.quantity),
         receivedQuantity: Number(it.receivedQuantity) || 0,
         receivedUnits: (Array.isArray(it.receivedUnits) ? it.receivedUnits : []).map((u) => ({ epc: upper(u.epc), uid: String(u.unitUid || ""), receiptId: lower(u.receiptId) })),

@@ -55,7 +55,17 @@
     return m ? m[1] : "";
   }
 
-  const lib = { soBase, soDigits, sameSo, ddmmyyFromIso, ddmmyyFromDmy, lotKeyFromBatch, lotKeyFromQr, posProductIdFromSku };
+  // Sản phẩm Nextwaves → mã sản phẩm POS. Production 06/11: sku thường để trống (29/32 dòng) hoặc dạng khác ("CIRCA2222.THI-VIA-001");
+  // mã POS nằm ở barcode (dòng giao, chi tiết PO) và externalProductId / productIdentifier "CIRCA-<id>" (chi tiết PO) — khớp tra QR POS
+  // 61/61 UID. Mọi nguồn có mặt phải trùng nhau; lệch → "" (không đoán, các bước sau chặn). Staging: chỉ sku "CIRCA-<id>".
+  function posProductIdOf(product, sku) {
+    const p = product || {};
+    const digits = (v) => (/^\d{1,9}$/.test(String(v === undefined || v === null ? "" : v).trim()) ? String(v).trim() : "");
+    const found = [posProductIdFromSku(sku === undefined ? p.sku : sku), posProductIdFromSku(p.productIdentifier), digits(p.externalProductId), digits(p.barcode)].filter(Boolean);
+    return found.length && found.every((x) => x === found[0]) ? found[0] : "";
+  }
+
+  const lib = { soBase, soDigits, sameSo, ddmmyyFromIso, ddmmyyFromDmy, lotKeyFromBatch, lotKeyFromQr, posProductIdFromSku, posProductIdOf };
   root.__CGN__ = root.__CGN__ || {};
   root.__CGN__.keys = lib;
   if (typeof module !== "undefined" && module.exports) module.exports = lib;
