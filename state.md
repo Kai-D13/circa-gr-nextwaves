@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **06/11/2026 (lần 62: v0.3.1 AEE4447F đã cài máy POS Florita; luồng thật production GR84674 ĐẠT theo đường thủ công — Nextwaves nhận 39 tem, extension điền 15 lô, dược sĩ HOÀN THÀNH)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). Staging done v0.3.0. Production Florita: một bản v0.3.1 cài một lần, đơn đầu tự động (`agent.md` §3). 06/11 chạy thử chỉ đọc trên production tìm 2 lỗi chặn của gói 3E44C1DC (sku Nextwaves trống; khoá SO tách giao) → sửa, gói **C7D1641F** (`batch/v0.3.1-prd` `691cfc3`): 237/237 test, đột biến 36/36 phần sửa, Edge 108/108, audit lần 2 0 P1 — `docs/dev/BATCH-v0.3.1.md`. Cặp thật: GR84674 ↔ PO-2026-000002 (đơn đầu), GR84673 ↔ PO-2026-000001. v0.3.2 khi Nextwaves thêm trường mã giao `-F`/`-P1`/`-P2`. Ghi production chỉ khi operator cho phép bằng chữ đúng phiếu.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **06/11/2026 (lần 63: review toàn bộ mã v0.3.1 + lỗi GR84570 (vòng lặp tìm đơn khi Nextwaves không có đơn) → plan v0.4.0 mọi POS + tự điền sau xác nhận Nextwaves, `docs/dev/PLAN-v0.4.0-MOI-POS-E2E.md`, chờ operator duyệt. Lần 62: GR84674 production ĐẠT đường thủ công)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). Staging done v0.3.0. Production Florita: một bản v0.3.1 cài một lần, đơn đầu tự động (`agent.md` §3). 06/11 chạy thử chỉ đọc trên production tìm 2 lỗi chặn của gói 3E44C1DC (sku Nextwaves trống; khoá SO tách giao) → sửa, gói **C7D1641F** (`batch/v0.3.1-prd` `691cfc3`): 237/237 test, đột biến 36/36 phần sửa, Edge 108/108, audit lần 2 0 P1 — `docs/dev/BATCH-v0.3.1.md`. Cặp thật: GR84674 ↔ PO-2026-000002 (đơn đầu), GR84673 ↔ PO-2026-000001. v0.3.2 khi Nextwaves thêm trường mã giao `-F`/`-P1`/`-P2`. Ghi production chỉ khi operator cho phép bằng chữ đúng phiếu.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -588,6 +588,7 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
 - 06/11/2026 (lần 60): chạy thử chỉ đọc production → 2 lỗi chặn gói 3E44C1DC; operator cho phép sửa lõi; Claude chốt nới khoá SO tách giao có điều kiện (đúng một đơn khớp, đơn khác lệch rõ; không so được thì vẫn khoá). Gói v0.3.1 đóng lại **C7D1641F**. Operator: Nextwaves sẽ thêm trường mã giao POS → v0.3.2.
 - 06/11/2026 (lần 61): lượt thử chỉ đọc GR84674 trên máy dev đạt (capture chỉ GET). Operator: cài máy POS, chạy luồng thật, dược sĩ thao tác thật, không chờ Claude giữa các chốt. Claude chốt sửa trước khi cài: khoá POS theo PO (SO tách giao), P2-1 gắn tab Nextwaves theo phiên, đoạn kiểm tự lấy phiên. Gói **AEE4447F**.
 - 06/11/2026 (lần 62): operator cài AEE4447F trên máy POS Florita, chạy luồng thật GR84674 (dược sĩ thao tác thật), chọn **đường thủ công** (extension điền, dược sĩ tự HOÀN THÀNH). **ĐẠT** theo `kiem-sau.js` — chi tiết §9 mục 62. Tự động HOÀN THÀNH chưa chạy trên production (đã đạt trên staging G3).
+- 06/11/2026 (lần 63): operator yêu cầu mọi POS + luồng liền mạch (tự kết nối đầu đọc, tự điền cả phiếu, dược sĩ HOÀN THÀNH). Claude: review toàn bộ mã, xác nhận lỗi vòng lặp GR84570, plan v0.4.0 bỏ cấp phép / tự HOÀN THÀNH, ghép kho theo `thuocsi_id` ↔ `buymedCustomerId`, mượn đầu đọc cần sửa QR Scan Log (dự án riêng).
 
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
@@ -601,7 +602,19 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-62. **Hiện hành (06/11 tối): v0.3.1 AEE4447F chạy trên máy POS Florita; luồng thật GR84674 ĐẠT (đường thủ công).**
+63. **Hiện hành (06/11 khuya): plan v0.4.0 — `docs/dev/PLAN-v0.4.0-MOI-POS-E2E.md`, chờ operator duyệt.**
+    - Operator 06/11 tối:
+      - mọi POS cài extension đều nhận hàng được (ví dụ Lumina `31493e74…` POS0012, GR84715 đã nhận tay, đơn Nextwaves `915536a8…`);
+      - luồng: nhập SO hoặc bấm nút → Nextwaves tự kết nối đầu đọc (lấy lại từ tab khác) → xác nhận nhận hàng → về POS tự điền cả phiếu → dược sĩ HOÀN THÀNH.
+    - **Lỗi GR84570** (`a4943005…`, `SOBD38560757-F`, Florita): Nextwaves không có đơn chờ nhận. Extension lặp vô hạn: ghi log thất bại → `storage.onChanged` → tìm lại (`nw-content.js:195/468`). Khung treo "Đang tìm…", gọi API Nextwaves liên tục. Có từ v0.2; test chưa phủ ca thất bại.
+    - **Review độc lập toàn bộ mã:** 0 P1; P2-1 (vòng lặp), P2-2 (nhận khi phiên đã mất → khung tắt im lặng), P2-3 (giật tab POS đang làm phiếu khác), P2-4 (chờ auth không hạn); P3-1..4.
+    - **Sự thật mới:**
+      - Kho Nextwaves có `warehouse.buymedCustomerId`; cửa hàng POS có `thuocsi_id`. STG trùng (30145 = 30145).
+      - PRD: Florita `thuocsi_id` 410478, Lumina 392301; phía Nextwaves PRD chưa kiểm (V1).
+      - Màn quét Nextwaves (bundle staging 26/10) mở modal với `autoConnect:!0` → tự dùng cổng đã cấp quyền (`requestAndConnect({autoReuseAuthorized})`), chỉ hỏng khi cổng bị giữ.
+      - QR Scan Log giữ cổng ở tab bán hàng; "Ngắt" = cờ ngắt toàn bộ tab; "Kết nối RFID" gọi `requestPort` (hộp chọn).
+    - Trong lúc chờ: phiếu không có đơn Nextwaves → đóng tab Nextwaves ngay, Xoá phiên, nhận tay.
+62. (cũ, thay bằng mục 63) **v0.3.1 AEE4447F chạy trên máy POS Florita; luồng thật GR84674 ĐẠT (đường thủ công).**
     - `kiem-sau.js` (operator gửi, máy POS): v 0.3.1, PRD, `phienTrungMa` 0, `state` done.
       - Nhật ký: start 19:14:16 → nw_matched → receive_scan 200 + scan_ok 19:17:16 → nw_received 39 (19:17:17) → apply_claimed 19:18:30 → applied 19:18:41 → gr_completed_seen 19:19:11.
       - `quyenDaDung` auto false, kế hoạch `E090844E` (trùng kế hoạch chạy thử chỉ đọc lần 60), cấp 19:18:21, dùng 19:18:30. `autoRun` / `hoanThanh` null, đúng đường thủ công.
