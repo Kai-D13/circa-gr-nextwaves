@@ -20,7 +20,8 @@ const KEY = `STG:${GR_ID}`;
 const posAuth = (headers) => ({ mark: "cgn/pos-hook", type: "auth", payload: { envId: "STG", headers } });
 const POS_AUTH = posAuth({ authorization: "Bearer pos-test", "x-client-id": "1", "x-store-id": STORE, "grpc-timeout": "30S" });
 const NW_AUTH = { mark: "cgn/nw-hook", type: "auth", payload: { envId: "STG", headers: { authorization: "Bearer nw-test" } } };
-const scan = (httpStatus, response) => ({ mark: "cgn/nw-hook", type: "receive-scan", payload: { envId: "STG", shipmentId: SHIP, httpStatus, response: response || {}, sentEpcs: 12 } });
+const scan = (httpStatus, response, shipmentId = SHIP) => ({ mark: "cgn/nw-hook", type: "receive-scan", payload: { envId: "STG", shipmentId, httpStatus, response: response || {}, sentEpcs: 12 } });
+const TWIN_SHIP = "00000000-0000-4000-8000-0000000000c1";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const APP_VERSION = require("../src/manifest.json").version;
 
@@ -36,6 +37,7 @@ function makeServer(opts = {}) {
     const r = H.receivingPO28237814();
     Object.assign(r.order, { id: twin.id, purchaseOrderId: twin.purchaseOrderId, purchaseOrderNumber: twin.purchaseOrderNumber });
     r.shipments[0].lines = r.shipments[0].lines.slice(1);
+    r.shipments[0].id = TWIN_SHIP; // audit 06/11: đơn kia có phiếu gửi RIÊNG (nhận nhầm đơn kia phải bị bỏ qua)
     return r;
   };
   async function handle(req) {
@@ -853,6 +855,11 @@ test("P1.7 + v0.3.1: Nextwaves có đơn cùng SO khác lần giao (tách giao) 
     assert.match((await b.sendFromPopup({ type: "session:nwMatched", key: KEY, match })).error, /nguồn gửi không hợp lệ/);
     const s1 = b.session(KEY);
     assert.deepEqual([s1.nwWriteLocks, s1.writeLocks, s1.nwPoId, s1.nwPoNumber, s1.shipmentIds, s1.warehouseId, s1.scanOk], [[], [], s0.nwPoId, "PO28237814", [SHIP], s0.warehouseId, undefined]);
+    // Dược sĩ nhận NHẦM đơn kia (phiếu gửi khác) trên màn quét → extension bỏ qua: phiên vẫn chờ, không scanOk, 0 PUT.
+    nw.post(scan(200, {}, TWIN_SHIP));
+    await settle(150);
+    assert.deepEqual([b.session(KEY).state, b.session(KEY).scanOk], ["nw_ready", undefined]);
+    assert.equal(srv.st.puts.length, 0);
     // Nhận thật xong, có cấp phép: điền được như phiếu một đơn (không còn khung "chỉ xem").
     srv.st.nwReceived = true;
     nw.post(scan(200));

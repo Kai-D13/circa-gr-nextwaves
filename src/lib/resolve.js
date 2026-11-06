@@ -5,7 +5,8 @@
  *  - không giới hạn số ứng viên; ứng viên thiếu trường → chặn;
  *  - bất kỳ GET ứng viên nào lỗi / hết giờ / sai dạng → chặn cả lượt (không bỏ qua rồi chọn ứng viên khác);
  *  - chỉ loại ứng viên khi dữ liệu nói rõ là của nơi khác: bên bán khác, kho khác, refId khác SO, đơn đã huỷ, lệch số lượng.
- * Ghi chú khoá ghi (PM P3): còn hơn một đơn cùng SO (dù dấu vân tay chỉ khớp một) → chưa chứng minh được đúng lần giao.
+ * Khoá ghi nw_many_orders (PM P3; v0.3.1 06/11 thu hẹp): SO tách giao có nhiều đơn → chọn được khi ĐÚNG MỘT đơn khớp số lượng và mọi
+ * đơn khác lệch RÕ (so được mà khác). Đơn cùng SO không so được (dòng thiếu mã sản phẩm, số tem ≠ số lượng, chưa có phiếu gửi) → vẫn khoá.
  */
 (function (root) {
   "use strict";
@@ -83,6 +84,7 @@
     out.verified = verified.length;
 
     const matched = [];
+    const unclear = []; // đơn cùng SO không so được với phiếu → không chứng minh được là lần giao khác
     for (const { c, order } of verified) {
       const r = await safeGet(getReceiving, c.poId);
       if (!r.ok) return fail("candidate_read_failed", { poNumber: c.poNumber, detail: r.detail });
@@ -93,6 +95,8 @@
       if (!fp.ok) {
         const bad = fp.rows.filter((x) => !x.ok).map((x) => `SP ${x.productId}: GR ${x.grBase} ≠ NW ${x.nwBase}${x.problems.length ? ` (${x.problems.join(", ")})` : ""}`);
         out.reports.push([c.poNumber, `lệch số lượng — ${bad.join("; ")}`]);
+        const shipped = receiving.shipments.some((s) => s.lines.length);
+        if (!shipped || fp.rows.some((x) => x.productId === "?" || x.problems.includes("tagged_count_mismatch"))) unclear.push(c.poNumber);
         continue;
       }
       matched.push({ order, receiving, fp });
@@ -102,7 +106,8 @@
     // v0.3.1 (operator 06/11): một SO tách giao nhiều lần → nhiều đơn Nextwaves cùng SO (refId "-16025426" / "-16025427"), POS tách
     // PO con "-P1" / "-P2"; hai bên không có mã chung nào. ĐÚNG MỘT đơn khớp số lượng từng sản phẩm của phiếu, mọi đơn khác lệch → chọn
     // đơn đó, không khoá ghi (trước đây khoá nw_many_orders). Hai đơn cùng khớp → "ambiguous" như cũ. Nhận nhầm đơn kia trên màn quét:
-    // background chỉ nhận lượt của phiếu gửi thuộc đơn đã khớp.
+    // background chỉ nhận lượt của phiếu gửi thuộc đơn đã khớp. Audit 06/11 P2-2: đơn khác mà không so được → giữ khoá như cũ.
+    if (unclear.length) out.writeLocks.push("nw_many_orders");
     return Object.assign(out, { ok: true, chosen: matched[0] });
   }
 

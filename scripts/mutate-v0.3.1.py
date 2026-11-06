@@ -82,6 +82,11 @@ muts += [
      "v0.3.1 SO tách giao khoá lại nw_many_orders"),
     ("src/lib/resolve.js", 'if (matched.length > 1) return fail("ambiguous"', 'if (false) return fail("ambiguous"', "v0.3.1 hai đơn cùng khớp vẫn chọn"),
     ("src/nw/nw-content.js", "    else if (q && q.verified > 1) lines.push(", "    else if (false) lines.push(", "v0.3.1 khung Nextwaves không chỉ đơn cần chọn"),
+    # audit 06/11 P2-2: đơn cùng SO không so được → giữ khoá
+    ("src/lib/resolve.js", '    if (unclear.length) out.writeLocks.push("nw_many_orders");\n', "", "v0.3.1 đơn kia không so được vẫn không khoá"),
+    ("src/lib/resolve.js", 'fp.rows.some((x) => x.productId === "?" || x.problems', "fp.rows.some((x) => x.problems", "v0.3.1 dòng thiếu mã không tính là không so được"),
+    ("src/lib/resolve.js", ' || x.problems.includes("tagged_count_mismatch")', "", "v0.3.1 số tem ≠ số lượng không tính là không so được"),
+    ("src/lib/resolve.js", "if (!shipped || fp.rows.some(", "if (fp.rows.some(", "v0.3.1 chưa có phiếu gửi không tính là không so được"),
 ]
 # Chạy lại một phần: CGN_MUT_FILTER="chuỗi 1|chuỗi 2" → chỉ các ca có tên chứa một trong các chuỗi (vd. ca từng sống + ca v0.3.1).
 # CGN_MUT_FILES="src/lib/keys.js|src/lib/resolve.js" → thêm mọi ca trên các file đó (chạy lại sau khi sửa lõi).

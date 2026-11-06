@@ -29,6 +29,8 @@ test("posProductIdOf: sku CIRCA-<id> / productIdentifier / externalProductId / b
   assert.equal(keys.posProductIdOf({}), "");
   assert.equal(keys.posProductIdOf(null), "");
   assert.equal(keys.posProductIdOf({ sku: null, barcode: null }, "CIRCA-77"), "77", "sku truyền riêng (productSku chi tiết PO)");
+  assert.equal(keys.posProductIdOf({ externalProductId: 5816, barcode: " 5816 " }), "5816", "số / khoảng trắng");
+  assert.equal(keys.posProductIdOf({ barcode: "12345678" }), "12345678", "8 số vẫn nhận (bước khớp số lượng / tra QR chặn nếu không phải mã POS)");
 });
 
 test("production PO-2026-000002: sku trống / sai dạng 13/14 dòng → vẫn đủ mã POS từ barcode; khớp số lượng GR84674 14/14", () => {
@@ -87,6 +89,20 @@ test("production SO tách giao 38565378: 2 đơn Nextwaves cùng SO, đúng mộ
   assert.equal(r.reports.length, 1);
   assert.equal(r.reports[0][0], "PO-2026-000003");
   assert.match(r.reports[0][1], /lệch số lượng/);
+  // Audit 06/11 P2-2: đơn kia KHÔNG SO ĐƯỢC (dòng thiếu mã sản phẩm / số tem ≠ số lượng / chưa có phiếu gửi) → vẫn chọn đơn khớp nhưng giữ khoá.
+  const variants = [
+    ["dòng thiếu mã sản phẩm", (r3) => { r3.shipments[0].lines[0].product.barcode = null; }],
+    ["số tem ≠ số lượng", (r3) => { r3.shipments[0].lines[0].quantity = 2; }],
+    ["chưa có phiếu gửi", (r3) => { r3.shipments = []; }],
+  ];
+  for (const [name, mut] of variants) {
+    const r3 = JSON.parse(JSON.stringify(RCV3));
+    mut(r3);
+    const rv = await resolve.resolveNwOrder(args(SPLIT.search, SPLIT.orders, { "be7e2d4b-1864-437b-8b4e-1baeb4bf2803": RCV1, "b4db032d-7977-4d9a-b747-a6e47ad87795": r3 }, FP.GR84673, "SOBD38565378"));
+    assert.equal(rv.ok, true, name);
+    assert.equal(rv.chosen.order.poNumber, "PO-2026-000001", name);
+    assert.deepEqual(rv.writeLocks, ["nw_many_orders"], name);
+  }
   // Phiếu khớp cả hai đơn (giả: hai đơn cùng nội dung) → vẫn dừng "ambiguous".
   const twin = JSON.parse(JSON.stringify(RCV1));
   twin.order.purchaseOrderId = "b4db032d-7977-4d9a-b747-a6e47ad87795";
