@@ -230,6 +230,8 @@ function createBrowser(server, opts = {}) {
         if (!c.dead) for (const fn of c.listeners.slice()) fn({ source: c.global, origin: new URL(t.url).origin, data: d });
       });
     };
+    // DOM tối thiểu (v0.4.0): nút của trang do test đặt ở t.dom.buttons ({textContent, disabled, click}) — đủ cho nw-content tìm nút đầu đọc.
+    win.document = { get visibilityState() { return t.dom.hidden ? "hidden" : "visible"; }, querySelectorAll: (sel) => (sel === "button" ? t.dom.buttons.slice() : []) };
     win.sessionStorage = {
       getItem: (k) => (t.ss.has(k) ? t.ss.get(k) : null),
       setItem: (k, v) => t.ss.set(k, String(v)),
@@ -407,7 +409,7 @@ function createBrowser(server, opts = {}) {
   }
 
   function openTab(url) {
-    const t = { id: nextTabId++, url, closed: false, ctx: null, view: null, viewKind: null, views: [], loads: 0, reloads: 0, focusCount: 0, ss: new Map(), post: () => {}, grListCtrl: null, grListActive: false, grListModel: null, grListModels: [], grListNotice: null, grListNotices: [], anchor: true, floatViews: [], inlineViews: [] };
+    const t = { id: nextTabId++, url, closed: false, ctx: null, view: null, viewKind: null, views: [], loads: 0, reloads: 0, focusCount: 0, ss: new Map(), post: () => {}, grListCtrl: null, grListActive: false, grListModel: null, grListModels: [], grListNotice: null, grListNotices: [], anchor: true, floatViews: [], inlineViews: [], dom: { buttons: [], hidden: false } };
     // Trang phiếu có / mất chỗ gắn khung (#all-receipt của đúng phiếu). Có lại khi khung đang chờ → onFound như trình duyệt thật.
     t.setAnchor = (on) => {
       t.anchor = !!on;

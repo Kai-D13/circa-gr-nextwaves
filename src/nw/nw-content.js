@@ -399,9 +399,9 @@
       if (ctx) renderReady();
     }
     if (!ctx || r.state !== "disconnected" || !r.btn || (typeof document !== "undefined" && document.visibilityState === "hidden")) return;
-    // Cho màn quét tự kết nối trước (autoConnect của Nextwaves), rồi mới bấm; tối đa readerMaxClicks lần, cách readerGapMs.
+    // Cho màn quét tự kết nối trước (autoConnect của Nextwaves), rồi mới bấm; tối đa readerMaxClicks lần cho MỘT lượt mất kết nối,
+    // cách readerGapMs. Hết lượt: chờ dược sĩ ("Mượn lại đầu đọc" / Ngắt RFID ở tab bán hàng) — không bấm lặp mãi.
     if (now - rd.since < T.readerFirstClickMs || now - rd.lastClick < T.readerGapMs || r.btn.disabled) return;
-    rd.clicks = rd.clicks.filter((t) => now - t < T.readerGapMs * (T.readerMaxClicks + 1));
     if (rd.clicks.length >= T.readerMaxClicks) {
       if (!rd.gaveUp) {
         rd.gaveUp = true;

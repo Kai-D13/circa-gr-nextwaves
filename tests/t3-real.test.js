@@ -83,7 +83,7 @@ test("T3 thật — kế hoạch điền GR03878 ra đúng mã #60070071 mà khu
   );
 });
 
-test("T3 thật — sau khi nhận, tìm theo SO trả total 0: phiên MỚI mở sau lượt nhận dừng ở 'không có đơn khớp', không chọn đơn", async () => {
+test("T3 thật — sau khi nhận, tìm theo SO trả total 0: phiên MỚI mở sau lượt nhận dừng ở 'Nextwaves chưa có đơn chờ nhận' (v0.4.0 no_order → phiếu nhận tay), không chọn đơn", async () => {
   const j = H.sample(SEARCH_AFTER);
   assert.deepEqual(j, { items: [], total: 0 });
   const r = await resolve.resolveNwOrder({
@@ -93,5 +93,5 @@ test("T3 thật — sau khi nhận, tìm theo SO trả total 0: phiên MỚI m�
     getOrder: () => assert.fail("không đọc đơn khi không có ứng viên"),
     getReceiving: () => assert.fail("không đọc /receiving khi không có ứng viên"),
   });
-  assert.deepEqual([r.ok, r.reason, r.total, r.read, r.candidates, r.chosen], [false, "no_match", 0, 0, 0, null]);
+  assert.deepEqual([r.ok, r.reason, r.total, r.read, r.candidates, r.chosen], [false, "no_order", 0, 0, 0, null]);
 });

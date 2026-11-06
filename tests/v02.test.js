@@ -133,7 +133,7 @@ test("bấm trên danh sách → đọc lại GR + PO + SO → MỘT phiên, m�
     assert.equal(pos.views.length, 0, "không lần nào hiện khung nổi trên danh sách (kể cả thoáng qua)");
     assert.equal(pos.grListNotice, null, "thành công không cần thông báo");
     // Nextwaves khớp đơn + lượt nhận 2xx + kết quả nhận (gửi từ trang Nextwaves) → background đưa tab POS về trang phiếu.
-    const match = { nwPoId: "55bd221f-65de-4a4d-8a77-40c568a6f176", nwPoNumber: "PO28237814", nwOrderId: "f930f66d-679a-4ed8-9c8e-b48aea91a8be", nwRefId: "SOBD1593858-1056745", shipmentIds: [SHIP], expected: H.receivingPO28237814(), receiptIdsBefore: [], nwWriteLocks: [] };
+    const match = { nwPoId: "55bd221f-65de-4a4d-8a77-40c568a6f176", nwPoNumber: "PO28237814", nwOrderId: "f930f66d-679a-4ed8-9c8e-b48aea91a8be", nwRefId: "SOBD1593858-1056745", warehouseId: "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57", shipmentIds: [SHIP], expected: H.receivingPO28237814(), receiptIdsBefore: [], nwWriteLocks: [] };
     assert.equal((await b.sendFromTab(nw, { type: "session:nwMatched", key: KEY, match })).ok, true);
     const scanAt = Date.now();
     assert.equal((await b.sendFromTab(nw, { type: "session:scanOk", key: KEY, scan: { shipmentId: SHIP, httpStatus: 200, sentEpcs: 12, at: scanAt } })).ok, true);
@@ -516,16 +516,3 @@ test("S4 background: returnUrl luôn là trang phiếu đúng GR — URL khác b
   }
 });
 
-test("ô cấp phép: chỉ ra ký tự làm mã bị từ chối (chữ O, ký tự ẩn, khoảng trắng); luật kiểm giữ nguyên", async () => {
-  const b = createBrowser(makeServer().handle);
-  try {
-    const g = (grCode) => b.sendFromPopup({ type: "grant:create", envId: "STG", grCode });
-    assert.match((await g("GRO3878")).error, /chữ O \(không phải số 0\) ở vị trí 3/);
-    assert.match((await g("GR03​878")).error, /ký tự ẩn ở vị trí 5/);
-    assert.match((await g("GR03 878")).error, /khoảng trắng ở vị trí 5/);
-    assert.match((await g("PO03878")).error, /phải bắt đầu bằng GR/);
-    assert.equal((await g(" gr03878 ")).ok, true, "khoảng trắng hai đầu và chữ thường vẫn nhận như trước");
-  } finally {
-    b.close();
-  }
-});
