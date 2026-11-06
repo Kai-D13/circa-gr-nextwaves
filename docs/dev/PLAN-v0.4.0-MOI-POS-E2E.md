@@ -19,7 +19,12 @@ Chạy ở **mọi cửa hàng** cài extension.
 
 ## 0. Hiện trạng
 
-- **Review lượt 1: không có lỗi P1.** Đường ghi (kế hoạch, đọc lại phiếu trước / sau mỗi lần điền, khớp cuối) dừng an toàn ở mọi ca thử.
+- **Review lượt 1 + lượt 2: không có lỗi P1.** Đường ghi (kế hoạch, đọc lại phiếu trước / sau mỗi lần điền, khớp cuối) dừng an toàn ở mọi ca thử.
+  - Lượt 2 chạy lại dữ liệu thật: kế hoạch dựng lại **đúng từng byte 15 PUT** của GR84674 (cả ca 12 chai → 1 thùng, 10 gói → 1 hộp, 5 UID, dòng 2 lô).
+  - Mất response ở PUT #7 → lập lại kế hoạch còn 8 bước, tổng đúng 15 PUT.
+  - Phiếu có mã lạ / sai lô / nhập lượng tay → dừng.
+  - Hai tab giành nhau được xếp hàng; đổi cửa hàng giữa chừng → huỷ.
+  - Hàng đợi ghi storage tuần tự.
 - **Lỗi GR84570 (P2-1).**
   - Nextwaves không có đơn chờ nhận cho `SOBD38560757`.
   - Extension ghi `nw_match_failed` (`nw-content.js:195` → `background.js:712`) → `storage.onChanged` (`nw-content.js:468`, `changes.sessions && !ctx`) → `refresh()` → tìm lại. Vòng lặp không dừng:
@@ -72,7 +77,10 @@ Chạy ở **mọi cửa hàng** cài extension.
 | A4 | P2-4 | Chờ auth Nextwaves > 20 giây → "Bấm F5 tab Nextwaves". Auth đổi sau 401 → tìm lại một lần. |
 | A5 | P3-3 | "Mở tab Nextwaves": tab cũ không còn đúng `?po=` → mở tab mới. |
 | A6 | P3-1 | Không có kho (đơn thiếu `warehouseId`) → dừng, không bỏ qua kiểm kho. |
-| A7 | — | Mục review lượt 2 (đang chạy). Ghi thêm khi có kết quả. |
+| A7 | P2-A (lượt 2) | Nhận hàng ở **tab Nextwaves khác** của cùng SO (SO tách giao, tab tự mở, shipment Buymed thêm sau): hiện chỉ ghi `receive_scan_other_shipment` → phiếu kia mất đường tự điền. Sửa: mọi receive-scan 2xx gửi `shipmentId` về background, background giao `scanOk` cho **đúng một** phiên đang mở có `shipmentIds` chứa nó (không có / nhiều → báo, không điền). |
+| A8 | P3-A (lượt 2) | Phiên kẹt `applying` khi tab chết sau PUT cuối: lease hết hạn thì coi như `apply_stopped` (đọc lại → điền tiếp / đã đủ → `applied`); GR đã COMPLETED → `done`. |
+| A9 | P3-B (lượt 2) | PUT trả 5xx / 0: coi là **chưa rõ** (như mất kết nối), chờ rồi đọc lại — không chạy lại ngay (tránh ghi trùng mã khi máy chủ lưu muộn). |
+| A10 | P3-C (lượt 2) | Chữ trên `/chi-tiet-so` còn nói khoá theo SO — sửa theo khoá theo PO (v0.3.1). |
 | — | P3-4 | Phiếu có hai dòng cùng sản phẩm: giữ dừng an toàn → nhận tay (giới hạn, ghi rõ). |
 
 ## 3. Batch B — mọi cửa hàng
@@ -81,6 +89,11 @@ Chạy ở **mọi cửa hàng** cài extension.
 - **B2.** Kho theo mục 1. Cửa hàng đọc `GET /v1/entity/pos/<storeId>` (chỉ đọc) để lấy `code` + `name` hiển thị; không dùng `thuocsi_id`.
 - **B3.** Nút "Nhận hàng bằng RFID" hiện ở mọi cửa hàng.
 - **B4.** Khoá, phiên, nhật ký dùng `grId` (UUID), không dùng mã GR một mình.
+- **B6. Tenant Nextwaves theo máy (P2-B lượt 2).** Cửa hàng Circa nằm ở nhiều tenant Nextwaves (Florita + Lumina ở `circa`; QR Scan Log từng có máy ở `circa-medly`). Khoá API và trang chỉ chạy ở đúng `<tenant>.nextwaves.app` / `api-<tenant>.nextwaves.app`.
+  - Popup thêm ô **Tenant Nextwaves** (mặc định `circa`, chỉ `[a-z0-9-]`), giống ô Tenant của QR Scan Log. Production dựng `https://<tenant>.nextwaves.app` + `https://api-<tenant>.nextwaves.app/api`; staging giữ `circa-stg`.
+  - Manifest: host / content script cho `https://*.nextwaves.app/*`; hook + content chỉ chạy khi origin = tenant đang chọn.
+  - Phiên ghi tenant; khoá nhận dạng đơn = tenant + id đơn (số PO Nextwaves chỉ duy nhất trong một tenant).
+  - Chưa tự dò được tenant theo cửa hàng (POS không có trường nào trỏ sang Nextwaves) → operator đặt một lần mỗi máy.
 - **B5.** Tài khoản Nextwaves trên máy phải thấy kho của cửa hàng. Nextwaves trả rỗng → báo như A1, thêm "kiểm tài khoản Nextwaves có quyền kho của cửa hàng".
 
 **Ô nhập SO:** POS đã có sẵn ô tìm SO trên danh sách phiếu nhận. v0.4.0 **không** thêm ô. Sau này: nhập SO có `-P1` / `-P2` thì tra Nextwaves mở đúng đơn — làm khi Nextwaves có trường mã giao.
@@ -111,7 +124,7 @@ Chạy ở **mọi cửa hàng** cài extension.
 ## 5. Batch D — mượn đầu đọc (giao thức `circa-reader/v1`)
 
 - **Hợp đồng:** `docs/dev/SPEC-QSL-MUON-DAU-DOC-v1.md` (đã gửi operator cho đội QR Scan Log).
-- **Kênh:** `window.postMessage` trong tab POS. Không cần Extension ID.
+- **Kênh:** `window.postMessage` trong tab POS. Không cần Extension ID → **không thêm `key` vào manifest**: giữ Extension ID theo thư mục, máy POS chép đè `C:\circa-gr-nextwaves` như cũ, giữ phiên / cấu hình.
 - **gr-nextwaves v0.4.0 cài phía mình:**
   1. `ping` (≤ 300 ms) → có `pong` thì `lend` (TTL 15 phút, gia hạn mỗi 10 phút) trước khi mở Nextwaves.
   2. `return` sau khi tab Nextwaves của lượt đã đóng.
