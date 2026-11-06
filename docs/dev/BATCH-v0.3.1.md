@@ -1,5 +1,22 @@
 # v0.3.1 — production Florita: một bản, cài một lần (05/11/2026, đóng lại 06/11)
 
+> **06/11 tối — rà cuối trước khi cài máy POS: mã gói AEE4447F thay C7D1641F.** C7D1641F chỉ cài thử trên Chrome máy dev (không phải máy POS), nên theo luật "một version = một lần cài POS" vẫn giữ số 0.3.1.
+>
+> **Vào từ đâu.** Lượt thử chỉ đọc GR84674 trên máy dev (Net Capture POS 17:00–17:25: chỉ GET, 0 PUT, phiếu vẫn Chờ nhận; `kiem-truoc` ĐẠT 14 dòng / 39 tem / không khoá). Operator: triển khai luôn luồng thật trên máy POS, dược sĩ thao tác thật, "sai thì sửa tiếp, không cần dè chừng".
+>
+> **Sửa (nhánh `batch/v0.3.1-prd` `2d35a8c`):**
+> - `pos-model.soWriteLock`: khoá `so_many_gr` tính theo **PO của phiếu**, không theo SO gốc. Trước: SO tách giao có thêm phiếu `-P2` thì cả `-P1` (chưa xong) lẫn `-P2` luôn bị khoá, kể cả khi `-P1` đã nhận. Giờ: phiếu của PO khác không khoá; hai phiếu chưa huỷ cùng PO vẫn khoá; dòng thiếu PO → `so_gr_unknown`. Đơn Nextwaves vẫn phải khớp số lượng đúng phiếu (resolve).
+> - `background.findByNw` (audit P2-1): tab Nextwaves do extension mở cho phiên nào thì gắn đúng phiên đó, dù phiên khác cùng SO mới hơn. Tab tự mở: chỉ gắn khi có đúng một phiên khớp; nhiều phiên → không đoán.
+> - Đoạn kiểm `kiem-truoc` / `kiem-quet` / `kiem-sau` (thư mục giao, không thuộc gói): để nguyên `GR?????` → tự lấy phiên mới nhất của môi trường đang chọn, in mã phiếu đã lấy (operator đã dán đoạn chưa sửa mã).
+> - Hướng dẫn viết lại cho lượt thật tự đối chiếu: kỳ vọng từng bước, chọn tự động (tự HOÀN THÀNH) hay thủ công (dược sĩ HOÀN THÀNH); bỏ luật "mỗi lúc một phiếu cùng SO" (thay bằng: mở mỗi phiếu bằng nút của chính phiếu).
+>
+> **Kiểm:**
+> - `node --test` **240/240** (thêm: mẫu thật tìm GR theo SO 38567266 từ capture `samples/pos-prd-gr-search-so-38567266-20261106.json`, -P2 PO khác / đã nhận / cùng PO / thiếu PO; browser-sim SO có phiếu PO khác vẫn điền đủ 12 UID; P2-1 hai phiên cùng SO; đoạn kiểm để nguyên mã).
+> - Đột biến 19/19: mọi ca trên `pos-model.js` + 5 ca mới (khoá theo PO, dòng thiếu PO, P2-1 ×3) + ca v0.3.0 "bỏ khoá SO nhiều GR" đổi neo.
+> - Edge thật 108/108.
+> - Trang phiếu GR84674 production (Claude in Chrome, chỉ đọc DOM): breadcrumb + thẻ thông tin chỉ mang GR84674, `#all-receipt` ngay sau thẻ thông tin → luật gắn khung `grPageAnchor` đạt, cấu trúc giống staging. (Extension không chạy trong tab do Claude in Chrome mở, nên kiểm bằng chính luật của hàm trên DOM thật.)
+> - Còn chưa có mẫu thật: dữ liệu Nextwaves production SAU khi nhận (biên nhận, UID đã nhận). Khác staging → khung Nextwaves báo "chưa đủ bằng chứng", không điền POS. Capture lượt đầu dùng để kiểm.
+
 > **06/11 — đóng gói lại: mã gói C7D1641F thay 3E44C1DC.** Gói 3E44C1DC chưa cài ở đâu. Theo luật "một version = một lần cài", vẫn giữ số 0.3.1.
 >
 > **Vì sao.** Chạy thử chỉ đọc trên production (`docs/dev/PLAN-TRIEN-KHAI-PRD-20261106.md`; `state.md` lần 59) cho thấy 3E44C1DC **không chạy được đơn nào**:

@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **06/11/2026 (lần 60, v0.3.1 đóng lại C7D1641F sau chạy thử production; chờ operator cài máy POS Florita + đơn thật GR84674)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). Staging done v0.3.0. Production Florita: một bản v0.3.1 cài một lần, đơn đầu tự động (`agent.md` §3). 06/11 chạy thử chỉ đọc trên production tìm 2 lỗi chặn của gói 3E44C1DC (sku Nextwaves trống; khoá SO tách giao) → sửa, gói **C7D1641F** (`batch/v0.3.1-prd` `691cfc3`): 237/237 test, đột biến 36/36 phần sửa, Edge 108/108, audit lần 2 0 P1 — `docs/dev/BATCH-v0.3.1.md`. Cặp thật: GR84674 ↔ PO-2026-000002 (đơn đầu), GR84673 ↔ PO-2026-000001. v0.3.2 khi Nextwaves thêm trường mã giao `-F`/`-P1`/`-P2`. Ghi production chỉ khi operator cho phép bằng chữ đúng phiếu.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **06/11/2026 (lần 61, rà cuối: v0.3.1 đóng lại AEE4447F — khoá theo PO cho SO tách giao, tab Nextwaves gắn đúng phiên; chờ operator cài máy POS Florita + chạy luồng thật)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). Staging done v0.3.0. Production Florita: một bản v0.3.1 cài một lần, đơn đầu tự động (`agent.md` §3). 06/11 chạy thử chỉ đọc trên production tìm 2 lỗi chặn của gói 3E44C1DC (sku Nextwaves trống; khoá SO tách giao) → sửa, gói **C7D1641F** (`batch/v0.3.1-prd` `691cfc3`): 237/237 test, đột biến 36/36 phần sửa, Edge 108/108, audit lần 2 0 P1 — `docs/dev/BATCH-v0.3.1.md`. Cặp thật: GR84674 ↔ PO-2026-000002 (đơn đầu), GR84673 ↔ PO-2026-000001. v0.3.2 khi Nextwaves thêm trường mã giao `-F`/`-P1`/`-P2`. Ghi production chỉ khi operator cho phép bằng chữ đúng phiếu.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -586,6 +586,7 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
 - 05/11/2026 (lần 59): operator chốt production một bản v0.3.1 cài một lần + đơn thật đầu chạy tự động; trả lời B0 (máy Florita có QR Scan Log, đã có tài khoản Nextwaves production); D1–D5 chốt (`agent.md` §3). Claude build v0.3.1 trên `batch/v0.3.1-prd` (`7719715`), gói 3E44C1DC, gate offline đủ + audit độc lập (`docs/dev/BATCH-v0.3.1.md`). Sự thật: hook POS gắn môi trường theo URL API (lời gọi API staging trên trang production báo envId STG, khung chỉ dùng header đúng môi trường).
 
 - 06/11/2026 (lần 60): chạy thử chỉ đọc production → 2 lỗi chặn gói 3E44C1DC; operator cho phép sửa lõi; Claude chốt nới khoá SO tách giao có điều kiện (đúng một đơn khớp, đơn khác lệch rõ; không so được thì vẫn khoá). Gói v0.3.1 đóng lại **C7D1641F**. Operator: Nextwaves sẽ thêm trường mã giao POS → v0.3.2.
+- 06/11/2026 (lần 61): lượt thử chỉ đọc GR84674 trên máy dev đạt (capture chỉ GET). Operator: cài máy POS, chạy luồng thật, dược sĩ thao tác thật, không chờ Claude giữa các chốt. Claude chốt sửa trước khi cài: khoá POS theo PO (SO tách giao), P2-1 gắn tab Nextwaves theo phiên, đoạn kiểm tự lấy phiên. Gói **AEE4447F**.
 
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
@@ -599,7 +600,10 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-60. **Hiện hành (06/11): gói v0.3.1 C7D1641F sẵn sàng cài** — `docs/dev/BATCH-v0.3.1.md` (mục 06/11), hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md`, plan `docs/dev/PLAN-TRIEN-KHAI-PRD-20261106.md`.
+61. **Hiện hành (06/11 tối): gói v0.3.1 AEE4447F sẵn sàng cài máy POS Florita** — `docs/dev/BATCH-v0.3.1.md` (mục 06/11 tối), hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md` (viết lại: tự đối chiếu, tự động hoặc thủ công).
+    - **Chờ operator:** cài trên máy POS (`C:\circa-gr-nextwaves`), chạy một luồng thật có capture, gửi `kiem-sau.js` + 2 capture.
+    - Máy dev: Chrome còn C7D1641F + phiên GR84674 nw_ready (39 tem đã quét trên màn Nextwaves, CHƯA xác nhận) — đóng tab Nextwaves đó, Xoá phiên trong popup.
+60. (cũ, thay bằng mục 61) **Gói v0.3.1 C7D1641F sẵn sàng cài** — `docs/dev/BATCH-v0.3.1.md` (mục 06/11), hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md`, plan `docs/dev/PLAN-TRIEN-KHAI-PRD-20261106.md`.
     - **06/11 16:43 — đã chép đè (operator yêu cầu):** `nang-cap-v0.3.1.ps1` nâng `C:\circa-gr-nextwaves-v0.2.3` (thư mục Chrome máy này đang tải, giữ Extension ID → giữ phiên / cấu hình) từ v0.3.0 45E07F60 lên **v0.3.1 C7D1641F**, khớp từng byte 19 file; sao lưu `C:\circa-gr-nextwaves-release\backup\v0.3.0-dang-tai-20261106-164347`. Operator bấm Reload + chọn Production.
     - **Chờ operator:** đơn đầu **GR84674** tự động — gửi `kiem-truoc.js` + số tem (39) + câu cho phép; sau đó `kiem-sau.js` + 2 capture.
     - Sau GR84674 đạt: GR84673; merge `batch/v0.3.1-prd` → `main` khi operator đồng ý.

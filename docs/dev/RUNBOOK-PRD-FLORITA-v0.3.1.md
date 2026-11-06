@@ -1,21 +1,24 @@
-# Hướng dẫn — đơn production đầu tiên tại Florita, v0.3.1 (05/11/2026)
+# Hướng dẫn — nhận hàng RFID production tại Florita, v0.3.1 (sửa 06/11/2026)
 
-**Một bản, cài một lần, rồi xử lý ngay đơn thật** (operator chốt 05/11). Đơn đầu chạy **tự động**, có Net Capture.
-Plan: `docs/dev/PLAN-PRD-FLORITA-v0.3.x-20261030.md` (bản sửa 05/11). Báo cáo gói: `docs/dev/BATCH-v0.3.1.md`.
+**Một bản, cài một lần trên máy POS Florita, rồi chạy luồng thật.** Dược sĩ thao tác thật, operator bật Net Capture.
+- Operator 06/11: chạy hết một luồng E2E thật, **không chờ Claude ở từng chốt**. Tự đối chiếu theo kỳ vọng ghi ở mỗi bước; sai thì dừng, gửi kết quả + capture, sửa tiếp.
+- Báo cáo gói: `docs/dev/BATCH-v0.3.1.md`.
 
-**An toàn:**
-- Extension **không ghi gì** vào POS khi chưa có cấp phép cho đúng phiếu: tự động thì cho phép từng phiên trong popup, thủ công thì cấp phép từng lần.
-- Production chỉ chạy ở **Florita**. Cửa hàng khác: không có nút, không tạo phiên.
-- Ghi thật chỉ khi operator cho phép **bằng chữ** cho đúng phiếu đó, như G3.
+**An toàn (extension tự giữ, không cần nhớ):**
+- Không ghi gì vào POS khi chưa có quyền cho đúng phiếu:
+  - tự động: cho phép từng phiên trong popup, hết hạn sau 30 phút;
+  - thủ công: cấp phép từng lần.
+- Chỉ chạy ở **Florita**. Cửa hàng khác không có nút, không tạo phiên.
+- Mọi điều kiện không khớp (đơn Nextwaves, số tem, biên nhận, khung trang phiếu, đọc lại phiếu) → dừng, không ghi sai.
 
 ## 0. Cài (một lần, trên máy POS Florita)
 
-1. Chép thư mục giao `C:\circa-gr-nextwaves-release\v0.3.1` sang máy POS, như cách vẫn cài QR Scan Log. Thư mục gồm:
-   - `circa-gr-nextwaves-v0.3.1.zip`: gói cài, **mã gói C7D1641F** (đóng lại 06/11 sau chạy thử production; gói 3E44C1DC KHÔNG cài, nằm trong `khong-dung`);
+1. Chép thư mục giao `C:\circa-gr-nextwaves-release\v0.3.1` sang máy POS. Thư mục gồm:
+   - `circa-gr-nextwaves-v0.3.1.zip`: gói cài, **mã gói AEE4447F**. Các gói trong `khong-dung` KHÔNG cài;
    - `kiem-truoc.js`, `kiem-quet.js`, `kiem-sau.js`, `kiem-khung-gr.js`;
    - hướng dẫn này;
    - `SHA256SUMS.txt`.
-2. Giải nén ZIP vào **`C:\circa-gr-nextwaves`**. Đây là thư mục cố định: Chrome nạp extension từ đây, không xoá / đổi tên. Bản sau sẽ chép đè đúng thư mục này để giữ phiên.
+2. Giải nén ZIP vào **`C:\circa-gr-nextwaves`**. Chrome nạp extension từ thư mục này, không xoá / đổi tên. Bản sau chép đè đúng thư mục này để giữ phiên.
 3. `chrome://extensions` → "Load unpacked" (Tải tiện ích đã giải nén) → chọn `C:\circa-gr-nextwaves`.
    - Kết quả: thẻ **"Circa GR ← Nextwaves" 0.3.1**.
    - "Developer mode" đã bật sẵn vì máy đang chạy QR Scan Log.
@@ -24,87 +27,91 @@ Plan: `docs/dev/PLAN-PRD-FLORITA-v0.3.x-20261030.md` (bản sửa 05/11). Báo c
    - Dòng này **không** có chữ "CHỈ ĐỌC".
 5. Tab POS: **F5**. Tab Nextwaves: đăng nhập `circa.nextwaves.app` bằng tài khoản thấy được kho Florita.
 
-## 1. Khi có đơn thật
+## 1. Một lượt nhận (dược sĩ thao tác thật)
 
 **a. Bật capture.**
-- Bật Net Capture trên tab POS (trang danh sách phiếu nhận hàng), rồi F5.
-- Tab Nextwaves do extension mở ở bước b. Khi tab đó mở, bật capture trên tab đó rồi bấm "Đọc lại kết quả nhận" trong khung extension.
+- Bật Net Capture trên tab POS (trang "Danh sách phiếu nhận hàng"), rồi F5.
 
-**b. Mở đơn.** Trang "Danh sách phiếu nhận hàng" → dòng của phiếu → bấm **"Nhận hàng bằng RFID"**. Extension mở màn quét Nextwaves đúng đơn. Khung extension trên tab Nextwaves phải ghi:
-- **"Sẵn sàng nhận hàng"**;
-- bảng SL GR = SL Nextwaves từng sản phẩm;
-- dòng "Tự động: chưa cho phép".
+**b. Mở đơn.** Dòng của phiếu → bấm **"Nhận hàng bằng RFID"**. Extension mở một tab Nextwaves riêng cho phiếu đó, đúng màn quét.
+- Bật Net Capture trên tab Nextwaves vừa mở → bấm **"Đọc lại kết quả nhận"** trong khung extension (chỉ đọc).
+- Khung extension trên tab Nextwaves phải ghi:
+  - **"Sẵn sàng nhận hàng"**;
+  - bảng SL GR = SL Nextwaves từng sản phẩm;
+  - dòng "Tự động: chưa cho phép".
+- Phiếu **không có đơn Nextwaves** (hàng không kèm tem RFID): khung báo "Không có đơn Nextwaves khớp" → nhận tay như hiện nay.
 
-Chỉ phiếu **có đơn Nextwaves** (hàng giao kèm tem RFID) mới dùng extension được. Phiếu không có đơn thì khung báo "Không có đơn Nextwaves khớp" → nhận tay như hiện nay.
-
-**SO tách giao** (06/11): một SO có thể có nhiều đơn Nextwaves, ví dụ SOBD38565378 có PO-2026-000001 và PO-2026-000003; POS tách PO con `-P1`, `-P2`.
-- Màn quét Nextwaves khi đó hiện *"Có nhiều đơn chờ nhận hàng khớp với SOBD… Hãy chọn một đơn"*.
-- Khung extension ghi *"Nextwaves có N đơn cùng SO (tách giao): trên màn quét chọn ĐÚNG đơn PO-…"*. **Chọn đúng PO đó.**
-- Nhận nhầm đơn khác: extension bỏ qua, không điền phiếu POS.
-- **Mỗi lúc chỉ làm MỘT phiếu của cùng một SO.**
-  - Chưa xong phiếu `-P1` thì không bấm "Nhận hàng bằng RFID" cho phiếu `-P2`.
-  - Lỡ bấm thì vào popup → "Phiên gần đây" → **Xoá** phiên phiếu chưa làm, trước khi nhận.
-  - Lý do: hai phiên cùng SO dùng chung màn quét Nextwaves, có thể gắn nhầm phiên, và phiếu đó sẽ phải xử lý tay.
-- Phần giao không có đủ tem RFID cho mọi dòng phiếu (ví dụ `-P2` có 8 dòng trên POS nhưng chỉ 3 dòng có tem trên Nextwaves): khung báo không khớp → nhận tay.
+**SO tách giao** (một SO giao nhiều lần: POS có PO `-P1`, `-P2`; Nextwaves có nhiều đơn cùng SO, ví dụ SOBD38565378 có PO-2026-000001 và PO-2026-000003):
+- Màn quét Nextwaves hiện *"Có nhiều đơn chờ nhận hàng khớp với SOBD… Hãy chọn một đơn"*. Khung extension ghi *"Nextwaves có N đơn cùng SO (tách giao): trên màn quét chọn ĐÚNG đơn PO-…"* → **chọn đúng PO đó**. Nhận nhầm đơn khác: extension bỏ qua, không điền phiếu POS.
+- Mỗi phiếu mở bằng nút **"Nhận hàng bằng RFID" của chính phiếu đó** trên POS. Tab Nextwaves do nút mở luôn gắn đúng phiếu đó (sửa 06/11). Tab Nextwaves tự mở tay: chỉ gắn được khi đang có đúng một phiếu của SO.
+- Phiếu `-P2` của PO khác **không còn khoá** phiếu `-P1` (sửa 06/11). Hai phiếu cùng một PO thì vẫn khoá → nhận tay.
+- Phần giao không đủ tem RFID cho mọi dòng phiếu (ví dụ `-P2` có 8 dòng trên POS, chỉ 3 dòng có tem): khung báo không khớp → nhận tay.
 
 **c. Kiểm trước (chỉ đọc).**
-- `chrome://extensions` → thẻ extension → **Service worker** → Console.
-- Mở `kiem-truoc.js`, sửa dòng `const GR = "GR?????"` thành mã phiếu, dán cả đoạn, Enter.
-- **Gửi Claude** ba thứ:
-  - kết quả in ra;
-  - số tem vật lý đang có;
-  - câu cho phép, ví dụ: *"Cho phép: một lượt nhận + tự điền + tự HOÀN THÀNH trên GR… / PO… / SO…, N tem, đủ N tem vật lý"*.
-- Claude đối chiếu xong mới sang bước d.
+- `chrome://extensions` → thẻ extension → **Service worker** → Console → dán cả `kiem-truoc.js` → Enter. **Không cần sửa mã phiếu** khi chỉ đang làm một phiếu: đoạn kiểm tự lấy phiên mới nhất và in mã phiếu đã lấy (`gr`).
+- Kỳ vọng — đúng hết mới sang d:
+  - `gr` = mã phiếu đang làm; `mode` và `env` = `"PRD"`; `phienTrungMa` 0;
+  - `state` `"nw_ready"`; `scanOk` false; `bienNhanTruoc` 0; `khoa` `[]`; `kho` true;
+  - `so` = mã giao của phiếu; `nwPo` = đơn Nextwaves khung ghi;
+  - mọi dòng `"có tem"`; `tem` = `temKhongTrung` = **số tem vật lý**; `thieuUid` 0;
+  - `grNw`: mỗi sản phẩm hai số bằng nhau.
+- Ví dụ GR84674: `so` SOBD38567266-P1, `nwPo` PO-2026-000002, 14 dòng, `tem` 39.
+- Sai một mục → không sang d. Gửi Claude kết quả in ra; phiếu nhận tay.
 
-**d. Cho phép tự động.**
-- Mở popup. Mục **"Phiên gần đây"** (đầu popup) → dòng `PRD · GR…` "Đã khớp đơn Nextwaves" → **"Cho phép tự điền và HOÀN THÀNH 1 lần"**.
-- Đọc khung xác nhận: Production · Florita · đúng GR / SO / PO Nextwaves / số tem. Đúng thì bấm **"Xác nhận cho phép"**.
-- **Không** dùng ô "Cấp phép điền THỦ CÔNG" ở dưới. Nếu lỡ bấm, popup chỉ cảnh báo, chưa cấp gì.
+**d. Cho phép.** Chọn MỘT trong hai:
+- **Tự động (luồng đầy đủ — extension tự điền VÀ tự HOÀN THÀNH phiếu POS):**
+  - Popup → mục **"Phiên gần đây"** (đầu popup) → dòng `PRD · GR…` "Đã khớp đơn Nextwaves" → **"Cho phép tự điền và HOÀN THÀNH 1 lần"**.
+  - Đọc khung xác nhận: Production · Florita · đúng GR / SO / PO Nextwaves / số tem. Đúng thì bấm **"Xác nhận cho phép"**.
+  - Quyền hết hạn sau **30 phút**: phải bấm "Xác nhận nhận hàng" trên Nextwaves trong 30 phút đó.
+- **Thủ công (extension chỉ điền, dược sĩ tự HOÀN THÀNH):** không cho phép tự động, bỏ qua e. Làm f → g, rồi ở bước h dùng ô **"Cấp phép điền THỦ CÔNG"**.
 
-**e. Chốt chặn.**
-- Console Service worker → `kiem-quet.js` (sửa mã phiếu) → phải in **`SẴN SÀNG QUÉT: GR… · PO… · N tem · quyền còn NN phút`**.
-- Khung extension trên tab Nextwaves phải ghi **"Tự động: ĐÃ CHO PHÉP 1 lần (hết hạn …)"**. Chưa đổi thì F5 tab Nextwaves.
-- In `DỪNG: …` → **không quét**, gửi Claude dòng đó.
-- Nếu phiên đã bị Xoá / mở lại sau khi cho phép thì quyền cũ mất: làm lại d rồi e.
+**e. Chốt chặn (chỉ khi chọn tự động).**
+- Console Service worker → dán `kiem-quet.js` → phải in **`SẴN SÀNG QUÉT: GR… · PO… · N tem · quyền còn NN phút`**.
+- Khung trên tab Nextwaves tự đổi thành **"Tự động: ĐÃ CHO PHÉP 1 lần (hết hạn …)"** (không cần F5; F5 khi đã quét tem thì phải quét lại).
+- In `DỪNG: …` → không bấm xác nhận; làm theo lý do in ra (ví dụ cho phép lại), hoặc chuyển sang thủ công.
 
-**f. Nhả đầu đọc cho Nextwaves.** Trên tab bán hàng, khung RFID của QR Scan Log → bấm **"Ngắt"**. Lệnh này ngắt đầu đọc ở mọi tab bán hàng.
+**f. Nhả đầu đọc cho Nextwaves.** Tab bán hàng → khung RFID của QR Scan Log → **"Ngắt"** (ngắt ở mọi tab bán hàng).
 - Màn quét Nextwaves báo "đầu đọc đang được sử dụng": kiểm lại đã Ngắt chưa, hoặc đóng tab bán hàng.
 - Lần đầu dùng đầu đọc trên `circa.nextwaves.app` ở máy này, Chrome hỏi chọn cổng: chọn đầu đọc RFID.
 
 **g. Nhận hàng (dược sĩ).**
-- Đặt đủ tem.
-- Chỉ khi màn quét báo **còn lại 0, ngoài phiếu 0**, mọi dòng đủ, mới bấm **"Xác nhận nhận hàng" đúng một lần**.
+- Quét đủ tem. Chỉ khi màn quét báo **còn lại 0, ngoài phiếu 0**, mọi dòng đủ, mới bấm **"Xác nhận nhận hàng" đúng một lần**.
 - Không chọn "Đóng đơn dù còn thiếu".
+- Khung Nextwaves: "Đã nhận đủ N UID — Đang chuyển về POS…". Báo "Kết quả nhận chưa đủ bằng chứng" → dừng (mục 2).
 
-**h. Không chạm POS.** Không bấm Điền / HOÀN THÀNH / Xoá / Huỷ phiên, không F5. Tab POS tự về phiếu và hiện lần lượt:
-1. "Đang TỰ điền i/n";
-2. "Đang đọc lại … trước khi tự HOÀN THÀNH";
-3. "Đang tự HOÀN THÀNH";
-4. "đã tự HOÀN THÀNH — đang tải lại phiếu".
+**h. Tab POS.**
+- **Tự động:** không chạm POS (không bấm Điền / HOÀN THÀNH / Xoá / Huỷ phiên, không F5). Tab POS tự về phiếu và hiện lần lượt:
+  1. "Đang TỰ điền i/n";
+  2. "Đang đọc lại … trước khi tự HOÀN THÀNH";
+  3. "Đang tự HOÀN THÀNH";
+  4. "đã tự HOÀN THÀNH — đang tải lại phiếu".
 
-Cuối cùng phiếu ở trạng thái **"Đã nhận"** (POS gọi phiếu hoàn thành là "Đã nhận").
+  Cuối cùng phiếu ở **"Đã nhận"** (POS gọi phiếu hoàn thành là "Đã nhận").
+- **Thủ công:** popup → **"Cấp phép điền THỦ CÔNG"** → mã phiếu → cấp phép → trên phiếu bấm **"Điền vào phiếu GR… · kế hoạch #…"** → chờ "đã điền N UID" → dược sĩ kiểm rồi tự bấm **HOÀN THÀNH** trên POS.
 
 **i. Sau lượt.**
 - Dừng capture cả hai tab.
-- Console Service worker → `kiem-sau.js` (sửa mã phiếu).
-- **Gửi Claude:** kết quả in ra + 2 file capture.
+- Console Service worker → dán `kiem-sau.js` (không cần sửa mã khi vừa làm phiếu đó).
+- Tự động đạt: `state` `"done"`, `hoanThanh.source` `"auto"`, `quyenDaDung.auto` true, `nwReceipts` 1, `autoGrantsConLai` 0.
+- **Gửi Claude:** kết quả in ra + 2 file capture (lượt đầu bắt buộc: dữ liệu Nextwaves production SAU khi nhận chưa có mẫu).
 
 **j. Trả đầu đọc cho bán hàng.** Đóng tab Nextwaves → tab bán hàng → khung RFID của QR Scan Log → **"Kết nối RFID"**.
 
 ## 2. Dừng ngay nếu thấy
 
 Trên POS:
-- "Tự động KHÔNG chạy: …" (v0.3.1 ghi rõ lý do);
+- "Tự động KHÔNG chạy: …" (ghi rõ lý do);
 - "Tự động: chưa cho phép ở lượt nhận này";
 - "đọc lại chưa khớp hoàn toàn";
 - "chưa rõ POS đã HOÀN THÀNH chưa";
 - "Không điền được".
 
+Trên Nextwaves: "Kết quả nhận chưa đủ bằng chứng / không khớp dữ liệu đơn".
+
 Khi đó:
 - Không bấm gì thêm, giữ tab, chụp màn hình.
-- Chạy `kiem-sau.js` và gửi Claude kèm capture.
-- **Không cho phép tự động lại trên cùng đơn.**
-- Phiếu hoàn tất theo đường thủ công khi operator cho phép riêng: cấp phép thủ công → "Điền" → dược sĩ HOÀN THÀNH. Hoặc dược sĩ nhận tay trên POS như hiện nay.
+- Dừng capture, chạy `kiem-sau.js`, gửi Claude kèm capture.
+- **Không cho phép tự động lại trên cùng phiếu.**
+- Hàng đã nhận trên Nextwaves thì phiếu POS hoàn tất theo đường thủ công (cấp phép thủ công → "Điền" → dược sĩ HOÀN THÀNH), hoặc dược sĩ nhập tay trên POS như hiện nay.
 
 ## 3. Tắt extension nếu cần
 
