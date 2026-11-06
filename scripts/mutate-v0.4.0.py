@@ -63,7 +63,7 @@ NEW = [
     ("src/pos/pos-content.js", '    if (!res.ok && res.reason === "put_failed" && (!res.status || res.status >= 500)) res = Object.assign({}, res, { reason: "put_uncertain" });\n', "", "v0.4 A9 PUT 5xx coi là lỗi chắc chắn (không hạ nhiệt)"),
     ("src/pos/pos-content.js", '    if (s.state === "received" && !autoTried.has(autoKey)) {', '    if (s.state === "received") {', "v0.4 tự điền lặp lại mỗi lần đánh giá"),
     ("src/pos/pos-content.js", '    if (s.state === "received" && !autoTried.has(autoKey)) {', "    if (!autoTried.has(autoKey)) {", "v0.4 tự điền cả khi đã dừng"),
-    ("src/pos/pos-content.js", "      const reader = await readerLend(gr.code, s0 && s0.reader ? s0.reader.leaseId : null);", "      const reader = null;", "v0.4 không mượn đầu đọc trước khi mở Nextwaves"),
+    ("src/pos/pos-content.js", "      const reader = await readerLend(gr.code, reuseLease(s0 && s0.reader));", "      const reader = null;", "v0.4 không mượn đầu đọc trước khi mở Nextwaves"),
     ("src/pos/pos-content.js", '      if (msg.cmd === "return") return (await readerAsk({ type: "return", leaseId: msg.leaseId }, T.readerLendMs)) || { ok: false, reason: "no_answer" };', '      if (msg.cmd === "return") return { ok: true };', "v0.4 báo đã trả đầu đọc mà không trả"),
     ("src/pos/pos-content.js", '    if (!m || m.ns !== RNS || m.from !== "qsl" || typeof m.reqId !== "string") return;', '    if (!m || m.ns !== RNS || typeof m.reqId !== "string") return;', "v0.4 nhận trả lời của chính mình như QR Scan Log"),
     # resolve / env
@@ -92,8 +92,8 @@ NEW = [
     ("src/lib/env.js", "  const TENANT_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])$/;", "  const TENANT_RE = /^.+$/;", "v0.4 tenant nhận mọi chuỗi"),
     ("src/lib/env.js", "    return isNwApiUrl(url, env) ? env : null; // isNwApiUrl", "    return env; // isNwApiUrl", "v0.4 coi mọi URL Nextwaves là API"),
 ]
-for m in NEW:
-    assert src(m[0]).count(m[1]) == 1, ("neo v0.4.0", m[3], src(m[0]).count(m[1]))
+bad = [(m[3], src(m[0]).count(m[1])) for m in NEW if src(m[0]).count(m[1]) != 1 or any(src(m[0]).count(x) != 1 for x, _ in (m[4] if len(m) > 4 else []))]
+assert not bad, ("neo v0.4.0 hỏng", bad)
 
 muts = NEW if os.environ.get("CGN_MUT_ONLY_NEW") else kept + NEW
 if os.environ.get("CGN_MUT_FILTER"):
