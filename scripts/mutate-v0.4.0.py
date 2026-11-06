@@ -70,7 +70,7 @@ NEW = [
     ("src/lib/resolve.js", "    if (whs.length !== 1 || !whs[0]) return fail(", "    if (false) return fail(", "v0.4 đơn cùng SO khác kho vẫn chọn"),
     ("src/lib/resolve.js", '    if (verified.length === 0) return fail("no_order");\n', "", "v0.4 không phân biệt không có đơn"),
     ("src/lib/env.js", "  const TENANT_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])$/;", "  const TENANT_RE = /^.+$/;", "v0.4 tenant nhận mọi chuỗi"),
-    ("src/lib/env.js", "    if (!nw || !/^api-/.test(u.hostname)) return null;", "    if (!nw) return null;", "v0.4 coi trang UI Nextwaves là API"),
+    ("src/lib/env.js", "    return isNwApiUrl(url, env) ? env : null; // isNwApiUrl", "    return env; // isNwApiUrl", "v0.4 coi mọi URL Nextwaves là API"),
 ]
 for m in NEW:
     assert src(m[0]).count(m[1]) == 1, ("neo v0.4.0", m[3], src(m[0]).count(m[1]))

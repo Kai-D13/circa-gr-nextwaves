@@ -519,3 +519,46 @@ test("v0.4.0 A8: tab chết ngay sau PUT cuối (phiên kẹt applying) → hế
     b.close();
   }
 });
+
+test("v0.4.0 A1 lớp 2: tab Nextwaves chỉ hỏi lại background khi danh sách phiên đổi THẬT — nhật ký / lease của phiên không đánh thức tab", async () => {
+  const srv = makeServer({ nw: nwEmpty });
+  const asks = [];
+  const b = createBrowser(srv.handle, { tuning: { uiWaitMs: 300 }, interceptBg: (msg, tab) => (tab && tab.url.startsWith(NW) && msg.type === "session:findByNw" ? (asks.push(Date.now()), undefined) : undefined) });
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const pos = b.openTab(GR_PAGE);
+    pos.post(POS_AUTH);
+    (await until(() => startBtn(pos))).onClick();
+    const nw = await until(() => b.tabs().find((t) => t.url.startsWith(NW)));
+    nw.post(NW_AUTH());
+    await sessionState(b, "no_nw_order");
+    await settle(200);
+    const n0 = asks.length;
+    for (let i = 0; i < 5; i++) await b.sendFromTab(pos, { type: "session:log", key: KEY, log: { type: "ghi_chu_" + i } });
+    await b.patchSession(KEY, { lease: { token: "x", expiresAt: Date.now() + 1000 } });
+    await settle(200);
+    assert.equal(asks.length, n0, "chỉ nhật ký / lease đổi → không đánh giá lại");
+    assert.equal(srv.st.nwSearches, 1);
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.4.0 bấm 'Nhận hàng bằng RFID' lại cho phiếu 'không có đơn' (tab khác / bấm đúp) → background tìm lại: waiting_nw, giữ phiên + khoá, dùng lại tab Nextwaves", async () => {
+  const ctx = await setup({ match: false, server: { nw: nwEmpty } });
+  const { b, pos, nw } = ctx;
+  try {
+    nw.post(NW_AUTH());
+    await sessionState(b, "no_nw_order");
+    const before = session(b);
+    const n0 = b.tabs().filter((t) => t.url.startsWith(NW)).length;
+    const r = await b.sendFromTab(pos, { type: "session:start", envId: "STG", nwTenant: "circa-stg", grId: GR_ID, grCode: "GR03887", posId: STORE, soBase: "SOBD1594095" });
+    assert.equal(r.ok, true, r.error);
+    assert.equal(r.data.createdAt, before.createdAt, "giữ phiên cũ");
+    assert.ok(r.data.log.some((l) => l.type === "nw_retry"));
+    assert.ok(["waiting_nw", "no_nw_order"].includes(session(b).state));
+    assert.equal(b.tabs().filter((t) => t.url.startsWith(NW)).length, n0, "dùng lại tab Nextwaves");
+  } finally {
+    b.close();
+  }
+});

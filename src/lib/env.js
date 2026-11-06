@@ -121,9 +121,9 @@
     const u = parseUrl(url);
     if (!u) return null;
     const nw = nwTenantOfOrigin(u.origin);
-    if (!nw || !/^api-/.test(u.hostname)) return null;
+    if (!nw) return null;
     const env = envFor(nw.envId, nw.tenant);
-    return isNwApiUrl(url, env) ? env : null;
+    return isNwApiUrl(url, env) ? env : null; // isNwApiUrl kiểm đúng origin api-<tenant> → trang UI không phải API
   }
 
   // Trang POS của môi trường env: {kind:"gr", grId} | {kind:"gr_list"} | {kind:"so", so} | null.
