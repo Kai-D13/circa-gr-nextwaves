@@ -123,6 +123,8 @@ Chạy ở **mọi cửa hàng** cài extension.
 
 ## 5. Batch D — mượn đầu đọc (giao thức `circa-reader/v1`)
 
+> **07/11 — HOÃN phía QR Scan Log (operator).** Làm sau, khi đội QR Scan Log làm hợp đồng. v0.4.0 giữ mã phía mình: không có QR Scan Log trả lời trong 300 ms thì bỏ qua. Hiện hành dùng D2: dược sĩ Ngắt RFID ở tab bán hàng, quay lại tab Nextwaves thì extension tự kết nối lại; nhận xong dược sĩ Kết nối RFID lại ở tab bán hàng. Luồng chuẩn: `docs/BUSINESS-FLOW.md`.
+
 - **Hợp đồng:** `docs/dev/SPEC-QSL-MUON-DAU-DOC-v1.md` (đã gửi operator cho đội QR Scan Log).
 - **Kênh:** `window.postMessage` trong tab POS. Không cần Extension ID → **không thêm `key` vào manifest**: giữ Extension ID theo thư mục, máy POS chép đè `C:\circa-gr-nextwaves` như cũ, giữ phiên / cấu hình.
 - **gr-nextwaves v0.4.0 cài phía mình:**

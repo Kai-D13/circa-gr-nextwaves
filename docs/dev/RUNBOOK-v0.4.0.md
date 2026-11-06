@@ -8,7 +8,7 @@ Thay `RUNBOOK-PRD-FLORITA-v0.3.1.md`.
 - Chạy ở **mọi cửa hàng** POS.
 - **Không còn cấp phép** trong popup. Sau khi dược sĩ bấm "Xác nhận nhận hàng" trên Nextwaves, extension **tự điền cả phiếu POS**.
 - Extension **không bao giờ** bấm HOÀN THÀNH: dược sĩ kiểm danh sách rồi tự bấm.
-- Đầu đọc tự chuyển sang tab Nextwaves, nhận xong tự trả cho tab bán hàng. Cần QR Scan Log có giao thức `circa-reader/v1`; chưa có thì làm tay, xem mục 0.5.
+- Đầu đọc: extension tự bấm "Kết nối đầu đọc" trên Nextwaves. Phần mượn / trả tự động với QR Scan Log **hoãn** (07/11): dược sĩ Ngắt RFID ở tab bán hàng trước khi nhận, Kết nối RFID lại sau khi nhận (mục 1c, 1e).
 - Nextwaves chưa có đơn của SO: khung báo rõ "nhận tay". Hết lỗi treo "Đang tìm…" (GR84570).
 
 **An toàn (extension tự giữ):**
@@ -17,10 +17,12 @@ Thay `RUNBOOK-PRD-FLORITA-v0.3.1.md`.
 - Đọc lại phiếu sau mỗi lô.
 - Chưa rõ kết quả (mất mạng, POS lỗi 5xx) → dừng, chờ 1 phút rồi mới cho điền tiếp.
 
-## 0. Cài / nâng (một lần mỗi máy POS)
+## 0. Cài / nâng (một lần mỗi máy)
+
+**Thứ tự:** máy dev trước → QA / QC trên máy dev đạt (`QA-v0.4.0-MAY-DEV.md`) → operator cho phép mới cài máy POS vận hành.
 
 1. Hoàn tất mọi phiếu đang nhận dở bằng v0.3.1. Khi nâng, extension xoá phiên của bản cũ.
-2. **Máy đã có v0.3.1** (Florita, `C:\circa-gr-nextwaves`):
+2. **Máy đã có v0.3.1** (máy POS Florita `C:\circa-gr-nextwaves`; máy dev `C:\circa-gr-nextwaves-v0.2.3` — đúng dòng "Tải từ" trên thẻ extension):
    - Giải nén gói v0.4.0 **chép đè vào đúng thư mục đó**, giữ Extension ID.
    - `chrome://extensions` → **Reload (↻)** thẻ "Circa GR ← Nextwaves". Thẻ phải ghi **0.4.0**.
 3. **Máy mới:**
@@ -28,12 +30,10 @@ Thay `RUNBOOK-PRD-FLORITA-v0.3.1.md`.
    - `chrome://extensions` → "Load unpacked" → chọn thư mục đó.
 4. **Popup:**
    - **Môi trường: Production**.
-   - **Tenant Nextwaves của máy**: để trống nếu máy dùng `circa.nextwaves.app` (Florita, Lumina). Máy đăng nhập Nextwaves ở địa chỉ khác (ví dụ `circa-medly.nextwaves.app`) thì điền `circa-medly`.
+   - **Tenant Nextwaves của máy**: **để trống**. Florita và Lumina (hai cửa hàng hiện có) đều dùng `circa.nextwaves.app`. Chỉ điền khi sau này có cửa hàng ở địa chỉ Nextwaves khác.
    - Bấm **Lưu**.
    - Dòng dưới phải ghi "Production: POS https://pos.v2.circa.vn · Nextwaves https://<tenant>.nextwaves.app · mọi cửa hàng".
-5. **Đầu đọc:**
-   - QR Scan Log của máy đã có bản hỗ trợ `circa-reader/v1` → không làm gì.
-   - Chưa có → mỗi lượt nhận làm tay (mục 1, bước c).
+5. **Đầu đọc:** không cần cài thêm gì. Mỗi lượt nhận: Ngắt RFID ở tab bán hàng (mục 1c), nhận xong Kết nối RFID lại (mục 1e).
 6. F5 các tab POS. Đăng nhập Nextwaves bằng tài khoản **thấy được kho của cửa hàng**.
 
 ## 1. Một lượt nhận
@@ -59,8 +59,8 @@ Các trường hợp khác:
 **c. Đầu đọc.**
 - **"Đầu đọc: đã kết nối"** / **"đang quét"** → sang bước d.
 - **"chưa kết nối — extension đang tự kết nối…"** → chờ vài giây. Extension bấm nút "Kết nối đầu đọc" của Nextwaves, tối đa 3 lần.
-- **"đang bận ở tab khác"** (QR Scan Log chưa hỗ trợ mượn) → sang tab bán hàng, khung RFID của QR Scan Log bấm **Ngắt**. Quay lại tab Nextwaves, bấm "Kết nối đầu đọc" nếu vẫn chưa kết nối.
-- **"chưa kết nối được — bấm Mượn lại đầu đọc"** → bấm nút đó (QR Scan Log có hỗ trợ).
+- **"đang bận ở tab khác — sang tab bán hàng bấm Ngắt RFID rồi quay lại tab này"** → sang tab bán hàng, khung RFID của QR Scan Log bấm **Ngắt**, rồi quay lại tab Nextwaves. Extension tự kết nối lại (thêm tối đa 3 lần). Vẫn chưa được thì bấm "Kết nối đầu đọc" của Nextwaves.
+- Mẹo: Ngắt RFID ở tab bán hàng **trước** khi bấm "Nhận hàng bằng RFID" thì Nextwaves kết nối ngay.
 
 **d. Nhận (dược sĩ).**
 - Đặt hàng lên đầu đọc, quét đủ: màn quét báo **còn lại 0, ngoài phiếu 0**.
@@ -70,13 +70,13 @@ Các trường hợp khác:
 1. Tab Nextwaves tự đóng (nhả đầu đọc), tab POS về đúng phiếu.
 2. Khung ghi **"Đang điền i/n — CHƯA bấm HOÀN THÀNH"**. Lúc này **chưa bấm HOÀN THÀNH**: bấm khi đang điền dở, POS sẽ đóng phiếu thiếu.
 3. Điền xong, trang tải lại, khung ghi **"GR…: đã điền N mã vào M lô — kiểm danh sách rồi bấm HOÀN THÀNH"**.
-4. Tab bán hàng tự kết nối lại đầu đọc (nếu QR Scan Log hỗ trợ). Chưa hỗ trợ: dược sĩ bấm **Kết nối RFID** ở tab bán hàng như hiện nay.
+4. Sang tab bán hàng bấm **Kết nối RFID** của QR Scan Log như hiện nay để bán tiếp.
 
 **f. HOÀN THÀNH (dược sĩ).** Kiểm số lượng từng lô trên phiếu → bấm **HOÀN THÀNH** của POS.
 
 **g. Lượt đầu ở mỗi máy:**
 - Dán `kiem-sau.js` vào Console của Service worker → gửi kết quả cho Claude (kèm capture nếu có).
-- Kỳ vọng: `state` `"applied"` hoặc `"done"`; `dien.how` `"auto"`; `dungDien` null; `nwReceipts` 1; `dauDoc` `"returned"` (hoặc `"no_qsl"`).
+- Kỳ vọng: `state` `"applied"` hoặc `"done"`; `dien.how` `"auto"`; `dungDien` null; `nwReceipts` 1; `dauDoc` `"no_qsl"` (chưa tích hợp QR Scan Log).
 
 ## 2. Khi khung báo dừng
 

@@ -74,6 +74,10 @@ Báo cáo tách ba mức bằng chứng: **đã kiểm từ source / gói**, **�
 | 28/10 | Kiểm từng phiên bản bằng fixture A1 / server giả / Node / Edge / trang GR đã COMPLETED chỉ đọc; **một** lượt E2E staging thật chỉ trên gói cuối (G3), operator cấp phép theo mã phiếu cụ thể |
 | 30/10 | **Staging done v0.3.0** (G1–G3 đạt trên gói `45E07F60`), merge `main` `7bff255`. Hết PO staging |
 | 05/11 | **Production:** một bản v0.3.1 cài một lần trên máy POS Florita rồi xử lý ngay đơn thật, đơn đầu chạy **tự động** có Net Capture. <br>• PRD được ghi, chỉ ở cửa hàng đã khai kho Nextwaves (Florita `c476efb2…` → kho `eb5e2b4f…`). <br>• Ghi vẫn chỉ khi operator cấp phép / cho phép tự động đúng phiếu. <br>• D1: lặp mã QR sau HOÀN THÀNH do máy chủ POS, chấp nhận. <br>• D2: mất phiên sau khi Nextwaves đã nhận → fail closed, làm tay. <br>• Mở thêm cửa hàng = thêm cặp cửa hàng → kho. <br>Thay dòng 24/10 "production theo tài khoản, không giới hạn cửa hàng" và phần "Production vẫn chỉ đọc" của dòng 28/10. Nguồn: `docs/dev/PLAN-PRD-FLORITA-v0.3.x-20261030.md` (sửa 05/11) |
+| 06/11 | **v0.4.0 — mọi cửa hàng + tự điền.** <br>• Bỏ bảng cửa hàng → kho; kho = kho của đơn Nextwaves khớp SO + bên bán Buymed + vân tay số lượng. Không ghép theo `thuocsi_id` của POS (Lumina POS 392301 ≠ kho Nextwaves 406918). <br>• Bỏ cấp phép điền và tự HOÀN THÀNH: Nextwaves nhận xong → extension **tự điền một lần**; **dược sĩ bấm HOÀN THÀNH**. <br>• Tenant Nextwaves chọn theo máy (popup). <br>• Được tự bấm **"Kết nối đầu đọc"** của Nextwaves (ngoại lệ duy nhất của "không bấm nút hộ dược sĩ"); không bao giờ bấm "Xác nhận nhận hàng". <br>Thay dòng 28/10 (chế độ tự động) và phần cửa hàng / cấp phép của dòng 05/11. Nguồn: `docs/dev/PLAN-v0.4.0-MOI-POS-E2E.md` |
+| 07/11 | **Production chỉ có hai cửa hàng: CIRCA FLORITA và CIRCA LUMINA**, cả hai tenant Nextwaves `circa` (`docs/BUSINESS-FLOW.md` §2) |
+| 07/11 | **Mượn / trả đầu đọc với QR Scan Log (`circa-reader/v1`) hoãn**, làm sau. Hiện hành: dược sĩ Ngắt RFID ở tab bán hàng trước khi nhận, Kết nối lại sau. Mã phía extension giữ nguyên (không có QR Scan Log trả lời thì bỏ qua) |
+| 07/11 | **Quy trình phát hành:** cài máy dev → QA / QC trên máy dev đạt → mới cài máy POS vận hành (`docs/BUSINESS-FLOW.md` §6) |
 
 Hệ quả của "một gói":
 - `manifest.json` phải khai quyền cho host của **cả hai** môi trường.
@@ -109,17 +113,18 @@ Hệ quả của "một gói":
 | Trang POS | `https://pos.v2.circa.vn` | `https://pos.stg.circa-v2.buymed.tech` |
 | API POS (v1) | `https://api.v2.circa.vn/v1/...` (khác origin, same-site) | `https://pos.stg.circa-v2.buymed.tech/backend/v1/...` (cùng origin) |
 | SSO | `sso.thuocsi.vn` | `sso.stg.buymed.tech` |
-| Cửa hàng | theo tài khoản đang đăng nhập (ví dụ CIRCA FLORITA `c476efb2-415c-429a-978e-d389b4b06607`) | **chỉ "2222" `64a8663b-0c9e-49c6-9626-0a4c7c4bd53d`** |
+| Cửa hàng | theo tài khoản đang đăng nhập. Hiện có hai: CIRCA FLORITA `c476efb2-415c-429a-978e-d389b4b06607`, CIRCA LUMINA `31493e74-3404-4c0e-a906-93691a6ee319` (POS0012) | **chỉ "2222" `64a8663b-0c9e-49c6-9626-0a4c7c4bd53d`** |
 | Nextwaves tenant | `circa` — UI `https://circa.nextwaves.app`, API `https://api-circa.nextwaves.app/api/v1` | `circa-stg` — UI `https://circa-stg.nextwaves.app`, API `https://api-circa-stg.nextwaves.app/api/v1` |
 | Đối tác Buymed trên Nextwaves | `buymed` | `buymed-stag` |
-| Kho Nextwaves của cửa hàng | Florita `eb5e2b4f-6f92-413b-90ef-6be1730b94c0` | "CIRCA FLORITA" `82bf85e4-84e2-4158-ae27-1aaa6fe1bc57` (ghép với POS 2222) |
+| Kho Nextwaves của cửa hàng | Florita `eb5e2b4f-6f92-413b-90ef-6be1730b94c0` (410478), Lumina (406918). Từ v0.4.0 lấy từ đơn đã khớp, không khai trong mã | "CIRCA FLORITA" `82bf85e4-84e2-4158-ae27-1aaa6fe1bc57` (ghép với POS 2222) |
 | Mã QR / UID | tem thật production | tem riêng của staging (đã map EPC, có tem vật lý). Mã production **không** tra được trên staging |
 
 - Header POS gửi (từ 24/10): `authorization: Bearer <token>`, `x-client-id: 1`, `x-store-id: <pos_id>`, `grpc-timeout: 30S`.
   Staging còn có cookie `session_token` (cùng giá trị token) + `session_expires_at`.
 - **Phạm vi cửa hàng:**
   - Production: extension làm việc theo phiên đăng nhập sẵn có. Tài khoản thuộc cửa hàng A thì chỉ thấy và thao tác dữ liệu cửa hàng A. Cửa hàng lấy từ phiên (`x-store-id` / `pos_id`).
-    - **Từ v0.3.1 (05/11):** chỉ chạy ở cửa hàng có trong bảng cửa hàng → kho Nextwaves (`src/lib/env.js`, hiện chỉ Florita). Cửa hàng khác: không nút, không phiên.
+    - v0.3.1 (05/11): chỉ chạy ở cửa hàng có trong bảng cửa hàng → kho Nextwaves (chỉ Florita).
+    - **Từ v0.4.0:** mọi cửa hàng; kho = kho của đơn Nextwaves khớp SO.
   - Staging: chỉ bật cho POS **2222**. Phiên staging thuộc cửa hàng khác thì extension không làm gì.
 - Web Nextwaves của mỗi tenant có `https://<tenant>.nextwaves.app/config.js` khai `window.__NWC_CONFIG__.NEXT_PUBLIC_API_URL`.
   Phiên Nextwaves dùng access token Bearer (JWT sống 1 giờ) + refresh token (`POST /auth/refresh`).
@@ -136,6 +141,7 @@ Hiện có (24/10):
 | `agent.md` | File này: vai trò, quyết định, luật, môi trường |
 | `state.md` | Trạng thái, sự thật đã kiểm, khác biệt stg / prd, câu hỏi mở, việc tiếp theo |
 | `AGENTS.md`, `CLAUDE.md` | Trỏ về `agent.md` + `state.md` (Codex / Claude Code tự đọc) |
+| `docs/BUSINESS-FLOW.md` | **Luồng nghiệp vụ hiện hành** (từ 07/11): bên liên quan, cửa hàng, các bước dược sĩ / extension, ngoại lệ, việc hoãn, quy trình phát hành |
 | `docs/PROMPT-PM-CODEX.md` | Prompt mở session PM Codex — **không còn dùng từ 29/10** |
 | `docs/SPEC-STG-v0.1.md` | Spec staging v0.1 của PM (đề xuất) |
 | `docs/dev/` | Báo cáo / phản hồi của dev gửi PM: `DEV-REVIEW-SPEC-STG-v0.1.md`, `LOGIC-v0.3.md` (logic hiện hành), `BATCH-v0.1-STG.md` (batch đầu, chờ audit) |
