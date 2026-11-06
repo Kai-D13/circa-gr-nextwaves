@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **06/11/2026 (lần 64: operator duyệt làm v0.4.0 đầy đủ — mọi POS, tự điền sau xác nhận Nextwaves, mượn đầu đọc; plan sửa lần 2 `docs/dev/PLAN-v0.4.0-MOI-POS-E2E.md`; nhận dạng đơn theo SO (KHÔNG theo `thuocsi_id`: Lumina POS 392301 ≠ Nextwaves 406918); spec gửi đội QR Scan Log `docs/dev/SPEC-QSL-MUON-DAU-DOC-v1.md`. Lần 63: lỗi vòng lặp GR84570. Lần 62: GR84674 production ĐẠT)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). Staging done v0.3.0. Production Florita: một bản v0.3.1 cài một lần, đơn đầu tự động (`agent.md` §3). 06/11 chạy thử chỉ đọc trên production tìm 2 lỗi chặn của gói 3E44C1DC (sku Nextwaves trống; khoá SO tách giao) → sửa, gói **C7D1641F** (`batch/v0.3.1-prd` `691cfc3`): 237/237 test, đột biến 36/36 phần sửa, Edge 108/108, audit lần 2 0 P1 — `docs/dev/BATCH-v0.3.1.md`. Cặp thật: GR84674 ↔ PO-2026-000002 (đơn đầu), GR84673 ↔ PO-2026-000001. v0.3.2 khi Nextwaves thêm trường mã giao `-F`/`-P1`/`-P2`. Ghi production chỉ khi operator cho phép bằng chữ đúng phiếu.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **07/11/2026 (lần 65: gói v0.4.0 `BA779823` (nhánh `batch/v0.4-moi-pos`) — 216 test, Edge 43/43, review 0 P1, đột biến 195 ca; `docs/dev/BATCH-v0.4.0.md`, hướng dẫn `docs/dev/RUNBOOK-v0.4.0.md`; chưa cài. Lần 64: operator duyệt làm v0.4.0 đầy đủ — mọi POS, tự điền sau xác nhận Nextwaves, mượn đầu đọc; plan sửa lần 2 `docs/dev/PLAN-v0.4.0-MOI-POS-E2E.md`; nhận dạng đơn theo SO (KHÔNG theo `thuocsi_id`: Lumina POS 392301 ≠ Nextwaves 406918); spec gửi đội QR Scan Log `docs/dev/SPEC-QSL-MUON-DAU-DOC-v1.md`. Lần 63: lỗi vòng lặp GR84570. Lần 62: GR84674 production ĐẠT)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). Staging done v0.3.0. Production Florita: một bản v0.3.1 cài một lần, đơn đầu tự động (`agent.md` §3). 06/11 chạy thử chỉ đọc trên production tìm 2 lỗi chặn của gói 3E44C1DC (sku Nextwaves trống; khoá SO tách giao) → sửa, gói **C7D1641F** (`batch/v0.3.1-prd` `691cfc3`): 237/237 test, đột biến 36/36 phần sửa, Edge 108/108, audit lần 2 0 P1 — `docs/dev/BATCH-v0.3.1.md`. Cặp thật: GR84674 ↔ PO-2026-000002 (đơn đầu), GR84673 ↔ PO-2026-000001. v0.3.2 khi Nextwaves thêm trường mã giao `-F`/`-P1`/`-P2`. Ghi production chỉ khi operator cho phép bằng chữ đúng phiếu.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -589,6 +589,8 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
 - 06/11/2026 (lần 61): lượt thử chỉ đọc GR84674 trên máy dev đạt (capture chỉ GET). Operator: cài máy POS, chạy luồng thật, dược sĩ thao tác thật, không chờ Claude giữa các chốt. Claude chốt sửa trước khi cài: khoá POS theo PO (SO tách giao), P2-1 gắn tab Nextwaves theo phiên, đoạn kiểm tự lấy phiên. Gói **AEE4447F**.
 - 06/11/2026 (lần 62): operator cài AEE4447F trên máy POS Florita, chạy luồng thật GR84674 (dược sĩ thao tác thật), chọn **đường thủ công** (extension điền, dược sĩ tự HOÀN THÀNH). **ĐẠT** theo `kiem-sau.js` — chi tiết §9 mục 62. Tự động HOÀN THÀNH chưa chạy trên production (đã đạt trên staging G3).
 - 06/11/2026 (lần 63): operator yêu cầu mọi POS + luồng liền mạch (tự kết nối đầu đọc, tự điền cả phiếu, dược sĩ HOÀN THÀNH). Claude: review toàn bộ mã, xác nhận lỗi vòng lặp GR84570, plan v0.4.0 bỏ cấp phép / tự HOÀN THÀNH, ghép kho theo `thuocsi_id` ↔ `buymedCustomerId`, mượn đầu đọc cần sửa QR Scan Log (dự án riêng).
+- 06/11/2026 (lần 64): operator chỉnh Lumina = kho Nextwaves 406918 (POS `thuocsi_id` 392301 sai) → Claude bỏ ghép kho theo `thuocsi_id`, nhận dạng đơn theo SO + bên bán + vân tay số lượng, kho = kho của đơn đã khớp. Không thêm ô SO (POS đã có). QR Scan Log do operator làm với đội đó; Claude viết hợp đồng `circa-reader/v1`. Operator cho phép extension tự bấm "Kết nối đầu đọc" trên Nextwaves (không bấm "Xác nhận nhận hàng").
+- 07/11/2026 (lần 65): Claude đóng gói **v0.4.0 `BA779823`** (nhánh `batch/v0.4-moi-pos`, src `bd37f35`): 216/216 test, Edge thật 43/43, review độc lập 0 P1 (3 P2 + 11 P3 đã sửa kèm test), đột biến 195 ca — `docs/dev/BATCH-v0.4.0.md`, hướng dẫn `docs/dev/RUNBOOK-v0.4.0.md`. Chưa cài; cài / nâng và lượt đầu chỉ khi operator cho phép bằng chữ.
 
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
@@ -602,7 +604,16 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-64. **Hiện hành (06/11 khuya): v0.4.0 được duyệt làm (operator: bản mới đủ tính năng, số bản tuỳ dev).** Plan sửa lần 2 `docs/dev/PLAN-v0.4.0-MOI-POS-E2E.md`.
+65. **Hiện hành (07/11): gói v0.4.0 `BA779823` sẵn sàng, chưa cài** — `docs/dev/BATCH-v0.4.0.md`, `docs/dev/RUNBOOK-v0.4.0.md`, thư mục giao `C:\circa-gr-nextwaves-release\v0.4.0\`.
+    - Florita đang chạy v0.3.1 `AEE4447F`. Nâng = chép đè đúng thư mục `C:\circa-gr-nextwaves` + Reload, sau khi xong mọi phiếu đang nhận dở (phiên schema 1 bị xoá khi nâng).
+    - **Chờ operator:**
+      1. cho phép cài / nâng (máy nào trước);
+      2. tenant Nextwaves của từng cửa hàng nếu khác `circa` (API public tenant `circa` chỉ thấy kho Florita + Lumina);
+      3. một phiếu thật ngoài Florita có đơn Nextwaves chờ nhận (ví dụ Lumina) cho lượt đầu;
+      4. khi đội QR Scan Log xong `circa-reader/v1`: số bản + mẫu trả lời pong / lend / return.
+    - Lượt đầu mỗi máy: `kiem-sau.js` → Claude đối chiếu. Đạt → đề nghị merge `batch/v0.4-moi-pos` → `main`. Merge `batch/v0.3.1-prd` vẫn chờ operator đồng ý.
+    - Lumina PO-2026-000006 vẫn `shipped` trên Nextwaves dù GR84715 đã nhận tay: đơn này không dùng được cho lượt thử (đã nhận trên POS).
+64. (cũ, thay bằng mục 65) **06/11 khuya: v0.4.0 được duyệt làm (operator: bản mới đủ tính năng, số bản tuỳ dev).** Plan sửa lần 2 `docs/dev/PLAN-v0.4.0-MOI-POS-E2E.md`.
     - Operator chỉnh: Lumina là **406918** (Nextwaves), POS ghi `thuocsi_id` 392301 → kiểm public API Nextwaves (khoá operator đưa, chỉ GET, không lưu khoá): kho Lumina `3f7bd541…` code = buymedCustomerId = 406918; Florita `eb5e2b4f…` = 410478. → **bỏ hướng ghép theo `thuocsi_id`**, nhận dạng theo SO (`refId` = `SOBD<SO>-<số giao Buymed>`) + Buymed + vân tay; kho lấy từ đơn đã khớp, hiển thị cho dược sĩ.
     - Đơn Lumina PO-2026-000006 (`915536a8…`) `refId` SOBD38567297-16026967 còn `shipped` (POS GR84715 đã nhận tay). PO-2026-000002 Florita `refId` SOBD38567266-16026945 `received`. Số đuôi `refId` không có trong dữ liệu POS.
     - Ô nhập SO: POS đã có sẵn → v0.4.0 không thêm; `-P1`/`-P2` tra Nextwaves làm khi Nextwaves có trường mã giao.
