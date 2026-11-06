@@ -560,9 +560,10 @@ test("v0.4.0 bấm 'Nhận hàng bằng RFID' lại cho phiếu 'không có đơ
     await sessionState(b, "no_nw_order");
     const before = session(b);
     const n0 = b.tabs().filter((t) => t.url.startsWith(NW)).length;
-    const r = await b.sendFromTab(pos, { type: "session:start", envId: "STG", nwTenant: "circa-stg", grId: GR_ID, grCode: "GR03887", posId: STORE, soBase: "SOBD1594095" });
+    const r = await b.sendFromTab(pos, { type: "session:start", envId: "STG", nwTenant: "circa-stg", grId: GR_ID, grCode: "GR03887", posId: STORE, soBase: "SOBD1594095", writeLocks: ["so_many_gr"] });
     assert.equal(r.ok, true, r.error);
     assert.equal(r.data.createdAt, before.createdAt, "giữ phiên cũ");
+    assert.ok(r.data.writeLocks.includes("so_many_gr"), "khoá vừa tính lại ở POS được gộp vào (chỉ thêm, không bớt)");
     assert.ok(r.data.log.some((l) => l.type === "nw_retry"));
     assert.ok(["waiting_nw", "no_nw_order"].includes(session(b).state));
     assert.equal(b.tabs().filter((t) => t.url.startsWith(NW)).length, n0, "dùng lại tab Nextwaves");
@@ -731,6 +732,23 @@ test("khớp cuối (plan C3): đọc lại CẢ phiếu sau khi điền thấy 
     await settle(100);
     assert.equal(pos.reloads, 0, "không tải lại (giữ thông báo)");
     assert.equal(srv.st.puts.length, 5);
+  } finally {
+    b.close();
+  }
+});
+
+test("review P3-6: phiếu HOÀN THÀNH trên POS khi phiên còn ở bước Nextwaves → đóng tab Nextwaves rồi trả đầu đọc; mở lại Nextwaves cho phiên đã xong bị từ chối", async () => {
+  const ctx = await setup({ qsl: { mode: "ok" } });
+  const { b, pos, nw } = ctx;
+  try {
+    const lease = session(b).reader.leaseId;
+    pos.post({ mark: "cgn/pos-hook", type: "gr-status", payload: { envId: "STG", grId: GR_ID, status: "COMPLETED", httpStatus: 200 } });
+    await sessionState(b, "done");
+    await until(() => nw.closed, 2000);
+    await until(() => b.qsl.calls.some((c) => c.type === "return" && c.leaseId === lease), 3000);
+    const r = await b.sendFromTab(pos, { type: "session:reopenNw", key: KEY });
+    assert.equal(r.ok, false);
+    assert.match(r.error, /không còn ở bước nhận trên Nextwaves/);
   } finally {
     b.close();
   }
