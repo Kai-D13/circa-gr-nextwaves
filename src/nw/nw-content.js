@@ -21,7 +21,7 @@
   const E = C.env;
   const N = C.nw;
   const R = C.resolve;
-  const T = Object.assign({ pollMs: 700, collectTries: 6, collectDelayMs: 1500, httpTimeoutMs: 30000, authWaitMs: 20000, readerPollMs: 1000, readerFirstClickMs: 1500, readerGapMs: 10000, readerMaxClicks: 3 }, C.tuning || {});
+  const T = Object.assign({ pollMs: 700, collectTries: 6, collectDelayMs: 1500, httpTimeoutMs: 30000, authWaitMs: 20000, readerPollMs: 1000, readerFirstClickMs: 1500, readerGapMs: 10000, readerMaxClicks: 3, readerRenewMs: 10 * 60 * 1000, readerRetryMs: 15000, readerRetryMax: 8 }, C.tuning || {});
   const HOOK = "cgn/nw-hook";
   const ME = "cgn/nw-content";
   // Khung không được che nút nhận hàng của màn quét.
@@ -60,7 +60,8 @@
   let sessionsSig = ""; // chữ ký gọn của mọi phiên (bỏ log) — chỉ đánh giá lại khi đổi
   let authWaitTimer = null;
   let curSession = null; // phiên của trang (để vẽ dòng đầu đọc)
-  const rd = { state: "none", since: 0, clicks: [], lastClick: 0, gaveUp: false }; // đầu đọc của màn quét
+  const rd = { state: "none", since: 0, clicks: [], lastClick: 0, gaveUp: false, el: null }; // đầu đọc của màn quét (el = đúng nút đầu đọc)
+  const lend = { key: null, last: 0, tries: 0 }; // gia hạn / mượn lại đầu đọc của phiên đang mở (QR Scan Log)
 
   async function bg(type, extra) {
     const r = await chrome.runtime.sendMessage(Object.assign({ type }, extra || {}));
@@ -155,7 +156,7 @@
     }
     if (s.state === "no_nw_order") {
       ctx = null;
-      return showNoOrder(s);
+      return showNoOrder(s, latch && latch.sig === sigOf(s) ? latch.reports : null);
     }
     if (!OPEN.has(s.state)) {
       ctx = null;
@@ -236,7 +237,8 @@
     };
   }
 
-  function showNoOrder(s) {
+  function showNoOrder(s, reports) {
+    const rows = reports || (latch && latch.reports) || [];
     panel.show({
       tone: "warn",
       title: `Nextwaves chưa có đơn chờ nhận cho ${s.soBase}`,
@@ -244,6 +246,7 @@
         `Phiếu ${s.grCode} (${s.deliveryCode || s.soBase}): nhận tay trên POS như hiện nay.`,
         "Hàng có tem RFID mà vẫn báo vậy: kiểm tra tài khoản Nextwaves đang đăng nhập có quyền kho của cửa hàng, rồi bấm “Tìm lại”.",
       ],
+      table: rows.length ? { head: ["Đơn Nextwaves tìm thấy", "Lý do loại"], rows } : null,
       buttons: [
         {
           label: "Tìm lại",
@@ -286,8 +289,8 @@
         } catch (_) {
           s2 = null;
         }
-        latch = { sig: sigOf(s2 || s), view: null };
-        showNoOrder(s2 || s);
+        latch = { sig: sigOf(s2 || s), view: null, reports: r.reports };
+        showNoOrder(s2 || s, r.reports);
         return null;
       }
       const facts = [`SO ${s.soBase}: kết quả tìm total = ${r.total === null ? "?" : r.total}, đã đọc ${r.read}; ứng viên Buymed ${r.candidates}; refId đúng SO ${r.verified}.`];
@@ -359,14 +362,25 @@
   // ---------- đầu đọc của màn quét (C2) ----------
   function readerButton() {
     const doc = typeof document !== "undefined" ? document : null;
-    const btns = doc && doc.querySelectorAll ? doc.querySelectorAll("button") : [];
-    for (const b of btns) {
-      const t = String(b.textContent || "").replace(/\s+/g, " ").trim();
-      if (READER_CONNECT.test(t)) return { btn: b, state: "disconnected" };
-      if (READER_IDLE.test(t)) return { btn: b, state: "connected" };
-      if (READER_READING.test(t)) return { btn: b, state: "reading" };
+    const btns = doc && doc.querySelectorAll ? Array.from(doc.querySelectorAll("button")) : [];
+    const text = (b) => String(b.textContent || "").replace(/\s+/g, " ").trim();
+    // Review v0.4.0 P3-8: bám ĐÚNG phần tử nút đầu đọc đã thấy (nút này đổi chữ Kết nối → Đang kết nối… → Dừng / Bắt đầu quét);
+    // một nút "Dừng" khác trên trang không bao giờ được coi là đầu đọc.
+    if (rd.el && btns.includes(rd.el)) {
+      const t = text(rd.el);
+      const state = READER_CONNECT.test(t) ? "disconnected" : READER_IDLE.test(t) ? "connected" : READER_READING.test(t) ? "reading" : "busy";
+      return { btn: rd.el, state, tracked: true };
     }
-    return { btn: null, state: "none" };
+    for (const [re, state] of [[READER_CONNECT, "disconnected"], [READER_IDLE, "connected"]]) {
+      const b = btns.find((x) => re.test(text(x)));
+      if (b) {
+        rd.el = b;
+        return { btn: b, state, tracked: true };
+      }
+    }
+    // Chưa thấy nút đầu đọc ở trạng thái Kết nối / Bắt đầu quét (vd. màn quét tự kết nối và đang quét ngay): "Dừng" chỉ để hiển thị.
+    const stop = btns.find((x) => READER_READING.test(text(x)));
+    return stop ? { btn: null, state: "reading", tracked: false } : { btn: null, state: "none", tracked: false };
   }
 
   function readerLine() {
@@ -376,6 +390,8 @@
     switch (rd.state) {
       case "reading":
         return "Đầu đọc: đang quét — đặt hàng lên đầu đọc.";
+      case "busy":
+        return "Đầu đọc: đang kết nối…";
       case "connected":
         return "Đầu đọc: đã kết nối." + lent;
       case "disconnected":
@@ -392,12 +408,14 @@
     if (r.state !== rd.state) {
       rd.state = r.state;
       rd.since = now;
-      if (r.state !== "disconnected") {
+      // Review v0.4.0 P3-8: chỉ đặt lại khi chính nút đầu đọc báo đã kết nối / đang quét; chữ tạm (đang kết nối…) không mở thêm lượt bấm.
+      if (r.tracked && (r.state === "connected" || r.state === "reading")) {
         rd.clicks = [];
         rd.gaveUp = false;
       }
       if (ctx) renderReady();
     }
+    lendTick(now);
     if (!ctx || r.state !== "disconnected" || !r.btn || (typeof document !== "undefined" && document.visibilityState === "hidden")) return;
     // Cho màn quét tự kết nối trước (autoConnect của Nextwaves), rồi mới bấm; tối đa readerMaxClicks lần cho MỘT lượt mất kết nối,
     // cách readerGapMs. Hết lượt: chờ dược sĩ ("Mượn lại đầu đọc" / Ngắt RFID ở tab bán hàng) — không bấm lặp mãi.
@@ -417,6 +435,20 @@
       /* bỏ qua */
     }
     logTo(ctx.key, { type: "reader_connect_click", n: rd.clicks.length });
+  }
+
+  // Lượt mượn đầu đọc có hạn (TTL ở QR Scan Log): gia hạn mỗi readerRenewMs khi phiên còn ở màn quét; QR Scan Log bận / không trả lời
+  // lúc mượn → thử lại mỗi readerRetryMs (tối đa readerRetryMax lần). Chỉ khi QR Scan Log có hỗ trợ (phiên có reader.supported).
+  function lendTick(now) {
+    const s = curSession;
+    if (!ctx || !s || s.key !== ctx.key || !s.reader || !s.reader.supported || !OPEN.has(s.state)) return;
+    if (lend.key !== s.key) Object.assign(lend, { key: s.key, last: now, tries: 0 });
+    const ok = ["released", "free", "off", "lent"].includes(s.reader.state);
+    const due = ok ? now - lend.last >= T.readerRenewMs : now - lend.last >= T.readerRetryMs && lend.tries < T.readerRetryMax;
+    if (!due) return;
+    lend.last = now;
+    if (!ok) lend.tries += 1;
+    bg("reader:lend", { key: s.key, why: ok ? "renew" : "retry" }).catch(() => {});
   }
 
   async function lendAgain() {
@@ -564,6 +596,18 @@
     try {
       await bg("session:received", { key, payload: { units: rec.units, nwPoNumber: c.nwPoNumber, receiptIds: rec.receiptIds, at: Date.now() } });
     } catch (e) {
+      // Tab Nextwaves khác của cùng phiên đã báo nhận xong trước → không phải lỗi (review v0.4.0 P3-9).
+      let s3 = null;
+      try {
+        s3 = await bg("session:findByNw", { envId: env.id, tenant: env.nwTenant, po: c.po });
+      } catch (_) {
+        s3 = null;
+      }
+      if (s3 && s3.key === key && !OPEN.has(s3.state)) {
+        ctx = null;
+        note = null;
+        return refresh();
+      }
       // A2: phiên đã bị xoá / hết hạn / đổi → không im lặng.
       note = { tone: "err", title: "Nextwaves ĐÃ nhận — POS CHƯA điền", text: `${String((e && e.message) || e)}\nNhận tay phiếu ${c.grCode} trên POS.` };
       return renderReady();

@@ -26,7 +26,7 @@
   const PL = C.plan;
   const A = C.apply;
   const L = C.grList;
-  const T = Object.assign({ pollMs: 3000, qrConcurrency: 4, reloadDelayMs: 800, httpTimeoutMs: 30000, leaseRenewMs: 15000, qrTtlMs: 10 * 60 * 1000, listSessionsDebounceMs: 300, autoAnchorWaitMs: 8000, readerPingMs: 300, readerLendMs: 5500, readerTtlMs: 20 * 60 * 1000 }, C.tuning || {});
+  const T = Object.assign({ pollMs: 3000, qrConcurrency: 4, reloadDelayMs: 800, httpTimeoutMs: 30000, leaseRenewMs: 15000, qrTtlMs: 10 * 60 * 1000, listSessionsDebounceMs: 300, autoAnchorWaitMs: 8000, readerPingMs: 300, readerLendMs: 5500, readerTtlMs: 15 * 60 * 1000 }, C.tuning || {});
   const HOOK = "cgn/pos-hook";
   const ME = "cgn/pos-content";
   // Khung nổi: trang /chi-tiet-so và báo lỗi giao diện khi trang phiếu không có chỗ gắn khung. Không che nút thao tác của phiếu
@@ -76,6 +76,7 @@
     session_outdated: "Phiên tạo bởi bản extension cũ — mở lại phiếu để tạo phiên mới",
     gr_mismatch: "Phiên không đúng phiếu",
     no_session: "Không còn phiên của phiếu này",
+    auto_once: "Lượt tự điền đã chạy — bấm “Đọc lại và điền tiếp” để điền phần còn lại",
   };
   const SO_CHECK_MSG = {
     search_unreadable: "Kết quả tìm phiếu nhận theo SO không đúng dạng (thiếu goods_receipts / total / page / limit)",
@@ -190,6 +191,13 @@
         resolve(null);
       }
     });
+  }
+  // Lượt mượn còn hiệu lực → gia hạn cùng leaseId; đã trả / hỏng → lượt mới (review v0.4.0 P3-3: lệnh trả muộn của lượt cũ không huỷ lượt mới).
+  const reuseLease = (r) => (r && r.leaseId && !["returned", "return_failed", "unknown_lease"].includes(r.state) ? r.leaseId : null);
+  // Lượt mượn không gắn được vào phiên (cú bấm bị huỷ / tạo phiên lỗi) → trả ngay (review v0.4.0 P3-1).
+  function readerGiveBack(reader) {
+    if (!reader || !reader.supported || !reader.leaseId || !["released", "free", "lent"].includes(reader.state)) return;
+    readerAsk({ type: "return", leaseId: reader.leaseId }, T.readerLendMs).catch(() => {});
   }
   // Mượn (hoặc gia hạn, cùng leaseId) đầu đọc trước khi mở Nextwaves. QR Scan Log không trả lời ping → bản chưa hỗ trợ: đi tiếp, khung
   // Nextwaves hướng dẫn bấm Ngắt RFID ở tab bán hàng.
@@ -408,8 +416,13 @@
       const lock = P.soWriteLock(found, gr.id);
       guard();
       // Mượn đầu đọc TRƯỚC khi mở Nextwaves (màn quét tự kết nối lúc mở). Không có QR Scan Log hỗ trợ → đi tiếp.
-      const reader = await readerLend(gr.code, s0 && s0.reader ? s0.reader.leaseId : null);
-      guard(); // ngay trước khi tạo phiên (giữa hai chỗ này không có await)
+      const reader = await readerLend(gr.code, reuseLease(s0 && s0.reader));
+      try {
+        guard(); // ngay trước khi tạo phiên (giữa hai chỗ này không có await)
+      } catch (e) {
+        readerGiveBack(reader);
+        throw e;
+      }
       const s = await bg("session:start", {
         envId: env.id,
         nwTenant: env.nwTenant,
@@ -424,6 +437,9 @@
         soBase: link.soBase,
         fingerprint: P.grFingerprintSource(gr),
         writeLocks: lock ? [lock] : [],
+      }).catch((e) => {
+        readerGiveBack(reader);
+        throw e;
       });
       if (!s) return fail(`${gr.code}: không đọc lại được phiên vừa tạo.`);
       return { status: "started", session: s, gr };
@@ -803,8 +819,12 @@
 
   // Mở lại / tìm lại trên Nextwaves: mượn lại đầu đọc (cùng leaseId) trước khi đưa tab Nextwaves lên.
   async function reopenNw(s) {
-    const reader = await readerLend(s.grCode, s.reader ? s.reader.leaseId : null);
-    return bg("session:reopenNw", { key: s.key, reader });
+    if (!["waiting_nw", "nw_ready", "no_nw_order"].includes(s.state)) return null;
+    const reader = await readerLend(s.grCode, reuseLease(s.reader));
+    return bg("session:reopenNw", { key: s.key, reader }).catch((e) => {
+      readerGiveBack(reader);
+      throw e;
+    });
   }
 
   function cancelButton(env, s) {
@@ -866,6 +886,18 @@
     const uids = ((s.nwResult && s.nwResult.units) || []).map((u) => u.uid);
     const codes = new Set(gr.items.flatMap((it) => it.details.flatMap((d) => d.qrCodes)));
     const missing = uids.filter((u) => !codes.has(u));
+    // Khớp cuối (giữ được qua mọi lần vẽ lại): mã trên phiếu không thuộc lượt nhận Nextwaves = phiếu bị đổi sau khi điền (kế hoạch đã
+    // chặn mã lạ từ trước khi ghi).
+    const uidAll = new Set(uids);
+    const foreign = [...codes].filter((c) => !uidAll.has(c));
+    if (foreign.length) {
+      return showGr(gr, {
+        tone: "warn",
+        title: `${gr.code}: đã điền nhưng đọc lại chưa khớp hoàn toàn — kiểm từng lô trước khi HOÀN THÀNH`,
+        lines: sessionLines(s).concat([`Phiếu có ${foreign.length} mã không thuộc lượt nhận Nextwaves: ${foreign.slice(0, 10).join(", ")}${foreign.length > 10 ? "…" : ""}`, "Dược sĩ kiểm số lượng / mã từng lô; đúng thì bấm HOÀN THÀNH, sai thì báo dev."]),
+        buttons: [{ label: "Đọc lại", onClick: refresh }],
+      });
+    }
     if (missing.length) {
       return showGr(gr, {
         tone: "warn",
@@ -875,6 +907,17 @@
     }
     const uidSet = new Set(uids);
     const lots = gr.items.reduce((n, it) => n + it.details.filter((d) => d.qrCodes.some((c) => uidSet.has(c))).length, 0);
+    // Review v0.4.0 P2-2: dòng Nextwaves không gắn tem (không có UID) vẫn nằm trên phiếu với lượng thiếu → nói rõ, không để khung "xanh".
+    const short = gr.items
+      .map((it) => ({ name: it.productName || it.sku || it.productId, got: it.details.reduce((n, d) => n + (Number(d.received) || 0), 0), want: Number(it.quantity) || 0 }))
+      .filter((x) => x.got < x.want);
+    if (short.length) {
+      return showGr(gr, {
+        tone: "warn",
+        title: `${gr.code}: đã điền ${uids.length} mã — còn ${short.length} sản phẩm CHƯA nhận đủ`,
+        lines: sessionLines(s).concat(short.slice(0, 20).map((x) => `• ${x.name}: ${x.got}/${x.want}`), ["Hàng này không có tem RFID (hoặc Nextwaves chưa giao): dược sĩ nhận tay phần còn thiếu, kiểm lại rồi mới bấm HOÀN THÀNH."]),
+      });
+    }
     return showGr(gr, {
       tone: "ok",
       title: `${gr.code}: đã điền ${uids.length} mã vào ${lots} lô — kiểm danh sách rồi bấm HOÀN THÀNH`,
@@ -956,9 +999,10 @@
         ],
       });
     }
-    const stopped = (s.state === "apply_stopped" || s.state === "applying") && s.applyError;
+    // Review v0.4.0 P3-10: mọi trạng thái sau lượt vừa nhận (đã dừng, tab chết giữa chừng) đều là "điền tiếp", không phải tự điền.
+    const stopped = s.state !== "received";
     const head = sessionLines(s).concat(
-      stopped ? [`Lần điền trước dừng: ${APPLY_MSG[s.applyError.reason] || s.applyError.reason}${s.applyError.status ? ` (HTTP ${s.applyError.status})` : ""}`] : [],
+      stopped && s.applyError ? [`Lần điền trước dừng: ${APPLY_MSG[s.applyError.reason] || s.applyError.reason}${s.applyError.status ? ` (HTTP ${s.applyError.status})` : ""}`] : stopped ? ["Lần điền trước bị ngắt giữa chừng (tab đóng / tải lại)."] : [],
       [`Kế hoạch #${plan.hash}: điền ${plan.summary.toWrite} UID vào ${plan.steps.length} lô${plan.summary.alreadyOnGr ? ` (${plan.summary.alreadyOnGr} UID đã nằm đúng lô)` : ""}.`],
       plan.warnings.map((w) => `• Sản phẩm ${w.productId}: sau khi điền mới ${w.received}/${w.quantity} — phần còn lại dược sĩ xử lý tay.`)
     );
@@ -1086,11 +1130,32 @@
         token: tabToken,
         ok: res.ok,
         uncertain,
-        result: res.ok ? { at: Date.now(), hash: plan.hash, steps: n, uids: plan.summary.toWrite + plan.summary.alreadyOnGr } : null,
+        result: res.ok ? { at: Date.now(), hash: plan.hash, steps: n, uids: plan.summary.toWrite + plan.summary.alreadyOnGr, notFull: plan.warnings.length } : null,
         error: res.ok ? null : { reason: res.reason, status: res.status || null, detailId: res.step ? res.step.detailId : null, hash: plan.hash },
       });
     } catch (_) {
       finished = false;
+    }
+    if (res.ok && finished) {
+      // Khớp cuối (plan C3): đọc lại CẢ phiếu — mọi lô đúng kế hoạch, đúng tập UID Nextwaves, không mã lạ. Lệch → báo, không tải lại.
+      let fresh = null;
+      try {
+        const r = await posGet(env, E.api.grDetail(env, gr.id));
+        fresh = r.ok ? P.normalizeGr(r.json) : null;
+      } catch (_) {
+        fresh = null;
+      }
+      const v = fresh ? PL.verifyFinal(plan, fresh, (s.nwResult && s.nwResult.units) || []) : { ok: false, diffs: [{ why: "read_failed", detailId: null }] };
+      if (!v.ok) {
+        applying = false;
+        logTo(s.key, { type: "final_verify_failed", diffs: v.diffs.slice(0, 10) });
+        return showGr(gr, {
+          tone: "warn",
+          title: `${gr.code}: đã điền nhưng đọc lại chưa khớp hoàn toàn — kiểm từng lô trước khi HOÀN THÀNH`,
+          lines: [`Lệch: ${v.diffs.slice(0, 6).map((d) => d.why + (d.detailId ? " " + String(d.detailId).slice(0, 8) : "")).join(", ")}.`, "Dược sĩ kiểm số lượng / mã từng lô trên phiếu; đúng thì bấm HOÀN THÀNH, sai thì báo dev."],
+          buttons: [{ label: "Tải lại phiếu", onClick: () => location.reload() }],
+        });
+      }
     }
     applying = false;
     if (res.ok && finished) {

@@ -32,7 +32,10 @@
 importScripts("lib/env.js", "lib/keys.js");
 const E = self.__CGN__.env;
 const K = self.__CGN__.keys;
-const T = Object.assign({ leaseMs: 90 * 1000, retryCooldownMs: 60 * 1000, readerTtlMs: 20 * 60 * 1000, readerRelayMs: 7000, nwCloseDelayMs: 500 }, self.__CGN__.tuning || {});
+const T = Object.assign({ leaseMs: 90 * 1000, retryCooldownMs: 60 * 1000, readerTtlMs: 15 * 60 * 1000, readerRelayMs: 7000, nwCloseDelayMs: 500, readerReturnTries: 5, readerReturnGapMs: 2000 }, self.__CGN__.tuning || {});
+// Lượt mượn đầu đọc còn hiệu lực (chưa trả / chưa bị QR Scan Log coi là lạ) → dùng lại leaseId để gia hạn; ngược lại lượt mới.
+const LEASE_DONE = new Set(["returned", "return_failed", "unknown_lease"]);
+const newLeaseId = () => "gr" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 
 const DEFAULT_CONFIG = Object.freeze({ mode: "", url: "", nwTenant: "" });
 const SESSION_SCHEMA = 2;
@@ -73,6 +76,11 @@ async function setConfig(patch) {
   if (next.mode && !E.envById(next.mode)) next.mode = "";
   if (next.url && !E.envFromAnyUrl(next.url)) throw new Error("URL không thuộc môi trường đã biết (STG / PRD)");
   if (next.nwTenant && !E.normTenant(next.nwTenant)) throw new Error("Tenant Nextwaves chỉ gồm chữ thường, số, gạch ngang (ví dụ circa, circa-medly)");
+  // Review v0.4.0 P3-7: tenant của staging / tên "api-…" ở Production dựng origin sai môi trường → tab Nextwaves chờ mãi.
+  const envSel = next.mode ? E.envById(next.mode) : next.url ? E.envFromAnyUrl(next.url) : null;
+  if (next.nwTenant && envSel && !envSel.nwTenantFixed && E.withTenant(envSel, next.nwTenant).nwTenant !== E.normTenant(next.nwTenant)) {
+    throw new Error(`Tenant Nextwaves "${next.nwTenant}" không dùng được cho ${envSel.label}`);
+  }
   await chrome.storage.local.set({ config: next });
   return next;
 }
@@ -122,7 +130,10 @@ async function contentUpdate(key, patch, logEvent) {
   // v0.4.0 (review lượt 2 P3-A): tab chết sau PUT cuối → applying hết lease được coi như apply_stopped.
   const stale = s.state === "applying" && !leaseLive(s);
   if (state === "applied" && !(["received", "apply_stopped"].includes(s.state) || stale)) throw new Error(`Không chuyển ${s.state} → applied`);
-  return updateSession(key, { state }, logEvent);
+  const s2 = await updateSession(key, { state }, logEvent);
+  // Review v0.4.0 P3-6: phiếu xong trên POS khi phiên còn ở bước Nextwaves → tab nhận hàng không còn việc: đóng rồi trả đầu đọc.
+  if (state === "done" && (NW_OPEN.has(s.state) || s.state === "no_nw_order")) laterCloseNwAndReturn(s2, s.nwTabId, "gr_done");
+  return s2;
 }
 
 // Nguồn gửi message: origin của trang (content script) — "" nếu là popup / không xác định.
@@ -200,15 +211,19 @@ async function noOrder(msg, sender) {
   if (!isCurrent(s) || s.state !== "waiting_nw") return s;
   const r = msg.result || {};
   const s2 = await updateSession(msg.key, { state: "no_nw_order", noOrderAt: Date.now() }, { type: "nw_no_order", total: Number.isFinite(r.total) ? r.total : null, read: Number.isFinite(r.read) ? r.read : null });
+  // Không có đơn → màn quét Nextwaves không mở modal quét (không giữ cổng): trả đầu đọc ngay, tab vẫn mở cho dược sĩ đọc thông báo.
   laterReturnReader(s2, "no_order");
   return s2;
 }
 
-// "Tìm lại" (tab Nextwaves hoặc POS): no_nw_order → waiting_nw.
-async function retryNw(key) {
+// "Tìm lại" trên tab Nextwaves: no_nw_order → waiting_nw, mượn lại đầu đọc (review v0.4.0 P2-3: lượt mượn cũ đã trả).
+async function retryNw(key, sender) {
   const s = (await getSessions())[key];
   if (!s || s.state !== "no_nw_order") return s || null;
-  return updateSession(key, { state: "waiting_nw" }, { type: "nw_retry" });
+  if (sender && sender.tab) requireNwTab(s, sender, "session:retryNw");
+  const s2 = await updateSession(key, { state: "waiting_nw" }, { type: "nw_retry" });
+  laterLend(s2, "retry");
+  return s2;
 }
 
 async function tabOrNull(tabId) {
@@ -292,8 +307,10 @@ async function startSession(msg, sender) {
   let s;
   if (cur && isCurrent(cur) && cur.state === "no_nw_order") {
     // Bấm lại phiếu "không có đơn": tìm lại trên Nextwaves (giữ phiên, giữ khoá).
-    s = Object.assign(cur, { state: "waiting_nw", updatedAt: Date.now(), reader: reader || cur.reader || null });
-    s.log = (s.log || []).concat([{ at: new Date().toISOString(), type: "nw_retry" }]).slice(-LOG_MAX);
+    // Review v0.4.0 P3-5: dữ liệu vừa đọc lại ở POS (khoá ghi, vân tay, tab) thắng; khoá chỉ thêm, không bao giờ bớt.
+    const locks = [...new Set([].concat(cur.writeLocks || [], Array.isArray(msg.writeLocks) ? msg.writeLocks.map(String) : []))];
+    s = Object.assign(cur, { state: "waiting_nw", updatedAt: Date.now(), reader: reader || cur.reader || null, writeLocks: locks, fingerprint: msg.fingerprint || cur.fingerprint || [], posTabId: sender && sender.tab ? sender.tab.id : cur.posTabId });
+    s.log = (s.log || []).concat([{ at: new Date().toISOString(), type: "nw_retry", writeLocks: locks }]).slice(-LOG_MAX);
   } else {
     const replaced = cur && !isCurrent(cur) ? { type: "replaced_outdated", oldState: cur.state, oldCreatedBy: cur.createdBy || null } : null;
     s = {
@@ -379,6 +396,8 @@ async function claimApply(msg, sender) {
   if (!msg.token || !/^[0-9A-F]{8}$/.test(String(msg.planHash || ""))) return no("bad_request");
   if (String(msg.grCode || "").toUpperCase() !== String(s.grCode || "").toUpperCase()) return no("gr_mismatch");
   const how = msg.how === "retry" ? "retry" : "auto";
+  // Review v0.4.0 P3-4: tự điền (không ai bấm) chỉ cho lượt vừa nhận; sau khi đã dừng / tab chết thì phải có cú bấm "điền tiếp".
+  if (how === "auto" && s.state !== "received") return no("auto_once");
   await updateSession(
     msg.key,
     { state: "applying", applyToken: msg.token, lease: { token: msg.token, expiresAt: now + T.leaseMs }, applyClaim: { how, planHash: msg.planHash, at: now }, applyError: null },
@@ -470,7 +489,7 @@ async function received(key, payload, sender) {
   if (!posTabId) posTabId = await openOrFocus(null, s.returnUrl);
   const nwTabId = sender && sender.tab ? sender.tab.id : s.nwTabId;
   const s2 = await updateSession(key, { posTabId, nwTabId: null }, { type: "pos_focused", tabId: posTabId, reusedTab: posTabId === s.posTabId });
-  laterCloseNwAndReturn(s2, nwTabId);
+  laterCloseNwAndReturn(s2, nwTabId, "received");
   return s2;
 }
 
@@ -490,6 +509,8 @@ async function reopenNw(msg, sender) {
   let s = (await getSessions())[msg.key];
   if (!s) return null;
   if (sender && sender.tab) requirePosTab(s, sender, "session:reopenNw");
+  // Review v0.4.0 P3-6: chỉ ở bước Nextwaves (đã nhận xong thì không mở lại màn quét / không giữ đầu đọc).
+  if (!(NW_OPEN.has(s.state) || s.state === "no_nw_order")) throw new Error("Phiên không còn ở bước nhận trên Nextwaves");
   if (s.state === "no_nw_order") s = await updateSession(msg.key, { state: "waiting_nw" }, { type: "nw_retry" });
   const reader = readerFrom(msg);
   if (reader) s = await updateSession(msg.key, { reader });
@@ -505,24 +526,12 @@ async function cancelSession(key) {
   if (leaseLive(s)) throw new Error("Phiên đang ghi — chờ xong mới huỷ");
   delete all[key];
   await saveSessions(all);
-  laterReturnReader(s, "cancel");
+  // Review v0.4.0 P2-3: màn quét có thể đang giữ cổng → đóng tab Nextwaves của phiên trước, rồi mới trả đầu đọc.
+  laterCloseNwAndReturn(s, s.nwTabId, "cancel");
   return true;
 }
 
 // ---------- đầu đọc (circa-reader/v1, qua một tab POS) ----------
-async function posTabFor(s) {
-  const env = envOf(s);
-  const tab = await tabOrNull(s.posTabId);
-  if (tab && E.classifyPosPage(tabUrl(tab), env) !== null) return tab.id;
-  if (tab && senderOrigin({ tab }) === env.posOrigin.toLowerCase()) return tab.id;
-  try {
-    const tabs = await chrome.tabs.query({ url: env.posOrigin + "/*" });
-    const t = (tabs || []).find((x) => Number.isInteger(x.id));
-    return t ? t.id : null;
-  } catch (_) {
-    return null;
-  }
-}
 
 function sendToTab(tabId, msg, ms) {
   return new Promise((resolve) => {
@@ -551,25 +560,76 @@ function sendToTab(tabId, msg, ms) {
   });
 }
 
-// Gửi lệnh đầu đọc qua tab POS (pos-content relay → window.postMessage). Ngoài hàng đợi serial (chờ tối đa readerRelayMs).
-async function readerRelay(s, cmd, leaseId) {
-  if (!s || !leaseId) return null;
-  const tabId = await posTabFor(s);
-  if (!Number.isInteger(tabId)) return null;
-  return sendToTab(tabId, { type: "cgn:reader", cmd, leaseId, ttlMs: T.readerTtlMs, label: s.grCode }, T.readerRelayMs);
+// Mọi tab POS có thể nói chuyện với QR Scan Log: tab của phiên trước, rồi các tab POS khác của môi trường.
+async function posTabsFor(s) {
+  const env = envOf(s);
+  const out = [];
+  const tab = await tabOrNull(s.posTabId);
+  if (tab && senderOrigin({ tab }) === env.posOrigin.toLowerCase()) out.push(tab.id);
+  try {
+    for (const t of (await chrome.tabs.query({ url: env.posOrigin + "/*" })) || []) if (Number.isInteger(t.id) && !out.includes(t.id)) out.push(t.id);
+  } catch (_) {
+    /* không liệt kê được tab */
+  }
+  return out;
 }
 
+// Gửi lệnh đầu đọc qua một tab POS (pos-content relay → window.postMessage). Ngoài hàng đợi serial (mỗi lần chờ tối đa readerRelayMs).
+// Tab vừa điều hướng / mới mở có thể chưa nạp xong (không có listener, QR Scan Log chưa trả lời ping) → thử tab khác.
+async function readerRelay(s, cmd, leaseId) {
+  if (!s || !leaseId) return null;
+  let last = null;
+  for (const tabId of await posTabsFor(s)) {
+    const r = await sendToTab(tabId, { type: "cgn:reader", cmd, leaseId, ttlMs: T.readerTtlMs, label: s.grCode }, T.readerRelayMs);
+    if (r && (r.ok || r.reason === "unknown_lease" || r.reason === "busy" || r.reason === "off_unknown")) return r;
+    last = r || last;
+  }
+  return last;
+}
+
+// Ghi trạng thái đầu đọc CHỈ khi phiên còn đúng lượt mượn đó (review v0.4.0 P3-3: lượt cũ về muộn không đè lượt mới).
+function setReader(key, leaseId, patch, log) {
+  return serial(async () => {
+    const s = (await getSessions())[key];
+    if (!s || !s.reader || s.reader.leaseId !== leaseId) return s || null;
+    return updateSession(key, { reader: Object.assign({}, s.reader, patch, { at: Date.now() }) }, log);
+  }).catch(() => null);
+}
+
+// Trả đầu đọc, thử lại có giãn cách (review v0.4.0 P2-1: tab POS vừa điều hướng về phiếu / tab mới còn đang tải).
 function laterReturnReader(s, why) {
-  if (!s || !s.reader || !s.reader.leaseId || !s.reader.supported || s.reader.state === "returned") return;
+  if (!s || !s.reader || !s.reader.leaseId || !s.reader.supported || LEASE_DONE.has(s.reader.state)) return;
   const key = s.key;
   const leaseId = s.reader.leaseId;
   setTimeout(async () => {
-    const r = await readerRelay(s, "return", leaseId).catch(() => null);
-    await serial(() => updateSession(key, { reader: Object.assign({}, s.reader, { state: r && r.ok ? "returned" : "return_failed", at: Date.now() }) }, { type: "reader_return", why, ok: !!(r && r.ok), state: (r && (r.state || r.reason)) || null })).catch(() => {});
+    let r = null;
+    for (let i = 0; i < T.readerReturnTries; i++) {
+      if (i > 0) await new Promise((res) => setTimeout(res, T.readerReturnGapMs));
+      r = await readerRelay(s, "return", leaseId).catch(() => null);
+      if (r && (r.ok || r.reason === "unknown_lease")) break;
+    }
+    const state = r && r.ok ? "returned" : r && r.reason === "unknown_lease" ? "unknown_lease" : "return_failed";
+    await setReader(key, leaseId, { state }, { type: "reader_return", why, ok: !!(r && r.ok), state: (r && (r.state || r.reason)) || null });
   }, 0);
 }
 
-function laterCloseNwAndReturn(s, nwTabId) {
+// Mượn (lại) đầu đọc qua tab POS: gia hạn cùng leaseId nếu lượt còn hiệu lực, không thì lượt mới.
+function laterLend(s, why) {
+  if (!s || !s.reader || !s.reader.supported) return;
+  const key = s.key;
+  const leaseId = s.reader.leaseId && !LEASE_DONE.has(s.reader.state) ? s.reader.leaseId : newLeaseId();
+  setTimeout(async () => {
+    const r = await readerRelay(s, "lend", leaseId).catch(() => null);
+    await serial(async () => {
+      const cur = (await getSessions())[key];
+      if (!cur) return null;
+      return updateSession(key, { reader: Object.assign({}, cur.reader || {}, { leaseId, supported: true, state: r ? (r.ok ? r.state || "lent" : r.reason || "error") : "no_answer", at: Date.now() }) }, { type: "reader_lend", why, ok: !!(r && r.ok) });
+    }).catch(() => null);
+  }, 0);
+}
+
+function laterCloseNwAndReturn(s, nwTabId, why) {
+  if (!s) return;
   const env = envOf(s);
   setTimeout(async () => {
     const tab = await tabOrNull(nwTabId);
@@ -581,19 +641,24 @@ function laterCloseNwAndReturn(s, nwTabId) {
       }
       await new Promise((r) => setTimeout(r, T.nwCloseDelayMs));
     }
-    laterReturnReader(s, "received");
+    laterReturnReader(s, why || "received");
   }, 0);
 }
 
-// Tab Nextwaves (từ khung "Mượn lại đầu đọc") → mượn / gia hạn qua tab POS, cùng leaseId của phiên.
+// Tab Nextwaves ("Mượn lại đầu đọc" / gia hạn định kỳ / thử lại khi QR Scan Log bận) → mượn qua tab POS.
 async function readerLendFromNw(msg, sender) {
   const s = (await getSessions())[msg.key];
   if (!s) return null;
   requireNwTab(s, sender, "reader:lend");
-  const leaseId = (s.reader && s.reader.leaseId) || null;
-  if (!leaseId) return { ok: false, reason: "no_lease" };
+  if (!(NW_OPEN.has(s.state) || s.state === "no_nw_order")) return { ok: false, reason: "not_nw_step" };
+  if (!s.reader || !s.reader.supported) return { ok: false, reason: "no_qsl" };
+  const leaseId = s.reader.leaseId && !LEASE_DONE.has(s.reader.state) ? s.reader.leaseId : newLeaseId();
   const r = await readerRelay(s, "lend", leaseId);
-  await serial(() => updateSession(msg.key, { reader: Object.assign({}, s.reader, { state: r && r.ok ? r.state || "lent" : (r && r.reason) || "no_answer", supported: s.reader.supported || !!r, at: Date.now() }) }, { type: "reader_lend", from: "nw", ok: !!(r && r.ok) }));
+  await serial(async () => {
+    const cur = (await getSessions())[msg.key];
+    if (!cur) return null;
+    return updateSession(msg.key, { reader: Object.assign({}, cur.reader || {}, { leaseId, supported: true, state: r ? (r.ok ? r.state || "lent" : r.reason || "error") : "no_answer", at: Date.now() }) }, { type: "reader_lend", from: msg.why || "nw", ok: !!(r && r.ok) });
+  });
   return r || { ok: false, reason: "no_answer" };
 }
 
@@ -669,7 +734,7 @@ async function handle(msg, sender) {
     case "session:noOrder":
       return noOrder(msg, sender);
     case "session:retryNw":
-      return retryNw(msg.key);
+      return retryNw(msg.key, sender);
     case "session:scanOk":
       return scanOk(msg, sender);
     case "session:routeScan":

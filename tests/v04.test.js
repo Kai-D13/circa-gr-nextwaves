@@ -35,7 +35,8 @@ const detailsOf = (gr) => gr.data.items.flatMap((i) => i.details);
 
 // POS A1 thật (+ Nextwaves tuỳ test qua o.nw(req)).
 function makeServer(o = {}) {
-  const st = { gr: H.clone(H.sample(o.grStart || "pos-stg-gr-GR03887-truoc-20261028.json")), puts: [], completes: [], log: [], nwSearches: 0 };
+  const st = { gr: H.clone(H.sample(o.grStart || "pos-stg-gr-GR03887-truoc-20261028.json")), puts: [], completes: [], log: [], nwSearches: 0, getsAfterLast: 0 };
+  if (o.grMut) o.grMut(st.gr.data);
   async function handle(req) {
     st.log.push(req);
     const u = new URL(req.url);
@@ -56,7 +57,13 @@ function makeServer(o = {}) {
     if (!u.pathname.startsWith("/backend/v1/")) return { status: 404, json: {} };
     if (req.headers.authorization !== "Bearer pos-test") return { status: 401, json: { message: "unauthorized" } };
     let m = /^\/backend\/v1\/order\/goods-receipt\/([0-9a-f-]{36})$/.exec(u.pathname);
-    if (m && req.method === "GET") return m[1] === GR_ID ? { status: 200, json: H.clone(st.gr) } : { status: 404, json: {} };
+    if (m && req.method === "GET") {
+      if (m[1] !== GR_ID) return { status: 404, json: {} };
+      const snap = H.clone(st.gr);
+      // o.tamperFinal: GET thứ 2 sau PUT cuối (lần đọc lại CẢ phiếu — khớp cuối) thấy phiếu bị đổi.
+      if (o.tamperFinal && st.puts.length >= 5 && ++st.getsAfterLast >= 2) o.tamperFinal(snap.data); // từ lần đọc CẢ phiếu trở đi (phiếu bị đổi thật)
+      return { status: 200, json: snap };
+    }
     m = /^\/backend\/v1\/pos\/([0-9a-f-]{36})\/po\/([0-9a-f-]{36})$/.exec(u.pathname);
     if (m && req.method === "GET") return { status: 200, json: H.sample("pos-stg-po-PO00006767-SOBD1594095-20261028.json") };
     if (u.pathname === "/backend/v1/order/goods-receipt/search" && req.method === "GET") return { status: 200, json: H.sample("pos-stg-gr-search-so-1594095-20261028.json") };
@@ -143,7 +150,7 @@ test("v0.4.0 A1 thật: mượn đầu đọc → nhận 2xx → về POS → T�
     const lease = s0.reader.leaseId;
     assert.match(lease, /^[A-Za-z0-9_-]{1,64}$/);
     assert.deepEqual(b.qsl.calls.slice(0, 2).map((c) => c.type), ["ping", "lend"]);
-    assert.deepEqual([b.qsl.calls[1].leaseId, b.qsl.calls[1].label, b.qsl.calls[1].ttlMs], [lease, "GR03887", 20 * 60 * 1000]);
+    assert.deepEqual([b.qsl.calls[1].leaseId, b.qsl.calls[1].label, b.qsl.calls[1].ttlMs], [lease, "GR03887", 15 * 60 * 1000]);
     assert.ok(b.qsl.calls.indexOf(b.qsl.calls.find((c) => c.type === "lend")) >= 0);
     assert.deepEqual([s0.warehouseId, s0.warehouseName, s0.nwTenant], [A1.warehouseId, "CIRCA FLORITA", "circa-stg"]);
 
@@ -236,8 +243,9 @@ test("v0.4.0 tab POS chết giữa lúc điền (tải lại ở PUT 2) → leas
     release();
     await sleep(260); // lease hết hạn
     pos.post(POS_AUTH);
-    const btn = await until(() => pos.view && (pos.view.buttons || []).find((x) => /^Điền vào phiếu GR03887 · #/.test(x.label)));
+    const btn = await until(() => pos.view && (pos.view.buttons || []).find((x) => /^Đọc lại và điền tiếp · #/.test(x.label)));
     assert.equal(session(b).state, "applying");
+    assert.match(pos.view.lines.join("\n"), /bị ngắt giữa chừng/);
     const left = 15 - REAL_PUTS.slice(0, 2).reduce((n, p) => n + p.body.detail.thuocsi_qr_codes.length, 0);
     assert.ok(btn.label.endsWith(`(${left} UID)`), `kế hoạch mới chỉ còn 3 lô / ${left} UID: ${btn.label}`);
     btn.onClick();
@@ -558,6 +566,171 @@ test("v0.4.0 bấm 'Nhận hàng bằng RFID' lại cho phiếu 'không có đơ
     assert.ok(r.data.log.some((l) => l.type === "nw_retry"));
     assert.ok(["waiting_nw", "no_nw_order"].includes(session(b).state));
     assert.equal(b.tabs().filter((t) => t.url.startsWith(NW)).length, n0, "dùng lại tab Nextwaves");
+  } finally {
+    b.close();
+  }
+});
+
+// ---------- review v0.4.0 (07/11) ----------
+test("review P2-1: trả đầu đọc khi QR Scan Log của tab POS chưa trả lời (trang vừa tải) → thử lại có giãn cách tới khi được", async () => {
+  const ctx = await setup({ qsl: { mode: "ok" } });
+  const { b } = ctx;
+  try {
+    const lease = session(b).reader.leaseId;
+    b.qsl.muteUntil = Date.now() + 250; // QR Scan Log của tab POS chưa nạp xong trong ~250 ms
+    await receive(ctx);
+    await sessionState(b, "applied", 8000);
+    await until(() => (session(b).reader || {}).state === "returned", 3000);
+    assert.ok(b.qsl.calls.some((c) => c.type === "return" && c.leaseId === lease));
+    assert.equal(b.qsl.lent, null);
+    const log = session(b).log.filter((l) => l.type === "reader_return");
+    assert.deepEqual(log.map((l) => [l.why, l.ok]), [["received", true]]);
+  } finally {
+    b.close();
+  }
+});
+
+test("review P2-2: dòng Nextwaves không gắn tem (phiếu cần nhiều hơn số UID) → tự điền phần có tem, khung VÀNG nêu sản phẩm chưa nhận đủ (không 'kiểm rồi bấm HOÀN THÀNH' xanh)", async () => {
+  let itemName = "";
+  const ctx = await setup({
+    server: {
+      grMut: (gr) => {
+        const it = gr.items[0];
+        it.quantity = Number(it.quantity) + 1; // phiếu cần thêm 1 mà Nextwaves không có tem cho phần đó
+        itemName = it.product_name;
+      },
+    },
+  });
+  const { b, srv, pos } = ctx;
+  try {
+    await receive(ctx);
+    const s = await sessionState(b, "applied", 8000);
+    assert.equal(srv.st.puts.length, 5);
+    assert.ok(s.applyResult.notFull >= 1, "kế hoạch ghi có sản phẩm chưa đủ");
+    await until(() => pos.reloads >= 1 && pos.loads >= 2);
+    pos.post(POS_AUTH);
+    const v = await until(() => pos.view && /CHƯA nhận đủ$/.test(pos.view.title || "") && pos.view);
+    assert.equal(v.tone, "warn");
+    assert.match(v.title, /^GR03887: đã điền 15 mã — còn 1 sản phẩm CHƯA nhận đủ$/);
+    assert.ok(v.lines.some((l) => l.startsWith(`• ${itemName}: `)), v.lines.join(" | "));
+    assert.equal(srv.st.completes.length, 0);
+  } finally {
+    b.close();
+  }
+});
+
+test("review P2-3: huỷ phiên → đóng tab Nextwaves TRƯỚC rồi mới trả đầu đọc; 'Tìm lại' trên phiếu không có đơn → mượn lượt MỚI (lượt cũ đã trả)", async () => {
+  const c1 = await setup({ qsl: { mode: "ok" } });
+  try {
+    const lease = session(c1.b).reader.leaseId;
+    assert.equal((await c1.b.sendFromPopup({ type: "session:cancel", key: KEY })).ok, true);
+    await until(() => c1.nw.closed, 2000);
+    await until(() => c1.b.qsl.calls.some((c) => c.type === "return" && c.leaseId === lease), 3000);
+    assert.equal(c1.b.qsl.lent, null);
+  } finally {
+    c1.b.close();
+  }
+  const c2 = await setup({ match: false, qsl: { mode: "ok" }, server: { nw: nwEmpty } });
+  try {
+    const lease = session(c2.b).reader.leaseId;
+    c2.nw.post(NW_AUTH());
+    await sessionState(c2.b, "no_nw_order");
+    await until(() => (session(c2.b).reader || {}).state === "returned", 2000);
+    c2.nw.view.buttons.find((x) => x.label === "Tìm lại").onClick();
+    await until(() => c2.b.qsl.calls.filter((c) => c.type === "lend").length === 2, 3000);
+    const again = c2.b.qsl.calls.filter((c) => c.type === "lend").pop();
+    assert.notEqual(again.leaseId, lease, "lượt mới sau khi đã trả");
+    await until(() => (session(c2.b).reader || {}).leaseId === again.leaseId, 2000);
+  } finally {
+    c2.b.close();
+  }
+});
+
+test("review P3-1: mượn đầu đọc xong mà tạo phiên lỗi → trả ngay lượt mượn (không để QR Scan Log chờ hết hạn)", async () => {
+  const srv = makeServer();
+  const b = createBrowser(srv.handle, { qsl: { mode: "ok" }, interceptBg: (msg) => (msg.type === "session:start" ? { ok: false, error: "lỗi giả" } : undefined) });
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const pos = b.openTab(GR_PAGE);
+    pos.post(POS_AUTH);
+    (await until(() => startBtn(pos))).onClick();
+    await until(() => b.qsl.calls.some((c) => c.type === "return"), 3000);
+    const lend = b.qsl.calls.find((c) => c.type === "lend");
+    assert.equal(b.qsl.calls.find((c) => c.type === "return").leaseId, lend.leaseId);
+    assert.equal(b.qsl.lent, null);
+    assert.equal(b.tabs().filter((t) => t.url.startsWith(NW)).length, 0);
+  } finally {
+    b.close();
+  }
+});
+
+test("review P3-2: tab Nextwaves gia hạn lượt mượn định kỳ (cùng leaseId); QR Scan Log bận lúc mượn → thử lại, có giới hạn", async () => {
+  const c1 = await setup({ qsl: { mode: "ok" }, tuning: { readerRenewMs: 150 } });
+  try {
+    const lease = session(c1.b).reader.leaseId;
+    c1.nw.post(NW_AUTH());
+    await until(() => viewTitle(c1.nw) === "Sẵn sàng nhận hàng");
+    await until(() => c1.b.qsl.calls.filter((c) => c.type === "lend").length >= 3, 3000);
+    assert.ok(c1.b.qsl.calls.filter((c) => c.type === "lend").every((c) => c.leaseId === lease), "gia hạn cùng lượt");
+  } finally {
+    c1.b.close();
+  }
+  const c2 = await setup({ qsl: { mode: "busy" }, tuning: { readerRetryMs: 60, readerRetryMax: 3 } });
+  try {
+    c2.nw.post(NW_AUTH());
+    await until(() => viewTitle(c2.nw) === "Sẵn sàng nhận hàng");
+    await until(() => c2.b.qsl.calls.filter((c) => c.type === "lend").length === 4, 3000); // 1 lúc mở + 3 lần thử lại
+    await settle(300);
+    assert.equal(c2.b.qsl.calls.filter((c) => c.type === "lend").length, 4, "thử lại có giới hạn");
+  } finally {
+    c2.b.close();
+  }
+});
+
+test("review P3-7 / P3-8: Production không nhận tenant staging / 'api-…'; nút đầu đọc đổi chữ tạm ('Đang kết nối…') không mở thêm lượt bấm", async () => {
+  const srv = makeServer();
+  const b = createBrowser(srv.handle);
+  try {
+    for (const t of ["circa-stg", "api-circa"]) {
+      const r = await b.sendFromPopup({ type: "config:set", patch: { mode: "PRD", url: "", nwTenant: t } });
+      assert.equal(r.ok, false, t);
+      assert.match(r.error, /không dùng được cho Production/);
+    }
+  } finally {
+    b.close();
+  }
+  const ctx = await setup({ qsl: { mode: "ok" } });
+  const { nw } = ctx;
+  try {
+    nw.post(NW_AUTH());
+    await until(() => viewTitle(nw) === "Sẵn sàng nhận hàng");
+    let clicks = 0;
+    const btn = { textContent: "Kết nối đầu đọc", disabled: false, click: () => (clicks += 1) };
+    nw.dom.buttons = [{ textContent: "Dừng", disabled: false, click: () => assert.fail("không bấm nút Dừng khác") }, btn];
+    await until(() => clicks === 1, 2000);
+    btn.textContent = "Đang kết nối…"; // Nextwaves đang thử
+    await settle(80);
+    btn.textContent = "Kết nối đầu đọc"; // thất bại, về lại
+    await until(() => clicks === 3, 3000);
+    await settle(300);
+    assert.equal(clicks, 3, "tổng vẫn tối đa 3 lần cho một lượt mất kết nối");
+  } finally {
+    ctx.b.close();
+  }
+});
+
+test("khớp cuối (plan C3): đọc lại CẢ phiếu sau khi điền thấy mã lạ trên một lô → KHÔNG tải lại, khung vàng 'chưa khớp hoàn toàn', nhật ký final_verify_failed", async () => {
+  const ctx = await setup({ server: { tamperFinal: (gr) => gr.items[0].details[0].thuocsi_qr_codes.push("MA_LA_123") } });
+  const { b, srv, pos } = ctx;
+  try {
+    await receive(ctx);
+    await sessionState(b, "applied", 8000);
+    const v = await until(() => pos.view && /chưa khớp hoàn toàn/.test(pos.view.title || "") && pos.view);
+    assert.equal(v.tone, "warn");
+    await until(() => session(b).log.some((l) => l.type === "final_verify_failed"), 2000);
+    await settle(100);
+    assert.equal(pos.reloads, 0, "không tải lại (giữ thông báo)");
+    assert.equal(srv.st.puts.length, 5);
   } finally {
     b.close();
   }

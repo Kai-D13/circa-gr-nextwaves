@@ -495,7 +495,8 @@ test("P1.5: tab mất lease giữa chừng (tab khác tiếp quản) → không 
     // v0.4.0: tab 1 tự điền ngay sau khi nhận.
     await until(() => srv.st.puts.length === 2); // PUT 2 đang treo
     await sleep(130); // lease tab 1 hết hạn
-    assert.equal((await b.sendFromTab(pos, claimMsg("tab-khac"))).data.ok, true, "lease hết hạn → tab khác giành được");
+    assert.deepEqual((await b.sendFromTab(pos, claimMsg("tab-khac"))).data, { ok: false, reason: "auto_once" }, "v0.4.0: không tự điền lần hai");
+    assert.equal((await b.sendFromTab(pos, claimMsg("tab-khac", { how: "retry" }))).data.ok, true, "lease hết hạn → tab khác giành được (bấm điền tiếp)");
     release(); // PUT 2 của tab 1 xong → tab 1 phải tự dừng trước PUT 3
     await until(() => b.session(KEY).log.some((l) => l.type === "apply_abort" && l.reason === "lease_lost"));
     await settle(100);
@@ -644,14 +645,15 @@ test("Chưa chọn môi trường / môi trường PRD → không làm gì trên
   }
 });
 
-test("Huỷ phiên trên POS → tải lại trang không tự mở Nextwaves; bấm 'Nhận hàng bằng RFID' → mở lại", async () => {
-  const { b, pos } = await openToReady();
+test("Huỷ phiên trên POS → đóng tab Nextwaves của phiên (v0.4.0, nhả đầu đọc); tải lại trang không tự mở Nextwaves; bấm 'Nhận hàng bằng RFID' → mở lại", async () => {
+  const { b, pos, nw } = await openToReady();
   try {
     const nwTabs = () => b.tabs().filter((t) => t.url.startsWith(NW)).length;
-    const before = nwTabs();
     const cancel = await until(() => pos.view && pos.view.buttons && pos.view.buttons.find((x) => x.label === "Huỷ phiên"));
     await cancel.onClick();
     await until(() => b.session(KEY) === null);
+    await until(() => nw.closed, 2000);
+    const before = nwTabs();
     pos.reload();
     pos.post(POS_AUTH);
     const start = await until(() => startBtn(pos));
@@ -1650,6 +1652,24 @@ test("v0.3.1 P2-1: hai phiên cùng SO — tab Nextwaves extension mở cho phi�
     await settle(30);
     assert.equal(await ask(manual), OTHER);
     assert.equal(await ask(nw), KEY);
+  } finally {
+    b.close();
+  }
+});
+
+test("review P3-9 (v0.4.0): hai tab Nextwaves cùng phiên — cả hai đọc kết quả nhận; tab chậm hơn KHÔNG báo đỏ 'POS CHƯA điền' mà về 'đã nhận xong'", async () => {
+  const { b, srv, nw } = await openToReady();
+  try {
+    const nw2 = b.openTab(`${NW}/vi/purchases/receive?po=SOBD1593858`);
+    nw2.post(NW_AUTH);
+    await until(() => viewTitle(nw2) === "Sẵn sàng nhận hàng");
+    srv.st.nwReceived = true;
+    nw.post(scan(200));
+    await sessionState(b, "applied");
+    await settle(200);
+    const red = [nw, nw2].flatMap((t) => t.views).filter((v) => v && /POS CHƯA điền/.test(v.title || ""));
+    assert.deepEqual(red.map((v) => v.title), [], "không báo đỏ sai");
+    assert.equal(srv.st.puts.length, 6);
   } finally {
     b.close();
   }

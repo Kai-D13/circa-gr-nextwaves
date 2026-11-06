@@ -71,7 +71,9 @@
   // Môi trường với tenant Nextwaves cụ thể (staging luôn tenant cố định). Tenant sai / rỗng → tenant mặc định của môi trường.
   function withTenant(env, tenant) {
     if (!env) return null;
-    const t = env.nwTenantFixed ? env.nwTenant : normTenant(tenant) || env.nwTenant;
+    // Review v0.4.0 P3-7: môi trường đổi được tenant (PRD) không nhận tenant của staging hay tên "api-…" (dựng sai origin).
+    const t0 = env.nwTenantFixed ? env.nwTenant : normTenant(tenant);
+    const t = t0 && (env.nwTenantFixed || (t0 !== ENVS.STG.nwTenant && !/^api-/.test(t0))) ? t0 : env.nwTenant;
     if (t === env.nwTenant) return env;
     const k = env.id + "|" + t;
     if (!tenantCache.has(k)) {

@@ -12,7 +12,7 @@ const SRC = path.join(__dirname, "..", "src");
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(SRC, "manifest.json"), "utf8"));
 const clone = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
 const TUNING = { pollMs: 10, collectTries: 3, collectDelayMs: 5, reloadDelayMs: 5, qrConcurrency: 4, httpTimeoutMs: 2000, leaseRenewMs: 50, autoAnchorWaitMs: 150, readerPingMs: 60, readerLendMs: 300, authWaitMs: 400, readerPollMs: 20, readerFirstClickMs: 30, readerGapMs: 60 };
-const BG_TUNING = { leaseMs: 2000, retryCooldownMs: 0, readerRelayMs: 1500, nwCloseDelayMs: 5 };
+const BG_TUNING = { leaseMs: 2000, retryCooldownMs: 0, readerRelayMs: 1500, nwCloseDelayMs: 5, readerReturnGapMs: 100 };
 
 // Mẫu match của manifest ("https://*.nextwaves.app/*") → có khớp origin không (như Chrome: * ở đầu host = mọi subdomain).
 function matchesOrigin(pattern, origin) {
@@ -374,6 +374,7 @@ function createBrowser(server, opts = {}) {
       c.listeners.push((e) => {
         const m = e.data;
         if (!m || m.ns !== "circa-reader/v1" || m.from !== "gr-nextwaves") return;
+        if (qsl.muteUntil && Date.now() < qsl.muteUntil) return; // QR Scan Log của trang chưa nạp xong (test thử lại khi trả)
         qsl.calls.push({ tab: t.id, type: m.type, leaseId: m.leaseId || null, ttlMs: m.ttlMs || null, label: m.label || null });
         const out = { ns: "circa-reader/v1", from: "qsl", reqId: m.reqId };
         if (m.type === "ping") Object.assign(out, { type: "pong", protocol: 1, version: "0.9.x-test", holder: qsl.lent ? "none" : "tab", lent: qsl.lent });
