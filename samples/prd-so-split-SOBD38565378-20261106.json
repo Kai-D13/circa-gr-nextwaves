@@ -1,0 +1,66 @@
+{
+  "_note": "Dựng lại 06/11/2026 từ response production thật (GET chỉ đọc qua Chrome của operator): đúng trường extension đọc; bỏ tên người / tên kho / tên đối tác; title sản phẩm bỏ trống. Tìm theo SO + đơn của từng PO (refId thật).",
+  "search": {
+    "items": [
+      {
+        "id": "de5afb91-f9a4-4c4a-be10-815eaf87b657",
+        "purchaseOrderId": "b4db032d-7977-4d9a-b747-a6e47ad87795",
+        "purchaseOrderNumber": "PO-2026-000003",
+        "purchaseOrderStatus": "CONFIRMED",
+        "counterparty": {
+          "tenantSlug": "buymed"
+        },
+        "origin": "seller",
+        "status": "shipped",
+        "warehouse": {
+          "id": "eb5e2b4f-6f92-413b-90ef-6be1730b94c0"
+        },
+        "openShipmentCount": 1
+      },
+      {
+        "id": "3d8c8ffe-a931-4cf6-8dc7-a4781c88ded4",
+        "purchaseOrderId": "be7e2d4b-1864-437b-8b4e-1baeb4bf2803",
+        "purchaseOrderNumber": "PO-2026-000001",
+        "purchaseOrderStatus": "CONFIRMED",
+        "counterparty": {
+          "tenantSlug": "buymed"
+        },
+        "origin": "seller",
+        "status": "shipped",
+        "warehouse": {
+          "id": "eb5e2b4f-6f92-413b-90ef-6be1730b94c0"
+        },
+        "openShipmentCount": 1
+      }
+    ],
+    "total": 2
+  },
+  "orders": {
+    "b4db032d-7977-4d9a-b747-a6e47ad87795": {
+      "id": "de5afb91-f9a4-4c4a-be10-815eaf87b657",
+      "status": "shipped",
+      "refId": "SOBD38565378-16025427",
+      "counterparty": {
+        "tenantSlug": "buymed"
+      },
+      "purchaseOrderId": "b4db032d-7977-4d9a-b747-a6e47ad87795",
+      "purchaseOrderNumber": "PO-2026-000003",
+      "warehouse": {
+        "id": "eb5e2b4f-6f92-413b-90ef-6be1730b94c0"
+      }
+    },
+    "be7e2d4b-1864-437b-8b4e-1baeb4bf2803": {
+      "id": "3d8c8ffe-a931-4cf6-8dc7-a4781c88ded4",
+      "status": "shipped",
+      "refId": "SOBD38565378-16025426",
+      "counterparty": {
+        "tenantSlug": "buymed"
+      },
+      "purchaseOrderId": "be7e2d4b-1864-437b-8b4e-1baeb4bf2803",
+      "purchaseOrderNumber": "PO-2026-000001",
+      "warehouse": {
+        "id": "eb5e2b4f-6f92-413b-90ef-6be1730b94c0"
+      }
+    }
+  }
+}

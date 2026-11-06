@@ -1,0 +1,272 @@
+{
+  "_note": "Nguồn so số lượng (grFingerprintSource) của GR production thật 06/11, tính từ GET goods-receipt (chỉ đọc). GR84674 = PO01974972 mã giao SOBD38567266-P1; GR84673 = PO01974970 mã giao SOBD38565378-P1.",
+  "GR84674": [
+    {
+      "productId": "3950",
+      "baseQuantity": 30,
+      "ratesByUnitName": {
+        "hộp": 30,
+        "viên": 1,
+        "vỉ": 10
+      }
+    },
+    {
+      "productId": "4117",
+      "baseQuantity": 12,
+      "ratesByUnitName": {
+        "chai": 1,
+        "thùng": 12
+      }
+    },
+    {
+      "productId": "5816",
+      "baseQuantity": 20,
+      "ratesByUnitName": {
+        "hộp": 20,
+        "vỉ": 4,
+        "viên": 1
+      }
+    },
+    {
+      "productId": "11906",
+      "baseQuantity": 15,
+      "ratesByUnitName": {
+        "viên": 1,
+        "gói": 15
+      }
+    },
+    {
+      "productId": "13873",
+      "baseQuantity": 500,
+      "ratesByUnitName": {
+        "viên": 1,
+        "hộp": 100,
+        "vỉ": 10
+      }
+    },
+    {
+      "productId": "77811",
+      "baseQuantity": 100,
+      "ratesByUnitName": {
+        "viên": 1,
+        "hộp": 100,
+        "vỉ": 10
+      }
+    },
+    {
+      "productId": "89261",
+      "baseQuantity": 30,
+      "ratesByUnitName": {
+        "gói": 1,
+        "hộp": 30
+      }
+    },
+    {
+      "productId": "207527",
+      "baseQuantity": 10,
+      "ratesByUnitName": {
+        "gói": 1,
+        "hộp": 10
+      }
+    },
+    {
+      "productId": "852265",
+      "baseQuantity": 16,
+      "ratesByUnitName": {
+        "miếng": 1,
+        "hộp": 16
+      }
+    },
+    {
+      "productId": "2004280",
+      "baseQuantity": 30,
+      "ratesByUnitName": {
+        "viên": 1,
+        "hộp": 30,
+        "vỉ": 15
+      }
+    },
+    {
+      "productId": "2005619",
+      "baseQuantity": 1,
+      "ratesByUnitName": {
+        "tuýp": 1,
+        "hộp": 1
+      }
+    },
+    {
+      "productId": "2011191",
+      "baseQuantity": 1,
+      "ratesByUnitName": {
+        "hũ": 1
+      }
+    },
+    {
+      "productId": "2014494",
+      "baseQuantity": 40,
+      "ratesByUnitName": {
+        "ống": 1,
+        "hộp": 20
+      }
+    },
+    {
+      "productId": "2019036",
+      "baseQuantity": 20,
+      "ratesByUnitName": {
+        "ống": 1,
+        "hộp": 20
+      }
+    }
+  ],
+  "GR84673": [
+    {
+      "productId": "1371",
+      "baseQuantity": 30,
+      "ratesByUnitName": {
+        "vỉ": 15,
+        "hộp": 30,
+        "viên": 1
+      }
+    },
+    {
+      "productId": "1446",
+      "baseQuantity": 20,
+      "ratesByUnitName": {
+        "vỉ": 10,
+        "viên": 1,
+        "hộp": 20
+      }
+    },
+    {
+      "productId": "1635",
+      "baseQuantity": 1,
+      "ratesByUnitName": {
+        "hộp": 1,
+        "tuýp": 1
+      }
+    },
+    {
+      "productId": "1908",
+      "baseQuantity": 3,
+      "ratesByUnitName": {
+        "chai": 1,
+        "hộp": 1
+      }
+    },
+    {
+      "productId": "2110",
+      "baseQuantity": 10,
+      "ratesByUnitName": {
+        "vỉ": 10,
+        "viên": 1,
+        "hộp": 10
+      }
+    },
+    {
+      "productId": "2740",
+      "baseQuantity": 1,
+      "ratesByUnitName": {
+        "chai": 1,
+        "hộp": 1
+      }
+    },
+    {
+      "productId": "11544",
+      "baseQuantity": 1,
+      "ratesByUnitName": {
+        "chai": 1
+      }
+    },
+    {
+      "productId": "15072",
+      "baseQuantity": 3,
+      "ratesByUnitName": {
+        "hộp": 3,
+        "miếng": 1
+      }
+    },
+    {
+      "productId": "77749",
+      "baseQuantity": 1,
+      "ratesByUnitName": {
+        "tuýp": 1,
+        "hộp": 1
+      }
+    },
+    {
+      "productId": "78026",
+      "baseQuantity": 40,
+      "ratesByUnitName": {
+        "hộp": 40,
+        "viên": 1,
+        "vỉ": 10
+      }
+    },
+    {
+      "productId": "98494",
+      "baseQuantity": 200,
+      "ratesByUnitName": {
+        "que": 1,
+        "hộp": 200
+      }
+    },
+    {
+      "productId": "111885",
+      "baseQuantity": 30,
+      "ratesByUnitName": {
+        "viên": 1,
+        "hộp": 30,
+        "vỉ": 10
+      }
+    },
+    {
+      "productId": "258149",
+      "baseQuantity": 10,
+      "ratesByUnitName": {
+        "ống": 1,
+        "hộp": 10
+      }
+    },
+    {
+      "productId": "2001870",
+      "baseQuantity": 360,
+      "ratesByUnitName": {
+        "viên": 1,
+        "hộp": 120,
+        "vỉ": 12,
+        "túi": 60
+      }
+    },
+    {
+      "productId": "2006697",
+      "baseQuantity": 1,
+      "ratesByUnitName": {
+        "thỏi": 1,
+        "vỉ": 1
+      }
+    },
+    {
+      "productId": "2015714",
+      "baseQuantity": 1,
+      "ratesByUnitName": {
+        "hộp": 1,
+        "chai": 1
+      }
+    },
+    {
+      "productId": "2016520",
+      "baseQuantity": 1,
+      "ratesByUnitName": {
+        "chai": 1
+      }
+    },
+    {
+      "productId": "2021326",
+      "baseQuantity": 30,
+      "ratesByUnitName": {
+        "ống": 1,
+        "hộp": 30
+      }
+    }
+  ]
+}

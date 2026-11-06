@@ -1,0 +1,406 @@
+{
+  "_note": "Dựng lại 06/11/2026 từ response production thật (GET chỉ đọc qua Chrome của operator): đúng trường extension đọc; bỏ tên người / tên kho / tên đối tác; title sản phẩm bỏ trống.",
+  "order": {
+    "direction": "outbound",
+    "status": "shipped",
+    "counterparty": {
+      "tenantSlug": "buymed"
+    },
+    "receivedAt": null,
+    "id": "3d8c8ffe-a931-4cf6-8dc7-a4781c88ded4",
+    "purchaseOrderId": "be7e2d4b-1864-437b-8b4e-1baeb4bf2803",
+    "purchaseOrderNumber": "PO-2026-000001"
+  },
+  "purchaseOrderStatus": "CONFIRMED",
+  "warehouse": {
+    "id": "eb5e2b4f-6f92-413b-90ef-6be1730b94c0"
+  },
+  "shipments": [
+    {
+      "status": "pending",
+      "needsAccept": true,
+      "dispatchedAt": null,
+      "id": "45869be5-090b-4856-9a53-39e12024d363",
+      "shipmentNumber": "IT-BUYMED-20261106014257-9937",
+      "lines": [
+        {
+          "lineId": "61f9133f-ad9f-4e0c-924a-70a338208a84",
+          "productId": "1b6152f5-67bd-423c-adc9-10f0a82c0970",
+          "product": {
+            "id": "1b6152f5-67bd-423c-adc9-10f0a82c0970",
+            "sku": null,
+            "barcode": "78026",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280691500004029AFE679D0",
+              "unitUid": "1793928569838Y21"
+            }
+          ]
+        },
+        {
+          "lineId": "88cc2509-560c-4e64-929d-487d06de4b42",
+          "productId": "c90bd7d0-6b8a-40b3-b1c0-c4e616234a76",
+          "product": {
+            "id": "c90bd7d0-6b8a-40b3-b1c0-c4e616234a76",
+            "sku": null,
+            "barcode": "2001870",
+            "title": ""
+          },
+          "quantity": 3,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280F30200000000EB0AC71C",
+              "unitUid": "1793928835773B51"
+            },
+            {
+              "epc": "E280F30200000000EF09E71E",
+              "unitUid": "1793929167969B51"
+            },
+            {
+              "epc": "E280F30200000000EF09E71C",
+              "unitUid": "1793929238382B51"
+            }
+          ]
+        },
+        {
+          "lineId": "03a99f86-4025-4a17-86f5-92163a531606",
+          "productId": "67947f35-9675-4b5c-9338-9a0d1cb258b2",
+          "product": {
+            "id": "67947f35-9675-4b5c-9338-9a0d1cb258b2",
+            "sku": null,
+            "barcode": "15072",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280F30200000000EB0AA71F",
+              "unitUid": "1793928851733B11"
+            }
+          ]
+        },
+        {
+          "lineId": "4399ae10-e2ed-4e24-8820-5961e84995d8",
+          "productId": "3efb5a36-101d-445d-be02-6eda12e5c24c",
+          "product": {
+            "id": "3efb5a36-101d-445d-be02-6eda12e5c24c",
+            "sku": null,
+            "barcode": "2006697",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "vỉ",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280F30200000000EB0AA71E",
+              "unitUid": "1793928875519B81"
+            }
+          ]
+        },
+        {
+          "lineId": "62f20ae5-f9bf-47b0-bb1c-3ed823aa27dc",
+          "productId": "6240119a-ada2-4c1d-b950-96ba1ebd49fa",
+          "product": {
+            "id": "6240119a-ada2-4c1d-b950-96ba1ebd49fa",
+            "sku": null,
+            "barcode": "1908",
+            "title": ""
+          },
+          "quantity": 3,
+          "unit": "chai",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280691500005029AFE67DD0",
+              "unitUid": "1793928894710C11"
+            },
+            {
+              "epc": "E280691500005029AFE68DD0",
+              "unitUid": "1793929052543C11"
+            },
+            {
+              "epc": "E280691500005029AFE699D0",
+              "unitUid": "1793929224337C11"
+            }
+          ]
+        },
+        {
+          "lineId": "b94c9ca2-b456-4961-a85e-8244b147f378",
+          "productId": "55841365-96ac-4d0f-a5b7-52be2d8e1b57",
+          "product": {
+            "id": "55841365-96ac-4d0f-a5b7-52be2d8e1b57",
+            "sku": null,
+            "barcode": "2110",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280F30200000000EB0AA71C",
+              "unitUid": "1793928911489C11"
+            }
+          ]
+        },
+        {
+          "lineId": "c3c728c4-af31-4bf6-a926-5859a4fc1782",
+          "productId": "58b72312-0790-40f5-85bf-b17cdd73bb30",
+          "product": {
+            "id": "58b72312-0790-40f5-85bf-b17cdd73bb30",
+            "sku": null,
+            "barcode": "2021326",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280691500005029AFE681D0",
+              "unitUid": "1793928950053B71"
+            }
+          ]
+        },
+        {
+          "lineId": "98eb37ac-9c72-4c4f-86c0-c23e0bec7083",
+          "productId": "b5bcca4f-3d8d-4277-abc7-654a7c6bf30d",
+          "product": {
+            "id": "b5bcca4f-3d8d-4277-abc7-654a7c6bf30d",
+            "sku": null,
+            "barcode": "98494",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280F30200000000EB0A871F",
+              "unitUid": "1793928967817B71"
+            }
+          ]
+        },
+        {
+          "lineId": "50c2505b-3dc2-4dcb-b8af-336e5e3cc300",
+          "productId": "b0626c60-ea13-4aca-a003-9041fad55473",
+          "product": {
+            "id": "b0626c60-ea13-4aca-a003-9041fad55473",
+            "sku": null,
+            "barcode": "11544",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "chai",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280691500004029AFE685D0",
+              "unitUid": "1793928996657B91"
+            }
+          ]
+        },
+        {
+          "lineId": "e517b474-d3f0-45d1-ab35-31f43eb0dc05",
+          "productId": "5e54e18f-5ec8-4eb8-a155-02684f851b29",
+          "product": {
+            "id": "5e54e18f-5ec8-4eb8-a155-02684f851b29",
+            "sku": null,
+            "barcode": "77749",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280F30200000000EB0A871E",
+              "unitUid": "1793929018293B31"
+            }
+          ]
+        },
+        {
+          "lineId": "78e16ac3-ecd2-4cbb-be82-f284accee820",
+          "productId": "2a72c892-7cf2-4a35-81d9-2a3778f9b095",
+          "product": {
+            "id": "2a72c892-7cf2-4a35-81d9-2a3778f9b095",
+            "sku": null,
+            "barcode": "2015714",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280691500004029AFE689D0",
+              "unitUid": "1793929037271B71"
+            }
+          ]
+        },
+        {
+          "lineId": "23291151-3c35-4e32-9633-4ea1858bb5f4",
+          "productId": "1cbbbeb1-b5dc-40ca-98ff-64e6014c2011",
+          "product": {
+            "id": "1cbbbeb1-b5dc-40ca-98ff-64e6014c2011",
+            "sku": null,
+            "barcode": "2740",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "chai",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280691500004029AFE691D0",
+              "unitUid": "1793929070812C11"
+            }
+          ]
+        },
+        {
+          "lineId": "d628cb51-a2f7-4475-9591-bfce51e1043f",
+          "productId": "5a68032f-6e70-4fa4-9439-946d9dee208a",
+          "product": {
+            "id": "5a68032f-6e70-4fa4-9439-946d9dee208a",
+            "sku": null,
+            "barcode": "1446",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280F30200000000EB0A871C",
+              "unitUid": "1793929087064C11"
+            }
+          ]
+        },
+        {
+          "lineId": "edbc52a6-0aac-4a74-8b30-c432b0c9a997",
+          "productId": "c3a97791-d0f6-446c-ba11-d29916a5c8bf",
+          "product": {
+            "id": "c3a97791-d0f6-446c-ba11-d29916a5c8bf",
+            "sku": null,
+            "barcode": "1371",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280F30200000000EF09E71F",
+              "unitUid": "1793929119118C11"
+            }
+          ]
+        },
+        {
+          "lineId": "30ae924e-8b4b-4923-baf4-fca212a0a5cc",
+          "productId": "4138d8b5-f48b-4585-a9c2-4d4af1f387d0",
+          "product": {
+            "id": "4138d8b5-f48b-4585-a9c2-4d4af1f387d0",
+            "sku": null,
+            "barcode": "258149",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280691500005029AFE695D0",
+              "unitUid": "1793929141886B71"
+            }
+          ]
+        },
+        {
+          "lineId": "818edc52-afa6-43c8-bd11-e444e2be56f5",
+          "productId": "42fb95cf-45cf-4560-b48b-07ea59c983c3",
+          "product": {
+            "id": "42fb95cf-45cf-4560-b48b-07ea59c983c3",
+            "sku": null,
+            "barcode": "2016520",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "chai",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280691500004029AFE69DD0",
+              "unitUid": "1793929254704B91"
+            }
+          ]
+        },
+        {
+          "lineId": "d56bbf91-dd32-45f5-a825-606e1fa50bdf",
+          "productId": "49b72f9e-b9a2-4da2-af3e-5a6ceebbfb2a",
+          "product": {
+            "id": "49b72f9e-b9a2-4da2-af3e-5a6ceebbfb2a",
+            "sku": null,
+            "barcode": "1635",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280691500004029AFE6A1D0",
+              "unitUid": "1793929292893B91"
+            }
+          ]
+        },
+        {
+          "lineId": "0354e538-140c-476c-9e7f-5a07a104f20a",
+          "productId": "227bedb4-49eb-4781-8138-345c87c9018a",
+          "product": {
+            "id": "227bedb4-49eb-4781-8138-345c87c9018a",
+            "sku": "CIRCA-111885",
+            "barcode": "111885",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E280F30200000000EF09C71F",
+              "unitUid": "1793929308564C31"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "receipts": []
+}

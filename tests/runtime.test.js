@@ -834,13 +834,15 @@ test("P1.6 đường /chi-tiet-so: danh sách chưa đủ / không rõ → dừn
 
 // ---------- P1.7: khoá ghi phía Nextwaves bất biến ----------
 
-test("P1.7: Nextwaves có đơn cùng SO khác lần giao → khoá nw_many_orders; tab POS / Nextwaves không xoá được khoá, không đổi được đơn; claim bị từ chối, 0 PUT", async () => {
+test("P1.7 + v0.3.1: Nextwaves có đơn cùng SO khác lần giao (tách giao) → chọn đúng đơn khớp số lượng, KHÔNG khoá; khung Nextwaves chỉ đúng đơn cần chọn; tab POS / Nextwaves không đổi được đơn", async () => {
   const { b, srv, pos, nw } = await openToReady({ server: { nwTwin: true } });
   try {
     const s0 = b.session(KEY);
     assert.equal(s0.nwPoNumber, "PO28237814", "dấu vân tay vẫn chọn đúng đơn");
-    assert.deepEqual(s0.nwWriteLocks, ["nw_many_orders"]);
+    assert.deepEqual(s0.nwWriteLocks, [], "v0.3.1: đúng một đơn khớp số lượng → không khoá (trước: nw_many_orders)");
     assert.deepEqual(s0.nwSearch, { total: 2, read: 2, candidates: 2, verified: 2 });
+    await until(() => nw.view && (nw.view.lines || []).some((l) => /2 đơn cùng SO \(tách giao\): trên màn quét chọn ĐÚNG đơn PO28237814/.test(l)));
+    assert.ok(!nw.view.lines.some((l) => /bị khoá/.test(l)));
     const tamper = { nwWriteLocks: [], writeLocks: [], nwPoId: "00000000-0000-4000-8000-0000000000b1", nwPoNumber: "PO99999999", shipmentIds: ["x"], receiptIdsBefore: [], warehouseId: "kho-khac", scanOk: { httpStatus: 200 } };
     for (const t of [pos, nw]) await b.sendFromTab(t, { type: "session:update", key: KEY, patch: tamper });
     const match = { nwPoId: tamper.nwPoId, nwPoNumber: "PO99999999", nwOrderId: "00000000-0000-4000-8000-0000000000a1", nwRefId: "SOBD1593858-999", shipmentIds: ["x"], expected: { shipments: [] }, receiptIdsBefore: [], nwWriteLocks: [] };
@@ -850,18 +852,17 @@ test("P1.7: Nextwaves có đơn cùng SO khác lần giao → khoá nw_many_orde
     assert.match((await b.sendFromTab(pos, { type: "session:nwMatched", key: KEY, match })).error, /nguồn gửi không hợp lệ/);
     assert.match((await b.sendFromPopup({ type: "session:nwMatched", key: KEY, match })).error, /nguồn gửi không hợp lệ/);
     const s1 = b.session(KEY);
-    assert.deepEqual([s1.nwWriteLocks, s1.writeLocks, s1.nwPoId, s1.nwPoNumber, s1.shipmentIds, s1.warehouseId, s1.scanOk], [["nw_many_orders"], [], s0.nwPoId, "PO28237814", [SHIP], s0.warehouseId, undefined]);
-    // Nhận thật xong, có cấp phép: vẫn chỉ xem, claim bị từ chối.
+    assert.deepEqual([s1.nwWriteLocks, s1.writeLocks, s1.nwPoId, s1.nwPoNumber, s1.shipmentIds, s1.warehouseId, s1.scanOk], [[], [], s0.nwPoId, "PO28237814", [SHIP], s0.warehouseId, undefined]);
+    // Nhận thật xong, có cấp phép: điền được như phiếu một đơn (không còn khung "chỉ xem").
     srv.st.nwReceived = true;
     nw.post(scan(200));
     await sessionState(b, "received");
     await grant(b);
-    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa được điền phiếu");
-    assert.match(pos.view.lines.join("\n"), /Nextwaves có nhiều đơn cùng SO/);
-    for (const t of [pos, nw]) await b.sendFromTab(t, { type: "session:update", key: KEY, patch: { nwWriteLocks: [] } });
-    assert.deepEqual((await b.sendFromTab(pos, claimMsg("x"))).data, { ok: false, reason: "nw_many_orders" });
+    await until(() => /^Đã có cấp phép điền GR03878/.test(viewTitle(pos) || ""));
+    assert.doesNotMatch(pos.view.lines.join("\n"), /Nextwaves có nhiều đơn cùng SO/);
+    assert.equal((await b.sendFromTab(pos, claimMsg("x"))).data.ok, true);
     await settle(50);
-    assert.equal(srv.st.puts.length, 0);
+    assert.equal(srv.st.puts.length, 0, "claim không tự ghi");
   } finally {
     b.close();
   }
@@ -888,6 +889,8 @@ test("P1.7: session:nwMatched — chỉ từ trang Nextwaves, chỉ khi phiên c
     const ok = await send(nw, { nwWriteLocks: ["nw_many_orders", "nw_many_orders"] });
     assert.equal(ok.ok, true, ok.error);
     assert.deepEqual([ok.data.state, ok.data.nwWriteLocks], ["nw_ready", ["nw_many_orders"]]);
+    // Phiên của bản cũ còn khoá (khoá vẫn hợp lệ, vẫn chặn ghi).
+    assert.deepEqual((await b.sendFromTab(pos, { type: "session:writeBlockers", key: KEY })).data, ["nw_many_orders"]);
     assert.match((await send(nw)).error, /đã khớp đơn/, "chỉ một lần");
     // scanOk / received chỉ từ trang Nextwaves, phiếu gửi phải thuộc đơn đã khớp.
     assert.match((await b.sendFromTab(nw, { type: "session:scanOk", key: KEY, scan: { shipmentId: "00000000-0000-0000-0000-000000000099", httpStatus: 200 } })).error, /không thuộc đơn đã khớp/);

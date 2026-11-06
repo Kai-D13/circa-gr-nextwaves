@@ -1,0 +1,49 @@
+{
+  "_note": "Dựng lại 06/11/2026 từ response production thật (GET chỉ đọc qua Chrome của operator): đúng trường extension đọc; bỏ tên người / tên kho / tên đối tác; title sản phẩm bỏ trống. Chỉ 3 item mẫu đúng dạng (không đủ PO).",
+  "id": "087bedc0-bdfa-48ff-a06c-60496a168900",
+  "poNumber": "PO-2026-000002",
+  "status": "CONFIRMED",
+  "warehouseId": "eb5e2b4f-6f92-413b-90ef-6be1730b94c0",
+  "items": [
+    {
+      "id": "i1",
+      "productSku": null,
+      "product": {
+        "sku": null,
+        "barcode": "4117",
+        "externalProductId": "4117",
+        "productIdentifier": "CIRCA-4117"
+      },
+      "quantity": 12,
+      "receivedQuantity": 0,
+      "receivedUnits": []
+    },
+    {
+      "id": "i2",
+      "productSku": "CIRCA-2019036",
+      "product": {
+        "sku": "CIRCA-2019036",
+        "barcode": "2019036",
+        "externalProductId": "2019036",
+        "productIdentifier": "CIRCA-2019036"
+      },
+      "quantity": 1,
+      "receivedQuantity": 0,
+      "receivedUnits": []
+    },
+    {
+      "id": "i3",
+      "productSku": "CIRCA2222.THI-VIA-001",
+      "product": {
+        "sku": "CIRCA2222.THI-VIA-001",
+        "barcode": "5816",
+        "externalProductId": "5816",
+        "productIdentifier": "CIRCA-5816"
+      },
+      "quantity": 1,
+      "receivedQuantity": 0,
+      "receivedUnits": []
+    }
+  ],
+  "receipts": []
+}

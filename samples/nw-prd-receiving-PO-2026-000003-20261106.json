@@ -1,0 +1,90 @@
+{
+  "_note": "Dựng lại 06/11/2026 từ response production thật (GET chỉ đọc qua Chrome của operator): đúng trường extension đọc; bỏ tên người / tên kho / tên đối tác; title sản phẩm bỏ trống. PO-2026-000003: dòng / barcode / đơn vị thật; id phiếu gửi, EPC, UID là GIÁ TRỊ GIẢ (không đọc).",
+  "order": {
+    "direction": "outbound",
+    "status": "shipped",
+    "counterparty": {
+      "tenantSlug": "buymed"
+    },
+    "receivedAt": null,
+    "id": "de5afb91-f9a4-4c4a-be10-815eaf87b657",
+    "purchaseOrderId": "b4db032d-7977-4d9a-b747-a6e47ad87795",
+    "purchaseOrderNumber": "PO-2026-000003"
+  },
+  "purchaseOrderStatus": "CONFIRMED",
+  "warehouse": {
+    "id": "eb5e2b4f-6f92-413b-90ef-6be1730b94c0"
+  },
+  "shipments": [
+    {
+      "status": "pending",
+      "needsAccept": true,
+      "dispatchedAt": null,
+      "id": "00000000-0000-4000-8000-0000000003a1",
+      "shipmentNumber": "(không đọc)",
+      "lines": [
+        {
+          "lineId": "l3000000-0000-4000-8000-000000000001",
+          "productId": "p3000000-0000-4000-8000-000000000001",
+          "product": {
+            "id": "p3000000-0000-4000-8000-000000000001",
+            "sku": null,
+            "barcode": "56035",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E2800000000000000000DD01",
+              "unitUid": "GIA-UID-1"
+            }
+          ]
+        },
+        {
+          "lineId": "l3000000-0000-4000-8000-000000000002",
+          "productId": "p3000000-0000-4000-8000-000000000002",
+          "product": {
+            "id": "p3000000-0000-4000-8000-000000000002",
+            "sku": null,
+            "barcode": "3134",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "hộp",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E2800000000000000000DD02",
+              "unitUid": "GIA-UID-2"
+            }
+          ]
+        },
+        {
+          "lineId": "l3000000-0000-4000-8000-000000000003",
+          "productId": "p3000000-0000-4000-8000-000000000003",
+          "product": {
+            "id": "p3000000-0000-4000-8000-000000000003",
+            "sku": null,
+            "barcode": "55086",
+            "title": ""
+          },
+          "quantity": 1,
+          "unit": "chai",
+          "tagged": true,
+          "qrUnitUids": [],
+          "units": [
+            {
+              "epc": "E2800000000000000000DD03",
+              "unitUid": "GIA-UID-3"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "receipts": []
+}

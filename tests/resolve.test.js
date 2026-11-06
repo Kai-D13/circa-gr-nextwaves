@@ -122,7 +122,7 @@ test("0 / n ứng viên khớp: lệch số lượng → no_match; hai đơn cù
   assert.deepEqual([r2.ok, r2.reason], [false, "ambiguous"]);
 });
 
-test("loại rõ ràng: bên bán khác / kho khác / đơn huỷ; còn đơn cùng SO lệch số lượng → chọn được nhưng khoá ghi", async () => {
+test("loại rõ ràng: bên bán khác / kho khác / đơn huỷ; còn đơn cùng SO lệch số lượng → chọn được, v0.3.1 KHÔNG khoá ghi (SO tách giao)", async () => {
   const other = decoy(5, { refId: "SOBD1593858-555" });
   other.order.counterparty = { tenantSlug: "nha-cung-cap-khac" };
   const wh = decoy(6, { refId: "SOBD1593858-666" });
@@ -136,5 +136,8 @@ test("loại rõ ràng: bên bán khác / kho khác / đơn huỷ; còn đơn c�
   const sameSo = decoy(8, { refId: "SOBD1593858-888" }); // cùng SO, khác lần giao (lệch số lượng)
   const r2 = await resolve.resolveNwOrder(world([sameSo, target()]).args);
   assert.equal(r2.ok, true, r2.reason);
-  assert.deepEqual(r2.writeLocks, ["nw_many_orders"]);
+  assert.equal(r2.chosen.order.poNumber, "PO28237814");
+  assert.equal(r2.verified, 2);
+  assert.deepEqual(r2.writeLocks, [], "v0.3.1: đúng một đơn khớp số lượng → không khoá (trước: nw_many_orders)");
+  assert.equal(r2.reports.length, 1);
 });

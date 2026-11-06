@@ -21,8 +21,11 @@ m030 = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m030)
 
 OLD_PRD = ("src/lib/env.js", "      writeEnabled: false,", "      writeEnabled: true,", "P1.3 PRD được ghi")
-muts = [m for m in m030.muts if tuple(m[:4]) != OLD_PRD]
-assert len(muts) == len(m030.muts) - 1, "không tìm thấy ca P1.3 PRD được ghi của v0.3.0"
+# v0.3.1 (06/11): bỏ khoá nw_many_orders khi đúng một đơn khớp số lượng → ca "bỏ khoá" của v0.3.0 không còn neo; thay bằng ca "khoá lại".
+OLD_LOCK = ("src/lib/resolve.js", 'if (verified.length > 1) out.writeLocks.push("nw_many_orders");', "", "P3 bỏ khoá nhiều đơn Nextwaves")
+assert any(tuple(m[:4]) == OLD_LOCK for m in m030.muts), "không tìm thấy ca P3 bỏ khoá nhiều đơn của v0.3.0"
+muts = [m for m in m030.muts if tuple(m[:4]) not in (OLD_PRD, OLD_LOCK)]
+assert len(muts) == len(m030.muts) - 2, "không tìm thấy ca P1.3 PRD được ghi của v0.3.0"
 muts.insert(m030.muts.index(next(m for m in m030.muts if tuple(m[:4]) == OLD_PRD)), (
     "src/lib/env.js",
     '      storeAllowlist: Object.freeze(["c476efb2-415c-429a-978e-d389b4b06607"]),',
@@ -56,11 +59,36 @@ muts += [
     ("src/pos/pos-content.js", '    const skip = log.slice(i + 1).filter((l) => l.type === "auto_skipped").pop();', '    const skip = null;',
      "v0.3.1 G3-2 bỏ qua lý do lúc nhận"),
     ("src/popup/popup.js", "    if (grantBusy) return;\n", "", "v0.3.1 audit P2-1 bấm đúp lọt bước hỏi lại"),
+    # 06/11 production: mã sản phẩm POS khi sku Nextwaves trống
+    ("src/lib/keys.js", "posProductIdFromSku(p.productIdentifier), digits(p.externalProductId), digits(p.barcode)]", "posProductIdFromSku(p.productIdentifier), digits(p.externalProductId)]",
+     "v0.3.1 PRD bỏ nguồn barcode"),
+    ("src/lib/keys.js", "posProductIdFromSku(sku === undefined ? p.sku : sku), posProductIdFromSku(p.productIdentifier), digits", "posProductIdFromSku(sku === undefined ? p.sku : sku), digits",
+     "v0.3.1 PRD bỏ nguồn productIdentifier"),
+    ("src/lib/keys.js", "digits(p.externalProductId), digits(p.barcode)]", "digits(p.barcode)]", "v0.3.1 PRD bỏ nguồn externalProductId"),
+    ("src/lib/keys.js", "return found.length && found.every((x) => x === found[0]) ? found[0] : \"\";", "return found.length ? found[0] : \"\";",
+     "v0.3.1 PRD nguồn lệch vẫn đoán"),
+    ("src/lib/keys.js", "(/^\\d{1,9}$/.test(", "(/^\\d+$/.test(", "v0.3.1 PRD nhận barcode EAN dài"),
+    ("src/lib/nw-model.js", "          posProductId: keys.posProductIdOf(l.product),\n          unit: unitName(l.unit),\n          quantity: Number(l.quantity),\n          tagged:",
+     "          posProductId: keys.posProductIdFromSku(l.product && l.product.sku),\n          unit: unitName(l.unit),\n          quantity: Number(l.quantity),\n          tagged:",
+     "v0.3.1 PRD dòng giao chỉ theo sku"),
+    ("src/lib/nw-model.js", "        posProductId: keys.posProductIdOf(l.product),\n        unit: unitName(l.unit),\n        quantity: Number(l.quantity),\n        batch:",
+     "        posProductId: keys.posProductIdFromSku(l.product && l.product.sku),\n        unit: unitName(l.unit),\n        quantity: Number(l.quantity),\n        batch:",
+     "v0.3.1 PRD phiếu gửi sau nhận chỉ theo sku"),
+    ("src/lib/nw-model.js", "posProductId: keys.posProductIdOf(it.product, it.productSku || (it.product && it.product.sku)),",
+     "posProductId: keys.posProductIdFromSku(it.productSku || (it.product && it.product.sku)),", "v0.3.1 PRD chi tiết PO chỉ theo sku"),
+    # 06/11 SO tách giao
+    ("src/lib/resolve.js", "    return Object.assign(out, { ok: true, chosen: matched[0] });\n  }",
+     "    if (verified.length > 1) out.writeLocks.push(\"nw_many_orders\");\n    return Object.assign(out, { ok: true, chosen: matched[0] });\n  }",
+     "v0.3.1 SO tách giao khoá lại nw_many_orders"),
+    ("src/lib/resolve.js", 'if (matched.length > 1) return fail("ambiguous"', 'if (false) return fail("ambiguous"', "v0.3.1 hai đơn cùng khớp vẫn chọn"),
+    ("src/nw/nw-content.js", "    else if (q && q.verified > 1) lines.push(", "    else if (false) lines.push(", "v0.3.1 khung Nextwaves không chỉ đơn cần chọn"),
 ]
 # Chạy lại một phần: CGN_MUT_FILTER="chuỗi 1|chuỗi 2" → chỉ các ca có tên chứa một trong các chuỗi (vd. ca từng sống + ca v0.3.1).
-if os.environ.get("CGN_MUT_FILTER"):
-    keys = [k for k in os.environ["CGN_MUT_FILTER"].split("|") if k]
-    muts = [m for m in muts if any(k in m[3] for k in keys)]
+# CGN_MUT_FILES="src/lib/keys.js|src/lib/resolve.js" → thêm mọi ca trên các file đó (chạy lại sau khi sửa lõi).
+if os.environ.get("CGN_MUT_FILTER") or os.environ.get("CGN_MUT_FILES"):
+    keys = [k for k in os.environ.get("CGN_MUT_FILTER", "").split("|") if k]
+    files = [f for f in os.environ.get("CGN_MUT_FILES", "").split("|") if f]
+    muts = [m for m in muts if any(k in m[3] for k in keys) or m[0] in files]
 m030.muts = muts
 
 

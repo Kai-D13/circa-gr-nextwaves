@@ -291,6 +291,8 @@
         : "Tự động: chưa cho phép — nhận xong, điền phiếu POS thủ công."
     );
     if (ctx.nwWriteLocks && ctx.nwWriteLocks.length) lines.push("Lưu ý: Nextwaves có nhiều đơn cùng SO — điền phiếu POS sẽ bị khoá (chỉ xem).");
+    // v0.3.1: SO tách giao → màn quét Nextwaves bắt chọn một đơn; chỉ đơn đã khớp số lượng phiếu mới được tính.
+    else if (q && q.verified > 1) lines.push(`Nextwaves có ${q.verified} đơn cùng SO (tách giao): trên màn quét chọn ĐÚNG đơn ${ctx.nwPoNumber} — đơn khớp số lượng phiếu ${ctx.grCode}. Nhận đơn khác thì extension bỏ qua, không điền phiếu.`);
     panel.show({
       tone: note ? note.tone : "info",
       title: note ? note.title : "Sẵn sàng nhận hàng",

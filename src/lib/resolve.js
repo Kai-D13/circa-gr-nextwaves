@@ -99,7 +99,10 @@
     }
     if (matched.length === 0) return fail("no_match");
     if (matched.length > 1) return fail("ambiguous", { matched: matched.map((m) => m.order.poNumber) });
-    if (verified.length > 1) out.writeLocks.push("nw_many_orders");
+    // v0.3.1 (operator 06/11): một SO tách giao nhiều lần → nhiều đơn Nextwaves cùng SO (refId "-16025426" / "-16025427"), POS tách
+    // PO con "-P1" / "-P2"; hai bên không có mã chung nào. ĐÚNG MỘT đơn khớp số lượng từng sản phẩm của phiếu, mọi đơn khác lệch → chọn
+    // đơn đó, không khoá ghi (trước đây khoá nw_many_orders). Hai đơn cùng khớp → "ambiguous" như cũ. Nhận nhầm đơn kia trên màn quét:
+    // background chỉ nhận lượt của phiếu gửi thuộc đơn đã khớp.
     return Object.assign(out, { ok: true, chosen: matched[0] });
   }
 
