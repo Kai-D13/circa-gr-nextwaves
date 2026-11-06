@@ -4,7 +4,10 @@
  *  - kết quả tìm phải có `total` và đọc đủ (total = số dòng đã đọc); nhiều trang / lệch → chặn, không chọn trên phần đã đọc;
  *  - không giới hạn số ứng viên; ứng viên thiếu trường → chặn;
  *  - bất kỳ GET ứng viên nào lỗi / hết giờ / sai dạng → chặn cả lượt (không bỏ qua rồi chọn ứng viên khác);
- *  - chỉ loại ứng viên khi dữ liệu nói rõ là của nơi khác: bên bán khác, kho khác, refId khác SO, đơn đã huỷ, lệch số lượng.
+ *  - chỉ loại ứng viên khi dữ liệu nói rõ là của nơi khác: bên bán khác, refId khác SO, đơn đã huỷ, lệch số lượng.
+ * v0.4.0 (mọi cửa hàng): không còn bảng cửa hàng → kho. Mỗi SO Buymed thuộc MỘT khách Buymed = một kho Nextwaves, nên đơn đúng SO là đơn
+ * của đúng cửa hàng. Mọi đơn cùng SO (đã qua kiểm refId / bên bán / huỷ) phải cùng MỘT kho, không rỗng; kho của phiên = kho đơn đã chọn.
+ * Không có đơn nào cùng SO (tìm đọc đủ) → "no_order": phiếu nhận tay, tab Nextwaves không tìm lại.
  * Khoá ghi nw_many_orders (PM P3; v0.3.1 06/11 thu hẹp): SO tách giao có nhiều đơn → chọn được khi ĐÚNG MỘT đơn khớp số lượng và mọi
  * đơn khác lệch RÕ (so được mà khác). Đơn cùng SO không so được (dòng thiếu mã sản phẩm, số tem ≠ số lượng, chưa có phiếu gửi) → vẫn khoá.
  */
@@ -20,7 +23,9 @@
     candidate_schema: "Đơn ứng viên thiếu trường cần kiểm",
     candidate_read_failed: "Không đọc được một đơn ứng viên — không chọn",
     candidate_inconsistent: "Dữ liệu đơn ứng viên không nhất quán",
-    no_match: "Không có đơn Nextwaves khớp phiếu nhận",
+    no_order: "Nextwaves chưa có đơn chờ nhận của SO này",
+    no_match: "Có đơn Nextwaves của SO nhưng số lượng không khớp phiếu nhận",
+    warehouse_inconsistent: "Các đơn Nextwaves cùng SO không cùng một kho (hoặc thiếu kho) — không tự chọn",
     ambiguous: "Có nhiều đơn Nextwaves cùng khớp phiếu nhận — không tự chọn",
   };
   const VERIFY = {
@@ -42,7 +47,7 @@
   // args: {search: {ok, status, json}, ctx: {soBase, buymedSlug, warehouseId}, fingerprintSource, getOrder(poId), getReceiving(poId)}
   async function resolveNwOrder(args) {
     const { search, ctx, fingerprintSource, getOrder, getReceiving } = args;
-    const out = { ok: false, reason: null, message: null, total: null, read: 0, candidates: 0, verified: 0, reports: [], chosen: null, writeLocks: [] };
+    const out = { ok: false, reason: null, message: null, total: null, read: 0, candidates: 0, verified: 0, reports: [], chosen: null, writeLocks: [], warehouseId: null };
     const fail = (reason, extra) => Object.assign(out, { reason, message: REASONS[reason] || reason }, extra || {});
 
     if (!search || !search.ok) return fail("search_failed", { detail: search ? `HTTP ${search.status}` : null });
@@ -60,6 +65,7 @@
         continue;
       }
       if (ctx.warehouseId && c.warehouseId !== ctx.warehouseId) {
+        // Chỉ khi người gọi đã biết kho (không dùng ở v0.4.0 — kho lấy từ đơn đã khớp).
         out.reports.push([c.poNumber, VERIFY.warehouse_mismatch]);
         continue;
       }
@@ -82,6 +88,10 @@
       verified.push({ c, order });
     }
     out.verified = verified.length;
+    if (verified.length === 0) return fail("no_order");
+    const whs = [...new Set(verified.map((v) => v.order.warehouseId || ""))];
+    if (whs.length !== 1 || !whs[0]) return fail("warehouse_inconsistent", { detail: `kho: ${whs.map((w) => (w ? w.slice(0, 8) : "trống")).join(", ")}` });
+    out.warehouseId = whs[0];
 
     const matched = [];
     const unclear = []; // đơn cùng SO không so được với phiếu → không chứng minh được là lần giao khác

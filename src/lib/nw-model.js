@@ -42,6 +42,9 @@
       poStatus: String(json.purchaseOrderStatus || ""),
       slug: String((o.counterparty && o.counterparty.tenantSlug) || ""),
       warehouseId: lower(json.warehouse && json.warehouse.id),
+      // v0.4.0: chỉ để hiển thị cho dược sĩ (kho nào của Nextwaves) — không dùng để quyết định.
+      warehouseName: String((json.warehouse && json.warehouse.name) || "").slice(0, 60),
+      warehouseCode: String((json.warehouse && json.warehouse.code) || "").slice(0, 40),
       shipments: json.shipments.map((s) => ({
         id: lower(s.id),
         number: String(s.shipmentNumber || ""),

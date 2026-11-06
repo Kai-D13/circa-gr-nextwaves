@@ -19,11 +19,10 @@
       nwUiOrigin: "https://circa-stg.nextwaves.app",
       nwApiBase: "https://api-circa-stg.nextwaves.app/api",
       buymedSlug: "buymed-stag",
-      // Ghi GR (W1) chỉ có ở staging, và chỉ khi operator cấp phép từng lần (PM audit 24/10 P1.3).
       writeEnabled: true,
-      // Staging chỉ chạy với cửa hàng 2222 (operator chốt 24/10/2026).
-      storeAllowlist: Object.freeze(["64a8663b-0c9e-49c6-9626-0a4c7c4bd53d"]),
-      warehouseByStore: Object.freeze({ "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57" }),
+      // Tenant Nextwaves staging cố định (không đổi được trong popup).
+      nwTenant: "circa-stg",
+      nwTenantFixed: true,
     }),
     PRD: Object.freeze({
       id: "PRD",
@@ -33,11 +32,11 @@
       nwUiOrigin: "https://circa.nextwaves.app",
       nwApiBase: "https://api-circa.nextwaves.app/api",
       buymedSlug: "buymed",
-      // v0.3.1 (operator chốt 05/11, sau staging done v0.3.0): production được ghi, vẫn chỉ khi operator cấp phép từng phiếu.
       writeEnabled: true,
-      // Chỉ cửa hàng đã khai kho Nextwaves bên dưới (Florita). Thêm cửa hàng = thêm cặp cửa hàng → kho ở cả hai dòng.
-      storeAllowlist: Object.freeze(["c476efb2-415c-429a-978e-d389b4b06607"]),
-      warehouseByStore: Object.freeze({ "c476efb2-415c-429a-978e-d389b4b06607": "eb5e2b4f-6f92-413b-90ef-6be1730b94c0" }),
+      // v0.4.0 (operator 06/11): mọi cửa hàng — không còn bảng cửa hàng → kho. Đơn Nextwaves nhận dạng theo SO (refId) + Buymed + số
+      // lượng; kho lấy từ đơn đã khớp. Tenant Nextwaves mặc định "circa" (Florita, Lumina); máy ở tenant khác đặt trong popup.
+      nwTenant: "circa",
+      nwTenantFixed: false,
     }),
   });
 
@@ -56,29 +55,75 @@
     }
   }
 
+  // Môi trường gốc (tenant mặc định). Nơi cần origin Nextwaves của một phiên / cấu hình dùng envFor / envFromConfig.
   function envById(id) {
     return id && Object.prototype.hasOwnProperty.call(ENVS, id) ? ENVS[id] : null;
   }
 
-  // Chế độ từ cấu hình: {mode:"STG"|"PRD"} hoặc {url:"https://…"} (URL phải thuộc đúng một môi trường đã biết).
-  function envFromConfig(config) {
-    if (!config) return null;
-    if (config.mode) return envById(String(config.mode).toUpperCase());
-    if (config.url) return envFromAnyUrl(config.url);
-    return null;
+  // v0.4.0: tenant Nextwaves ("circa", "circa-medly", …): chữ thường, số, gạch ngang; 2..40 ký tự. Sai → null.
+  const TENANT_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])$/;
+  function normTenant(t) {
+    const s = String(t || "").trim().toLowerCase();
+    return TENANT_RE.test(s) ? s : null;
   }
 
-  // URL bất kỳ của POS hoặc Nextwaves (trang hoặc API) → môi trường; không khớp → null.
+  const tenantCache = new Map();
+  // Môi trường với tenant Nextwaves cụ thể (staging luôn tenant cố định). Tenant sai / rỗng → tenant mặc định của môi trường.
+  function withTenant(env, tenant) {
+    if (!env) return null;
+    const t = env.nwTenantFixed ? env.nwTenant : normTenant(tenant) || env.nwTenant;
+    if (t === env.nwTenant) return env;
+    const k = env.id + "|" + t;
+    if (!tenantCache.has(k)) {
+      tenantCache.set(k, Object.freeze(Object.assign({}, env, { nwTenant: t, nwUiOrigin: `https://${t}.nextwaves.app`, nwApiBase: `https://api-${t}.nextwaves.app/api` })));
+    }
+    return tenantCache.get(k);
+  }
+
+  function envFor(id, tenant) {
+    return withTenant(envById(id), tenant);
+  }
+
+  // Chế độ từ cấu hình: {mode:"STG"|"PRD", nwTenant} hoặc {url:"https://…"} (URL phải thuộc đúng một môi trường đã biết).
+  function envFromConfig(config) {
+    if (!config) return null;
+    let env = null;
+    if (config.mode) env = envById(String(config.mode).toUpperCase());
+    else if (config.url) env = envFromAnyUrl(config.url);
+    return env ? withTenant(env, config.nwTenant || env.nwTenant) : null;
+  }
+
+  // Origin Nextwaves → {envId, tenant} ("https://<t>.nextwaves.app" / "https://api-<t>.nextwaves.app"); tenant staging → STG.
+  const NW_ORIGIN_RE = /^https:\/\/(api-)?([a-z0-9-]+)\.nextwaves\.app$/;
+  function nwTenantOfOrigin(origin) {
+    const m = NW_ORIGIN_RE.exec(String(origin || "").toLowerCase());
+    const t = m ? normTenant(m[2]) : null;
+    if (!t) return null;
+    if (t === ENVS.STG.nwTenant) return { envId: "STG", tenant: t };
+    return { envId: "PRD", tenant: t };
+  }
+
+  // URL bất kỳ của POS hoặc Nextwaves (trang hoặc API) → môi trường (Nextwaves: kèm đúng tenant); không khớp → null.
   function envFromAnyUrl(url) {
     const u = parseUrl(url);
     if (!u || u.protocol !== "https:") return null;
     const origin = u.origin.toLowerCase();
     for (const id of Object.keys(ENVS)) {
       const e = ENVS[id];
-      const origins = [e.posOrigin, new URL(e.posApiBase).origin, e.nwUiOrigin, new URL(e.nwApiBase).origin];
-      if (origins.some((o) => o.toLowerCase() === origin)) return e;
+      if ([e.posOrigin, new URL(e.posApiBase).origin].some((o) => o.toLowerCase() === origin)) return e;
     }
-    return null;
+    const nw = nwTenantOfOrigin(origin);
+    return nw ? envFor(nw.envId, nw.tenant) : null;
+  }
+
+  // Lời gọi API Nextwaves (mọi tenant) → môi trường kèm tenant của chính URL đó; không phải API Nextwaves → null.
+  function nwApiEnvOf(url) {
+    const u = parseUrl(url);
+    if (!u) return null;
+    const nw = nwTenantOfOrigin(u.origin);
+    if (!nw || !/^api-/.test(u.hostname)) return null;
+    const env = envFor(nw.envId, nw.tenant);
+    return isNwApiUrl(url, env) ? env : null;
   }
 
   // Trang POS của môi trường env: {kind:"gr", grId} | {kind:"gr_list"} | {kind:"so", so} | null.
@@ -114,17 +159,6 @@
     if (!u || !env) return false;
     const base = new URL(env.nwApiBase);
     return u.origin === base.origin && u.pathname.startsWith(base.pathname.replace(/\/$/, "") + "/v1/");
-  }
-
-  function storeAllowed(env, posId) {
-    if (!env || !posId) return false;
-    if (!env.storeAllowlist) return true;
-    return env.storeAllowlist.includes(String(posId).toLowerCase());
-  }
-
-  function warehouseForStore(env, posId) {
-    if (!env || !posId) return null;
-    return env.warehouseByStore[String(posId).toLowerCase()] || null;
   }
 
   const enc = encodeURIComponent;
@@ -184,14 +218,17 @@
   const lib = {
     ENVS,
     envById,
+    envFor,
+    withTenant,
+    normTenant,
+    nwTenantOfOrigin,
+    nwApiEnvOf,
     envFromConfig,
     envFromAnyUrl,
     classifyPosPage,
     classifyNwPage,
     isPosApiUrl,
     isNwApiUrl,
-    storeAllowed,
-    warehouseForStore,
     api,
     isUuid,
     nwReceiveScanCall,

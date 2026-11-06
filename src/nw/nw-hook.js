@@ -11,7 +11,6 @@
   const L = window.__CGN__ && window.__CGN__.env;
   if (!L) return;
   const MARK = "cgn/nw-hook";
-  const ENVS = Object.values(L.ENVS);
   const MAX_TEXT = 2000000;
   let lastAuthKey = "";
   let lastAuth = null;
@@ -24,15 +23,16 @@
     }
   }
 
-  const apiEnvOf = (url) => ENVS.find((e) => L.isNwApiUrl(url, e)) || null;
+  // v0.4.0: API Nextwaves của mọi tenant (api-<tenant>.nextwaves.app) → môi trường kèm tenant; content chỉ dùng đúng tenant đang chọn.
+  const apiEnvOf = (url) => L.nwApiEnvOf(url);
 
   function reportAuth(url, auth) {
     const env = apiEnvOf(url);
     if (!env || !auth) return;
-    const key = env.id + "|" + auth;
+    const key = env.id + "|" + env.nwTenant + "|" + auth;
     if (key === lastAuthKey) return;
     lastAuthKey = key;
-    lastAuth = { envId: env.id, headers: { authorization: String(auth) } };
+    lastAuth = { envId: env.id, tenant: env.nwTenant, headers: { authorization: String(auth) } };
     post("auth", lastAuth);
   }
 
@@ -56,16 +56,16 @@
   }
 
   function reportReceiveScan(url, method, status, text, requestBody) {
-    for (const e of ENVS) {
-      const c = L.nwReceiveScanCall(url, method, e);
-      if (!c) continue;
+    const e = apiEnvOf(url);
+    const c = e ? L.nwReceiveScanCall(url, method, e) : null;
+    if (c) {
       let json = null;
       try {
         if (typeof text === "string" && text.length <= MAX_TEXT) json = JSON.parse(text);
       } catch (_) {
         json = null;
       }
-      return post("receive-scan", { envId: e.id, shipmentId: c.shipmentId, httpStatus: Number(status) || 0, response: json, sentEpcs: epcCountOf(requestBody) });
+      return post("receive-scan", { envId: e.id, tenant: e.nwTenant, shipmentId: c.shipmentId, httpStatus: Number(status) || 0, response: json, sentEpcs: epcCountOf(requestBody) });
     }
   }
 
