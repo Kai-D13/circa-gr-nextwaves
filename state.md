@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **05/11/2026 (lần 59, v0.3.1 production Florita đóng gói xong — gói 3E44C1DC, chờ operator cài + đơn thật)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). Staging done v0.3.0 (G1–G3 đạt, `main` `7bff255`). Operator chốt 05/11: production **một bản v0.3.1, cài một lần** trên máy POS Florita rồi xử lý ngay đơn thật, đơn đầu chạy **tự động** có Net Capture (`agent.md` §3). v0.3.1 = PRD được ghi chỉ ở Florita + sửa G3-1..5, lõi ghi = `4b79c58` từng byte; 231/231 test, đột biến 213/215 + 2 ca sống đã có test bắt, Edge 108/108, audit độc lập 0 P1 (2 P2 đã sửa) — `docs/dev/BATCH-v0.3.1.md`. Thư mục giao `C:\circa-gr-nextwaves-release\v0.3.1\`, hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md`. Nhánh `batch/v0.3.1-prd` chưa merge (sau đơn thật). Ghi production chỉ khi operator cho phép bằng chữ đúng phiếu.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **06/11/2026 (lần 60, v0.3.1 đóng lại C7D1641F sau chạy thử production; chờ operator cài máy POS Florita + đơn thật GR84674)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). Staging done v0.3.0. Production Florita: một bản v0.3.1 cài một lần, đơn đầu tự động (`agent.md` §3). 06/11 chạy thử chỉ đọc trên production tìm 2 lỗi chặn của gói 3E44C1DC (sku Nextwaves trống; khoá SO tách giao) → sửa, gói **C7D1641F** (`batch/v0.3.1-prd` `691cfc3`): 237/237 test, đột biến 36/36 phần sửa, Edge 108/108, audit lần 2 0 P1 — `docs/dev/BATCH-v0.3.1.md`. Cặp thật: GR84674 ↔ PO-2026-000002 (đơn đầu), GR84673 ↔ PO-2026-000001. v0.3.2 khi Nextwaves thêm trường mã giao `-F`/`-P1`/`-P2`. Ghi production chỉ khi operator cho phép bằng chữ đúng phiếu.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -585,6 +585,8 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
 
 - 05/11/2026 (lần 59): operator chốt production một bản v0.3.1 cài một lần + đơn thật đầu chạy tự động; trả lời B0 (máy Florita có QR Scan Log, đã có tài khoản Nextwaves production); D1–D5 chốt (`agent.md` §3). Claude build v0.3.1 trên `batch/v0.3.1-prd` (`7719715`), gói 3E44C1DC, gate offline đủ + audit độc lập (`docs/dev/BATCH-v0.3.1.md`). Sự thật: hook POS gắn môi trường theo URL API (lời gọi API staging trên trang production báo envId STG, khung chỉ dùng header đúng môi trường).
 
+- 06/11/2026 (lần 60): chạy thử chỉ đọc production → 2 lỗi chặn gói 3E44C1DC; operator cho phép sửa lõi; Claude chốt nới khoá SO tách giao có điều kiện (đúng một đơn khớp, đơn khác lệch rõ; không so được thì vẫn khoá). Gói v0.3.1 đóng lại **C7D1641F**. Operator: Nextwaves sẽ thêm trường mã giao POS → v0.3.2.
+
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
 2. Operator mở session PM Codex bằng `docs/PROMPT-PM-CODEX.md`. PM chốt hướng §3 / §6 và ra spec v0.1 staging chia batch.
@@ -597,7 +599,11 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-59. **Hiện hành (v0.3.1 production Florita đóng gói, 05/11):** `docs/dev/BATCH-v0.3.1.md`, hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md`.
+60. **Hiện hành (06/11): gói v0.3.1 C7D1641F sẵn sàng cài** — `docs/dev/BATCH-v0.3.1.md` (mục 06/11), hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md`, plan `docs/dev/PLAN-TRIEN-KHAI-PRD-20261106.md`.
+    - **Chờ operator:** cài `C:\circa-gr-nextwaves-release\v0.3.1\` (KHÔNG cài gói trong `khong-dung`) trên máy POS Florita; đơn đầu **GR84674** tự động — gửi `kiem-truoc.js` + số tem (39) + câu cho phép; sau đó `kiem-sau.js` + 2 capture.
+    - Sau GR84674 đạt: GR84673; merge `batch/v0.3.1-prd` → `main` khi operator đồng ý.
+    - Bản sau (v0.3.2): trường mã giao POS từ Nextwaves (khớp chính xác); P2-1 (hai phiên cùng SO tách giao); kiểm hình dạng response production SAU khi nhận (chưa có mẫu thật).
+59. (cũ, thay bằng mục 60) **v0.3.1 production Florita đóng gói, 05/11:** `docs/dev/BATCH-v0.3.1.md`, hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md`.
     - Gói **3E44C1DC** (`batch/v0.3.1-prd` `7719715`): PRD ghi chỉ Florita (`c476efb2…` → kho `eb5e2b4f…`); popup hỏi lại trước cấp phép thủ công khi phiếu còn tự động được; khung POS ghi trạng thái tự động; 3 đoạn kiểm `scripts/kiem-*.js`. Lõi ghi = `4b79c58`.
     - Gate: 231/231; đột biến 213/215 lượt đủ, 2 ca sống → thêm test, chạy lại 13/13; Edge 108/108 (≤ 15,12 ms); audit độc lập 0 P1, P2-1 bấm đúp + P2-2 tài liệu đã sửa.
     - **Chờ operator:** chép `C:\circa-gr-nextwaves-release\v0.3.1\` sang máy POS Florita, cài theo hướng dẫn §0, khi có đơn: gửi kết quả `kiem-truoc.js` + số tem + câu cho phép bằng chữ; chạy tự động; gửi `kiem-sau.js` + 2 capture.

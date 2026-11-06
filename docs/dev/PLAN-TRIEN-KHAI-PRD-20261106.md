@@ -3,6 +3,18 @@
 Gói **v0.3.1 3E44C1DC** (`docs/dev/BATCH-v0.3.1.md`). Hướng dẫn từng bước: `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md`.
 Ghi production chỉ khi operator cho phép bằng chữ, **đúng một phiếu mỗi lần**.
 
+> **Cập nhật 06/11 chiều — chạy thử chỉ đọc trên production** (Chrome laptop của operator; mã extension chạy trong trang POS, không bấm, không ghi). Cặp đúng:
+>
+> | Phiếu POS | Đơn Nextwaves | Tem | Kết quả chạy thử (bản sửa `3ec5163`) |
+> |---|---|---|---|
+> | **GR84674** `88fef544…` (PO01974972, `SOBD38567266-P1`) | PO-2026-000002 `087bedc0…` | 39 | khớp 14/14, QR 39/39, kế hoạch `#E090844E` 15 lần điền, **tự động đạt** |
+> | **GR84673** `aa2701bb…` (PO01974970, `SOBD38565378-P1`) | PO-2026-000001 `be7e2d4b…` | 22 | khớp 18/18, QR 22/22, kế hoạch `#0ABB5139` 20 lần điền, **tự động đạt**. SO tách giao: còn PO-2026-000003 (3 dòng), POS PO01974971 `-P2` (8 dòng, chưa có GR) |
+>
+> - GR84569 / GR84570: không có đơn Nextwaves → nhận tay.
+> - Gói 3E44C1DC **không dùng được**: sku Nextwaves trống, lại còn khoá khi nhiều đơn cùng SO. Cả hai đã sửa trong v0.3.1, đóng gói lại.
+> - **Đơn thật đầu: GR84674 (tự động), sau đó GR84673.**
+> - Phần dưới là bản trước khi chạy thử, giữ làm lịch sử.
+
 ## 0. Dữ liệu operator báo (06/11)
 
 | | Nextwaves (PO) | POS Circa (GR) |

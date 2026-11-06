@@ -1,4 +1,33 @@
-# v0.3.1 — production Florita: một bản, cài một lần (05/11/2026)
+# v0.3.1 — production Florita: một bản, cài một lần (05/11/2026, đóng lại 06/11)
+
+> **06/11 — đóng gói lại: mã gói C7D1641F thay 3E44C1DC.** Gói 3E44C1DC chưa cài ở đâu. Theo luật "một version = một lần cài", vẫn giữ số 0.3.1.
+>
+> **Vì sao.** Chạy thử chỉ đọc trên production (`docs/dev/PLAN-TRIEN-KHAI-PRD-20261106.md`; `state.md` lần 59) cho thấy 3E44C1DC **không chạy được đơn nào**:
+> - Nextwaves production để `product.sku` trống ở 29/32 dòng → khớp số lượng hỏng 14/14, kế hoạch chặn 38/39 UID.
+> - SO tách giao (2 đơn Nextwaves cùng SO) bị khoá `nw_many_orders` dù chỉ một đơn khớp.
+>
+> **Sửa (nhánh `batch/v0.3.1-prd` `691cfc3`, lõi có đổi — operator cho phép 06/11):**
+> - `keys.posProductIdOf`: lấy mã POS từ sku `CIRCA-<id>` / `productIdentifier` / `externalProductId` / `barcode` (≤ 9 số). Mọi nguồn có mặt phải trùng; lệch → không đoán. Dùng ở `nw-model` 3 chỗ.
+>   Đối chiếu tra QR POS: 61/61 UID đúng sản phẩm.
+> - `resolve`: SO có nhiều đơn mà **đúng một** đơn khớp số lượng, các đơn khác lệch rõ → chọn, không khoá.
+>   - Đơn khác **không so được** (dòng thiếu mã / số tem ≠ số lượng / chưa có phiếu gửi) → vẫn khoá. Đây là audit P2-2.
+>   - Hai đơn cùng khớp → `ambiguous`.
+> - Khung Nextwaves ghi đúng PO cần chọn trên màn quét.
+>
+> **Gate:**
+> - `node --test` **237/237**; 7 test mới trượt trên src 3E44C1DC. Có mẫu production dựng lại, bỏ tên: `samples/*prd*-20261106.json`, `tests/prd-real.test.js`.
+> - Đột biến 36 ca (mọi ca trên `keys` / `nw-model` / `resolve` / `nw-content` + mọi ca v0.3.1) **36/36**.
+> - Edge thật 108/108, tác vụ dài nhất 33,25 ms (`ui/panel.js`, file không đổi).
+> - Đóng lại từ `git archive` ra cùng mã gói.
+> - Audit độc lập lần 2: 0 P1. P2-2 đã sửa. P2-1 (hai phiếu cùng SO tách giao mở cùng lúc có thể gắn nhầm tab Nextwaves → phiếu không được điền, không ghi sai) → luật vận hành trong hướng dẫn, sửa mã ở bản sau.
+>
+> **Chạy thử production bằng chính mã sửa (chỉ đọc):**
+> - GR84674 ↔ PO-2026-000002: kế hoạch `#E090844E`, 15 lần điền / 39 UID, autoPlanCheck đạt, không khoá.
+> - GR84673 ↔ PO-2026-000001: kế hoạch `#0ABB5139`, 20 lần điền / 22 UID, autoPlanCheck đạt, không khoá (PO-2026-000003 lệch rõ).
+>
+> Thư mục giao `C:\circa-gr-nextwaves-release\v0.3.1\`: gói mới; gói 3E44C1DC chuyển vào `khong-dung\`; `sha256sum -c` đạt.
+>
+> Phần dưới: báo cáo 05/11 của gói 3E44C1DC, giữ làm lịch sử. Số test / đột biến ở đó là của gói cũ.
 
 **Căn cứ:**
 - quyết định operator 05/11 (`agent.md` §3);

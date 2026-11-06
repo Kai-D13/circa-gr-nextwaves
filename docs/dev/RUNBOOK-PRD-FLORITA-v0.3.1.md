@@ -11,7 +11,7 @@ Plan: `docs/dev/PLAN-PRD-FLORITA-v0.3.x-20261030.md` (bản sửa 05/11). Báo c
 ## 0. Cài (một lần, trên máy POS Florita)
 
 1. Chép thư mục giao `C:\circa-gr-nextwaves-release\v0.3.1` sang máy POS, như cách vẫn cài QR Scan Log. Thư mục gồm:
-   - `circa-gr-nextwaves-v0.3.1.zip`: gói cài, **mã gói 3E44C1DC**;
+   - `circa-gr-nextwaves-v0.3.1.zip`: gói cài, **mã gói C7D1641F** (đóng lại 06/11 sau chạy thử production; gói 3E44C1DC KHÔNG cài, nằm trong `khong-dung`);
    - `kiem-truoc.js`, `kiem-quet.js`, `kiem-sau.js`, `kiem-khung-gr.js`;
    - hướng dẫn này;
    - `SHA256SUMS.txt`.
@@ -34,6 +34,18 @@ Plan: `docs/dev/PLAN-PRD-FLORITA-v0.3.x-20261030.md` (bản sửa 05/11). Báo c
 - **"Sẵn sàng nhận hàng"**;
 - bảng SL GR = SL Nextwaves từng sản phẩm;
 - dòng "Tự động: chưa cho phép".
+
+Chỉ phiếu **có đơn Nextwaves** (hàng giao kèm tem RFID) mới dùng extension được. Phiếu không có đơn thì khung báo "Không có đơn Nextwaves khớp" → nhận tay như hiện nay.
+
+**SO tách giao** (06/11): một SO có thể có nhiều đơn Nextwaves, ví dụ SOBD38565378 có PO-2026-000001 và PO-2026-000003; POS tách PO con `-P1`, `-P2`.
+- Màn quét Nextwaves khi đó hiện *"Có nhiều đơn chờ nhận hàng khớp với SOBD… Hãy chọn một đơn"*.
+- Khung extension ghi *"Nextwaves có N đơn cùng SO (tách giao): trên màn quét chọn ĐÚNG đơn PO-…"*. **Chọn đúng PO đó.**
+- Nhận nhầm đơn khác: extension bỏ qua, không điền phiếu POS.
+- **Mỗi lúc chỉ làm MỘT phiếu của cùng một SO.**
+  - Chưa xong phiếu `-P1` thì không bấm "Nhận hàng bằng RFID" cho phiếu `-P2`.
+  - Lỡ bấm thì vào popup → "Phiên gần đây" → **Xoá** phiên phiếu chưa làm, trước khi nhận.
+  - Lý do: hai phiên cùng SO dùng chung màn quét Nextwaves, có thể gắn nhầm phiên, và phiếu đó sẽ phải xử lý tay.
+- Phần giao không có đủ tem RFID cho mọi dòng phiếu (ví dụ `-P2` có 8 dòng trên POS nhưng chỉ 3 dòng có tem trên Nextwaves): khung báo không khớp → nhận tay.
 
 **c. Kiểm trước (chỉ đọc).**
 - `chrome://extensions` → thẻ extension → **Service worker** → Console.
