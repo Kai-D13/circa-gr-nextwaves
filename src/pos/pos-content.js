@@ -985,8 +985,9 @@
     // v0.4.0 (C3): lượt vừa nhận → TỰ điền một lần ở tab này (đợi khung gắn đúng trang phiếu). Dừng giữa chừng → nút "Đọc lại và điền tiếp".
     const autoKey = `${s.key}|${(s.nwResult && s.nwResult.at) || ""}`;
     if (s.state === "received" && !autoTried.has(autoKey)) {
-      autoTried.add(autoKey);
       showGr(gr, { tone: "busy", title: `${gr.code}: Nextwaves đã nhận — chuẩn bị tự điền`, lines: head, table: planTable(plan) });
+      // Đánh dấu khi thật sự thử (kế hoạch sạch): kế hoạch chặn (vd. tra QR lỗi tạm) → "Kiểm tra lại" xong vẫn tự điền được.
+      autoTried.add(autoKey);
       if (await waitAnchored(gr, T.autoAnchorWaitMs)) {
         runApply(env, gr, s, plan, { how: "auto" }); // không chờ trong vòng đánh giá (applying chặn vẽ lại tới khi xong)
         return;

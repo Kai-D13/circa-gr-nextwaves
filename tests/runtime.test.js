@@ -142,9 +142,13 @@ async function sessionState(b, state) {
   });
 }
 
-const grant = (b, grCode = "GR03878", envId = "STG") => b.sendFromPopup({ type: "grant:create", envId, grCode });
 const viewTitle = (t) => (t.view ? t.view.title : null);
-const fillButton = (t) => t.view && t.view.buttons && t.view.buttons.find((x) => x.label.startsWith("Điền vào phiếu GR03878 · kế hoạch #"));
+// v0.4.0: không còn cấp phép — tab POS TỰ điền sau khi Nextwaves nhận. Nút chỉ còn khi không tự điền được (khung chưa gắn kịp) hoặc
+// điền tiếp sau khi dừng.
+const fillButton = (t) => t.view && t.view.buttons && t.view.buttons.find((x) => /^(Điền vào phiếu GR03878 · #|Đọc lại và điền tiếp · #)/.test(x.label));
+const APPLIED_TITLE = "GR03878: đã điền 12 mã vào 6 lô — kiểm danh sách rồi bấm HOÀN THÀNH";
+// Phiên đã có kết quả nhận (tab POS có thể đã tự điền ngay sau đó).
+const afterReceived = (b) => until(() => { const s = b.session(KEY); return s && s.nwResult && s; });
 const codesOnGr = (srv) => srv.st.gr.data.items.flatMap((i) => i.details).flatMap((d) => d.thuocsi_qr_codes || []);
 const claimMsg = (token, extra) => Object.assign({ type: "session:claimApply", key: KEY, token, grCode: "GR03878", planHash: "ABCDEF12" }, extra || {});
 // v0.2: mở phiếu không tự tạo phiên — dược sĩ bấm "Nhận hàng bằng RFID".
@@ -171,13 +175,13 @@ async function openToReady(opts = {}) {
   }
 }
 
-// … rồi Nextwaves nhận thành công (2xx) → phiên "received", POS hiện kế hoạch chỉ xem.
+// … rồi Nextwaves nhận thành công (2xx) → phiên có kết quả nhận; tab POS (đang ở trang phiếu) TỰ điền ngay (v0.4.0).
 async function openToReceived(opts = {}) {
   const ctx = await openToReady(opts);
   try {
     ctx.srv.st.nwReceived = true;
     ctx.nw.post(scan(200));
-    await sessionState(ctx.b, "received");
+    await afterReceived(ctx.b);
     return ctx;
   } catch (err) {
     ctx.b.close();
@@ -185,45 +189,33 @@ async function openToReceived(opts = {}) {
   }
 }
 
-test("E2E STG GR03878: GR → Nextwaves ?po=SOBD1593858 → khớp PO28237814 → nhận → kế hoạch chỉ xem → cấp phép 1 lần → điền 6 lô / 12 UID → HOÀN THÀNH", async () => {
+test("E2E STG GR03878 (v0.4.0): GR → Nextwaves ?po=SOBD1593858 → khớp PO28237814 (kho lấy từ đơn) → nhận → về POS, TỰ điền 6 lô / 12 UID (không cấp phép) → đóng tab Nextwaves → dược sĩ HOÀN THÀNH", async () => {
   const { b, srv, pos, nw } = await openToReady();
   try {
     assert.equal(nw.url, `${NW}/vi/purchases/receive?po=SOBD1593858`);
     const s1 = b.session(KEY);
-    assert.deepEqual([s1.deliveryCode, s1.nwPoNumber, s1.nwRefId, s1.posId], ["SOBD1593858-F", "PO28237814", "SOBD1593858-1056745", STORE]);
+    assert.deepEqual([s1.schema, s1.nwTenant, s1.deliveryCode, s1.nwPoNumber, s1.nwRefId, s1.posId], [2, "circa-stg", "SOBD1593858-F", "PO28237814", "SOBD1593858-1056745", STORE]);
+    assert.equal(s1.warehouseId, "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57", "kho = kho của đơn Nextwaves đã khớp (không còn bảng cửa hàng → kho)");
     assert.deepEqual(s1.shipmentIds, [SHIP]);
     assert.deepEqual([s1.writeLocks, s1.nwWriteLocks, s1.receiptIdsBefore], [[], [], []]);
     assert.deepEqual(s1.nwSearch, { total: 1, read: 1, candidates: 1, verified: 1 });
-    assert.match(nw.view.lines.join("\n"), /Tìm theo SOBD1593858: total 1, đã đọc 1; ứng viên Buymed cùng kho 1; refId đúng SO 1\./);
+    assert.match(nw.view.lines.join("\n"), /Tìm theo SOBD1593858: total 1, đã đọc 1; ứng viên Buymed 1; refId đúng SO 1\./);
+    assert.match(nw.view.lines.join("\n"), /TỰ điền phiếu; dược sĩ kiểm rồi bấm HOÀN THÀNH/);
     await until(() => pos.view && pos.view.title.startsWith("Đã khớp đơn Nextwaves"));
 
-    // Dược sĩ bấm "Xác nhận nhận hàng" trên Nextwaves → 2xx.
+    // Dược sĩ bấm "Xác nhận nhận hàng" trên Nextwaves → 2xx → về POS → tự điền.
     srv.st.nwReceived = true;
     const focusBefore = pos.focusCount;
     nw.post(scan(200));
-    const s2 = await sessionState(b, "received");
+    const s2 = await afterReceived(b);
     assert.equal(s2.nwResult.units.length, 12);
     assert.deepEqual(s2.nwResult.receiptIds, [H.RECEIPT_ID]);
     assert.equal(s2.scanOk.httpStatus, 200);
-    assert.ok(pos.focusCount > focusBefore, "đưa dược sĩ về tab POS");
-
-    // Chưa cấp phép: chỉ xem kế hoạch, 0 PUT.
-    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền");
-    assert.equal(pos.view.table.rows.length, 6);
-    await settle();
-    assert.equal(srv.st.puts.length, 0);
-
-    // Operator cấp phép 1 lần cho GR03878 (popup) → nút mang mã kế hoạch → bấm.
-    await grant(b);
-    const btn = await until(() => fillButton(pos));
-    const hash = /#([0-9A-F]{8})/.exec(btn.label)[1];
-    assert.equal(srv.st.puts.length, 0, "chưa bấm thì chưa ghi");
-    btn.onClick();
     const s3 = await sessionState(b, "applied");
-    assert.equal(s3.authorization.planHash, hash);
-    assert.equal(s3.authorization.grCode, "GR03878");
+    assert.ok(pos.focusCount > focusBefore, "đưa dược sĩ về tab POS (tab gốc đang ở đúng phiếu)");
+    assert.equal(s3.posTabId, pos.id, "tái dùng tab gốc");
+    assert.equal(s3.applyClaim.how, "auto");
     assert.equal(s3.lease, null);
-    assert.deepEqual((await b.sendFromPopup({ type: "grant:list" })).data, [], "cấp phép đã tiêu");
     assert.equal(srv.st.puts.length, 6);
     for (const p of srv.st.puts) {
       assert.deepEqual(Object.keys(p.body.detail).sort(), ["lot_id", "received_quantity", "thuocsi_qr_codes"]);
@@ -233,20 +225,24 @@ test("E2E STG GR03878: GR → Nextwaves ?po=SOBD1593858 → khớp PO28237814 �
       assert.equal(p.headers["content-type"], "application/json");
     }
     assert.equal(codesOnGr(srv).length, 12);
+    await until(() => nw.closed, 2000); // tab Nextwaves của phiên đóng sau khi nhận (nhả cổng đầu đọc)
+    assert.equal(b.session(KEY).nwTabId, null);
     await until(() => pos.reloads >= 1 && pos.loads >= 2);
     pos.post(POS_AUTH); // trang POS tải lại → app gọi API → hook báo lại header
-    await until(() => viewTitle(pos) === "GR03878: đã điền 12 UID từ Nextwaves");
+    await until(() => viewTitle(pos) === APPLIED_TITLE);
+    assert.ok(!(pos.view.buttons || []).some((x) => /HOÀN THÀNH/i.test(x.label)), "extension không có nút HOÀN THÀNH");
 
     // Dược sĩ bấm HOÀN THÀNH trên POS.
     srv.st.gr.data.status = "COMPLETED";
     pos.post({ mark: "cgn/pos-hook", type: "gr-status", payload: { envId: "STG", grId: GR_ID, status: "COMPLETED", httpStatus: 200 } });
     await sessionState(b, "done");
-    await until(() => pos.view === null); // v0.2.5 (PM AUDIT-A1 P2): phiếu đã HOÀN THÀNH → không còn khung trên trang phiếu
+    await until(() => pos.view === null); // phiếu đã HOÀN THÀNH → không còn khung trên trang phiếu
 
     // Bất biến.
     const nwCalls = srv.st.log.filter((r) => r.url.startsWith(NWAPI));
     assert.ok(nwCalls.length > 0 && nwCalls.every((r) => r.method === "GET"));
     assert.ok(srv.st.log.every((r) => !r.url.includes("/integrations/")));
+    assert.ok(!srv.st.log.some((r) => /\/status\/COMPLETED$/.test(new URL(r.url).pathname)), "extension KHÔNG BAO GIỜ gửi HOÀN THÀNH");
     const stgOrigins = new Set([POS, NWAPI]);
     assert.ok(srv.st.log.every((r) => stgOrigins.has(new URL(r.url).origin)), "chế độ STG chỉ gọi host staging");
     assert.ok(!JSON.stringify(b.store).includes("Bearer"), "không lưu token vào storage");
@@ -256,59 +252,52 @@ test("E2E STG GR03878: GR → Nextwaves ?po=SOBD1593858 → khớp PO28237814 �
   }
 });
 
-test("v0.2 S6: tra QR một lần mỗi phiên + lượt nhận — 12 UID = 12 GET dù cấp phép / phiên đổi; lỗi không cache; 'Kiểm tra lại' tra lại hết", async () => {
+test("v0.2 S6 (v0.4.0): tra QR một lần mỗi phiên + lượt nhận — 12 UID = 12 GET rồi tự điền; lỗi không cache; 'Kiểm tra lại' tra lại hết rồi tự điền", async () => {
   const qrGets = (srv) => srv.st.log.filter((r) => new URL(r.url).pathname === "/thuocsi-warehouse/qrcode").length;
   const { b, srv, pos } = await openToReceived();
   try {
-    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền");
+    await sessionState(b, "applied");
     assert.equal(qrGets(srv), 12);
-    await grant(b); // cấp phép của đúng phiếu → lập lại kế hoạch, QR lấy từ cache
-    await until(() => fillButton(pos));
-    await settle(100);
-    const grGets = () => srv.st.log.filter((r) => r.method === "GET" && new URL(r.url).pathname === `/backend/v1/order/goods-receipt/${GR_ID}`).length;
-    const g0 = grGets();
-    await grant(b, "GR09999"); // cấp phép phiếu khác → không đánh giá lại (không đọc lại GR)
-    await settle(150);
-    assert.equal(grGets(), g0, "cấp phép phiếu khác không làm đọc lại phiếu");
-    assert.equal(qrGets(srv), 12, "không tra lại khi cấp phép / phiên đổi");
+    await until(() => pos.reloads >= 1 && pos.loads >= 2);
+    pos.post(POS_AUTH);
+    await until(() => viewTitle(pos) === APPLIED_TITLE);
+    await settle(80);
+    assert.equal(qrGets(srv), 12, "đã điền xong: không tra lại");
   } finally {
     b.close();
   }
-  // Một UID tra lỗi (503): kế hoạch chặn; lỗi không cache → lần lập lại chỉ tra UID đó; "Kiểm tra lại" tra lại cả 12.
+  // Một UID tra lỗi (503): kế hoạch chặn, 0 PUT; lỗi không cache; "Kiểm tra lại" khi đã ổn → tra lại cả 12 rồi TỰ điền.
   const down = new Set(["1792145819958AA1"]);
   const ctx = await openToReceived({ server: { qrDown: down } });
   try {
     const recheck = await until(() => ctx.pos.view && ctx.pos.view.buttons && ctx.pos.view.buttons.find((x) => x.label === "Kiểm tra lại"));
     await settle(150);
-    // 12 lần đầu; có thể thêm 1 nếu phiên đổi ngay lúc vừa nhận (lập lại kế hoạch: UID OK lấy cache, chỉ UID lỗi tra lại).
     const n0 = qrGets(ctx.srv);
     assert.ok(n0 === 12 || n0 === 13, `n0=${n0}`);
-    await grant(ctx.b); // đổi cấp phép của đúng phiếu → lập lại kế hoạch
-    await until(() => qrGets(ctx.srv) === n0 + 1);
-    await settle(100);
-    assert.equal(qrGets(ctx.srv), n0 + 1, "chỉ tra lại UID lỗi");
+    assert.equal(ctx.srv.st.puts.length, 0, "kế hoạch chặn → không ghi");
     down.clear();
     recheck.onClick();
-    await until(() => qrGets(ctx.srv) === n0 + 13);
-    await until(() => fillButton(ctx.pos));
+    await until(() => qrGets(ctx.srv) >= n0 + 12);
+    await sessionState(ctx.b, "applied");
+    assert.equal(ctx.srv.st.puts.length, 6);
   } finally {
     ctx.b.close();
   }
 });
 
-test("T3 thật: lượt 2xx mang body receive-scan thật (25/10 23:46) → về POS, kế hoạch #60070071 như khung thật, 0 PUT khi chưa cấp phép", async () => {
-  const { b, srv, pos, nw } = await openToReady();
+test("T3 thật (v0.4.0): lượt 2xx mang body receive-scan thật (25/10 23:46) → về POS, TỰ điền đúng kế hoạch #60070071 (6 lô / 12 UID)", async () => {
+  const { b, srv, nw } = await openToReady();
   try {
     const [x] = H.sample("nw-stg-receive-scan-200-PO28237814-T3-20261025.json");
     srv.st.nwReceived = true;
     nw.post({ mark: "cgn/nw-hook", type: "receive-scan", payload: { envId: "STG", shipmentId: x.response.shipmentId, httpStatus: x.status, response: x.response, sentEpcs: x.request.epcs.length } });
-    const s = await sessionState(b, "received");
+    const s = await afterReceived(b);
     assert.deepEqual([s.scanOk.httpStatus, s.scanOk.sentEpcs, s.nwResult.units.length], [200, 12, 12]);
     assert.deepEqual(s.nwResult.receiptIds, [H.RECEIPT_ID]);
-    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền");
-    assert.match(pos.view.lines.join("\n"), /Kế hoạch #60070071: điền 12 UID vào 6 lô\./);
-    await settle();
-    assert.equal(srv.st.puts.length, 0);
+    const s2 = await sessionState(b, "applied");
+    assert.equal(s2.applyClaim.planHash, "60070071");
+    assert.ok(s2.log.some((l) => l.type === "plan" && l.hash === "60070071" && l.steps === 6));
+    assert.equal(srv.st.puts.length, 6);
   } finally {
     b.close();
   }
@@ -316,68 +305,55 @@ test("T3 thật: lượt 2xx mang body receive-scan thật (25/10 23:46) → v�
 
 // ---------- P1.3: không có quyền ghi lâu dài ----------
 
-test("P1.3: cấu hình cũ writeMode=auto (v0.1.0) sau nâng cấp → không tự PUT; config không còn writeMode", async () => {
-  const { b, srv, pos } = await openToReceived({ config: { mode: "STG", url: "", writeMode: "auto" } });
-  try {
-    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền");
-    await settle(150);
-    assert.equal(srv.st.puts.length, 0);
-    assert.deepEqual((await b.sendFromPopup({ type: "config:get" })).data, { mode: "STG", url: "" });
-    await b.sendFromPopup({ type: "config:set", patch: { mode: "STG", writeMode: "auto" } });
-    assert.equal(b.store.config.writeMode, undefined);
-  } finally {
-    b.close();
-  }
-});
-
-test("P1.3: cấp phép cho phiếu khác / đã hết hạn → 0 PUT; content script không tự cấp phép được", async () => {
-  const { b, srv, pos } = await openToReceived({ bgTuning: { grantTtlMs: 80 } });
-  try {
-    await grant(b, "GR03999");
-    await settle(100);
-    assert.equal(fillButton(pos), undefined);
-    await grant(b); // GR03878, hết hạn sau 80 ms
-    await until(() => fillButton(pos));
-    await sleep(120);
-    assert.deepEqual((await b.sendFromTab(pos, claimMsg("x"))).data, { ok: false, reason: "no_grant" });
-    assert.equal(srv.st.puts.length, 0);
-    const denied = await b.sendFromTab(pos, { type: "grant:create", envId: "STG", grCode: "GR03878" });
-    assert.equal(denied.ok, false);
-    assert.match(denied.error, /popup/);
-  } finally {
-    b.close();
-  }
-});
-
-test("v0.3.1: production chỉ ở cửa hàng đã khai kho (Florita) — cửa hàng khác không tạo được phiên; phiên Florita hết khoá 'chỉ đọc' nhưng vẫn cần cấp phép từng lần", async () => {
+test("P1.3 (v0.4.0): cấu hình cũ (writeMode của v0.1.0) bị bỏ — config chỉ còn mode / url / nwTenant; trang web không đổi được cấu hình; tenant sai bị từ chối", async () => {
   const srv = makeServer();
   const b = createBrowser(srv.handle);
-  const FLORITA = "c476efb2-415c-429a-978e-d389b4b06607";
   try {
-    await b.setConfig({ mode: "STG", url: "" });
+    await b.setConfig({ mode: "STG", url: "", writeMode: "auto" });
+    assert.deepEqual((await b.sendFromPopup({ type: "config:get" })).data, { mode: "STG", url: "", nwTenant: "" });
+    await b.sendFromPopup({ type: "config:set", patch: { mode: "STG", writeMode: "auto" } });
+    assert.equal(b.store.config.writeMode, undefined);
+    const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    const r = await b.sendFromTab(pos, { type: "config:set", patch: { mode: "PRD" } });
+    assert.equal(r.ok, false);
+    assert.equal(b.store.config.mode, "STG", "trang web không đổi được môi trường");
+    const bad = await b.sendFromPopup({ type: "config:set", patch: { nwTenant: "circa.evil" } });
+    assert.equal(bad.ok, false);
+    assert.match(bad.error, /Tenant Nextwaves/);
+    assert.equal((await b.sendFromPopup({ type: "config:set", patch: { mode: "PRD", nwTenant: "Circa-Medly" } })).data.nwTenant, "circa-medly");
+    assert.equal(srv.st.puts.length, 0);
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.4.0: production MỌI cửa hàng — cửa hàng bất kỳ tạo được phiên (tenant theo máy, mặc định circa); kho không nhận từ trang; chưa khớp đơn Nextwaves thì chưa ghi được", async () => {
+  const srv = makeServer();
+  const b = createBrowser(srv.handle);
+  const LUMINA = "31493e74-3404-4c0e-a906-93691a6ee319";
+  const GR2 = "48425ac4-5e54-4b5b-846a-cd8d6b4448c6";
+  try {
+    await b.setConfig({ mode: "PRD", url: "" });
     const prd = b.openTab(`https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/${GR_ID}`);
-    const start = (posId, warehouseId) => b.sendFromTab(prd, { type: "session:start", envId: "PRD", grId: GR_ID, grCode: "GR03878", posId, soBase: "SOBD1", warehouseId });
-    // Cửa hàng production chưa khai kho Nextwaves (vd. id cửa hàng staging, hay một cửa hàng PRD bất kỳ) → không có phiên.
-    for (const other of ["64a8663b-0c9e-49c6-9626-0a4c7c4bd53d", "11111111-2222-4333-8444-555555555555"]) {
-      const r = await start(other, "eb5e2b4f-6f92-413b-90ef-6be1730b94c0");
-      assert.equal(r.ok, false, other);
-      assert.match(r.error, /store/, other);
+    const start = (grId, posId, extra) => b.sendFromTab(prd, Object.assign({ type: "session:start", envId: "PRD", grId, grCode: "GR03878", posId, soBase: "SOBD1", warehouseId: "eb5e2b4f-6f92-413b-90ef-6be1730b94c0" }, extra || {}));
+    for (const bad of ["bat-ky", "", null]) {
+      const r = await start(GR_ID, bad);
+      assert.equal(r.ok, false, String(bad));
+      assert.match(r.error, /store/);
     }
-    assert.equal(b.store.sessions && b.store.sessions[`PRD:${GR_ID}`], undefined);
-    const st = await start(FLORITA.toUpperCase(), "eb5e2b4f-6f92-413b-90ef-6be1730b94c0");
+    const st = await start(GR_ID, LUMINA.toUpperCase());
     assert.equal(st.ok, true, st.error);
-    assert.equal(st.data.returnUrl, `https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/${GR_ID}`, "background tự dựng đích quay về");
-    assert.deepEqual((await b.sendFromTab(prd, { type: "session:writeBlockers", key: `PRD:${GR_ID}` })).data, [], "không còn env_read_only");
+    assert.deepEqual([st.data.posId, st.data.nwTenant, st.data.warehouseId, st.data.returnUrl], [LUMINA, "circa", null, `https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/${GR_ID}`]);
+    assert.ok(b.tabs().some((t) => t.url === "https://circa.nextwaves.app/vi/purchases/receive?po=SOBD1"), "mở Nextwaves đúng tenant mặc định");
+    assert.deepEqual((await b.sendFromTab(prd, { type: "session:writeBlockers", key: `PRD:${GR_ID}` })).data, ["nw_not_matched"]);
     b.store.sessions[`PRD:${GR_ID}`].state = "received";
-    // Chưa cấp phép → không giành được lượt ghi; cấp phép STG không dùng được cho PRD.
-    assert.equal((await grant(b, "GR03878", "STG")).ok, true);
-    assert.deepEqual((await b.sendFromTab(prd, claimMsg("x", { key: `PRD:${GR_ID}` }))).data, { ok: false, reason: "no_grant" });
-    // Cấp phép PRD đúng mã → giành được đúng một lượt, cấp phép bị tiêu.
-    assert.equal((await grant(b, "GR03878", "PRD")).ok, true);
-    const r = await b.sendFromTab(prd, claimMsg("x", { key: `PRD:${GR_ID}` }));
-    assert.equal(r.data.ok, true, JSON.stringify(r.data));
-    assert.ok(!(await b.sendFromPopup({ type: "grant:list" })).data.some((g) => g.envId === "PRD"), "cấp phép PRD đã tiêu");
-    assert.equal(srv.st.puts.length, 0, "claim không tự ghi gì");
+    assert.deepEqual((await b.sendFromTab(prd, claimMsg("x", { key: `PRD:${GR_ID}` }))).data, { ok: false, reason: "nw_not_matched" });
+    // Máy ở tenant khác: phiên mang tenant đó, mở Nextwaves đúng tenant.
+    const st2 = await start(GR2, LUMINA, { nwTenant: "circa-medly" });
+    assert.equal(st2.ok, true, st2.error);
+    assert.equal(st2.data.nwTenant, "circa-medly");
+    assert.ok(b.tabs().some((t) => t.url === "https://circa-medly.nextwaves.app/vi/purchases/receive?po=SOBD1"));
+    assert.equal(srv.st.puts.length, 0, "không ghi gì");
   } finally {
     b.close();
   }
@@ -385,9 +361,9 @@ test("v0.3.1: production chỉ ở cửa hàng đã khai kho (Florita) — cửa
 
 // Audit v0.3.1 P3: cả hai môi trường đều writeEnabled → hàng rào "chỉ đọc" của background không còn cấu hình thật nào chạm tới.
 // Giữ nó sống: vá env.js của background cho PRD writeEnabled false (công tắc tắt ghi) → mọi đường ghi bị chặn.
-test("v0.3.1 công tắc tắt ghi: PRD writeEnabled false → không cấp phép, không cho phép tự động, phiên khoá env_read_only, claim bị chặn", async () => {
+test("v0.3.1 công tắc tắt ghi (giữ ở v0.4.0): PRD writeEnabled false → phiên khoá env_read_only, claim bị chặn, 0 PUT", async () => {
   const srv = makeServer();
-  const ON = "      writeEnabled: true,\n      // Chỉ cửa hàng đã khai kho Nextwaves";
+  const ON = "      writeEnabled: true,\n      // v0.4.0 (operator 06/11): mọi cửa hàng";
   const b = createBrowser(srv.handle, {
     bgSrcPatch: {
       "lib/env.js": (code) => {
@@ -398,17 +374,11 @@ test("v0.3.1 công tắc tắt ghi: PRD writeEnabled false → không cấp phé
   });
   try {
     await b.setConfig({ mode: "PRD", url: "" });
-    const g = await grant(b, "GR03878", "PRD");
-    assert.equal(g.ok, false);
-    assert.match(g.error, /chỉ đọc/);
     const prd = b.openTab(`https://pos.v2.circa.vn/danh-sach-phieu-nhan-hang/${GR_ID}`);
-    const st = await b.sendFromTab(prd, { type: "session:start", envId: "PRD", grId: GR_ID, grCode: "GR03878", posId: "c476efb2-415c-429a-978e-d389b4b06607", soBase: "SOBD1", warehouseId: "eb5e2b4f-6f92-413b-90ef-6be1730b94c0" });
+    const st = await b.sendFromTab(prd, { type: "session:start", envId: "PRD", grId: GR_ID, grCode: "GR03878", posId: "c476efb2-415c-429a-978e-d389b4b06607", soBase: "SOBD1" });
     assert.equal(st.ok, true, st.error);
     assert.ok((await b.sendFromTab(prd, { type: "session:writeBlockers", key: `PRD:${GR_ID}` })).data.includes("env_read_only"));
-    b.store.sessions[`PRD:${GR_ID}`].state = "nw_ready";
-    const a = await b.sendFromPopup({ type: "auto:arm", key: `PRD:${GR_ID}`, confirm: {} });
-    assert.match(a.error, /chỉ đọc/);
-    b.store.sessions[`PRD:${GR_ID}`].state = "received";
+    Object.assign(b.store.sessions[`PRD:${GR_ID}`], { state: "received", warehouseId: "eb5e2b4f-6f92-413b-90ef-6be1730b94c0" });
     assert.deepEqual((await b.sendFromTab(prd, claimMsg("x", { key: `PRD:${GR_ID}` }))).data, { ok: false, reason: "env_read_only" });
     assert.equal(srv.st.puts.length, 0);
   } finally {
@@ -416,19 +386,19 @@ test("v0.3.1 công tắc tắt ghi: PRD writeEnabled false → không cấp phé
   }
 });
 
-test("P1.3: PUT lỗi → dừng; cấp phép đã tiêu nên thử lại cần cấp phép MỚI, rồi điền tiếp đủ", async () => {
+test("P1.3 (v0.4.0): PUT trả 500 → dừng, 'chưa rõ' (A9: máy chủ có thể lưu muộn); bấm 'Đọc lại và điền tiếp' → lập kế hoạch mới, điền đủ", async () => {
   const { b, srv, pos } = await openToReceived({ server: { putFailures: 1 } });
   try {
-    await grant(b);
-    (await until(() => fillButton(pos))).onClick();
     const s = await sessionState(b, "apply_stopped");
-    assert.deepEqual([s.applyError.reason, s.applyError.status], ["put_failed", 500]);
+    assert.deepEqual([s.applyError.reason, s.applyError.status], ["put_uncertain", 500]);
     assert.equal(srv.st.puts.length, 1);
-    // Khung "Chỉ xem kế hoạch" có thể vẽ trước khi phiên sang apply_stopped (cấp phép bị tiêu → refresh) → chờ đủ cả dòng dừng.
-    await until(() => viewTitle(pos) === "Chỉ xem kế hoạch — chưa có cấp phép điền" && /Lần điền trước dừng: POS từ chối ghi \(HTTP 500\)/.test(pos.view.lines.join("\n")));
-    await grant(b);
-    (await until(() => fillButton(pos))).onClick();
-    await sessionState(b, "applied");
+    const btn = await until(() => fillButton(pos) && /Lần điền trước dừng: POS báo lỗi máy chủ \(5xx\)/.test(pos.view.lines.join("\n")) && fillButton(pos));
+    assert.match(btn.label, /^Đọc lại và điền tiếp · #/);
+    await settle(80);
+    assert.equal(srv.st.puts.length, 1, "dừng rồi không tự chạy lại");
+    btn.onClick();
+    const s2 = await sessionState(b, "applied");
+    assert.equal(s2.applyClaim.how, "retry");
     assert.equal(srv.st.puts.length, 7);
     assert.equal(codesOnGr(srv).length, 12);
   } finally {

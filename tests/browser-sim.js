@@ -11,7 +11,7 @@ const path = require("node:path");
 const SRC = path.join(__dirname, "..", "src");
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(SRC, "manifest.json"), "utf8"));
 const clone = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
-const TUNING = { pollMs: 10, collectTries: 3, collectDelayMs: 5, reloadDelayMs: 5, qrConcurrency: 4, httpTimeoutMs: 2000, leaseRenewMs: 50 };
+const TUNING = { pollMs: 10, collectTries: 3, collectDelayMs: 5, reloadDelayMs: 5, qrConcurrency: 4, httpTimeoutMs: 2000, leaseRenewMs: 50, autoAnchorWaitMs: 150, readerPingMs: 60, readerLendMs: 300, authWaitMs: 400, readerPollMs: 20, readerFirstClickMs: 30, readerGapMs: 60 };
 const BG_TUNING = { leaseMs: 2000, retryCooldownMs: 0, readerRelayMs: 1500, nwCloseDelayMs: 5 };
 
 // Mẫu match của manifest ("https://*.nextwaves.app/*") → có khớp origin không (như Chrome: * ở đầu host = mọi subdomain).

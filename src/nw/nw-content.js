@@ -358,7 +358,8 @@
 
   // ---------- đầu đọc của màn quét (C2) ----------
   function readerButton() {
-    const btns = document.querySelectorAll ? document.querySelectorAll("button") : [];
+    const doc = typeof document !== "undefined" ? document : null;
+    const btns = doc && doc.querySelectorAll ? doc.querySelectorAll("button") : [];
     for (const b of btns) {
       const t = String(b.textContent || "").replace(/\s+/g, " ").trim();
       if (READER_CONNECT.test(t)) return { btn: b, state: "disconnected" };
@@ -397,7 +398,7 @@
       }
       if (ctx) renderReady();
     }
-    if (!ctx || r.state !== "disconnected" || !r.btn || document.visibilityState === "hidden") return;
+    if (!ctx || r.state !== "disconnected" || !r.btn || (typeof document !== "undefined" && document.visibilityState === "hidden")) return;
     // Cho màn quét tự kết nối trước (autoConnect của Nextwaves), rồi mới bấm; tối đa readerMaxClicks lần, cách readerGapMs.
     if (now - rd.since < T.readerFirstClickMs || now - rd.lastClick < T.readerGapMs || r.btn.disabled) return;
     rd.clicks = rd.clicks.filter((t) => now - t < T.readerGapMs * (T.readerMaxClicks + 1));
@@ -442,6 +443,7 @@
     if (note) lines.push(note.text);
     else lines.push("Đặt hàng lên đầu đọc rồi bấm “Xác nhận nhận hàng”. Nhận đủ xong extension về POS và TỰ điền phiếu; dược sĩ kiểm rồi bấm HOÀN THÀNH trên POS.");
     const q = ctx.nwSearch;
+    if (q) lines.push(`Tìm theo ${ctx.soBase}: total ${q.total}, đã đọc ${q.read}; ứng viên Buymed ${q.candidates}; refId đúng SO ${q.verified}.`);
     if (ctx.nwWriteLocks && ctx.nwWriteLocks.length) lines.push("Lưu ý: Nextwaves có nhiều đơn cùng SO chưa so được — điền phiếu POS sẽ bị khoá (chỉ xem).");
     else if (q && q.verified > 1) lines.push(`Nextwaves có ${q.verified} đơn cùng SO (tách giao): trên màn quét chọn ĐÚNG đơn ${ctx.nwPoNumber} — đơn khớp số lượng phiếu ${ctx.grCode}.`);
     const buttons = [
