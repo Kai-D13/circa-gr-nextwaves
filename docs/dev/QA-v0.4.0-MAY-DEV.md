@@ -26,6 +26,23 @@
 - kết quả `kiem-sau.js` sau Q4 (có trạng thái `no_nw_order`, số lần tìm đơn trong nhật ký) và `kiem-truoc.js` của Q5 nếu có;
 - ảnh chụp chỉ khi một mục không đạt.
 
+## Kết quả 07/11/2026 — **ĐẠT** (Claude chạy trên Chrome máy dev qua Claude in Chrome; operator Reload + Production + kết nối)
+
+Gói **79D4269C**. Chỉ đọc trang và bấm nút của extension; không bấm "Xác nhận nhận hàng", không HOÀN THÀNH. Phiên tạo ra đã huỷ; SL nhận trên POS vẫn 0.
+
+| # | Kết quả |
+|---|---|
+| Q1 / Q2 | **Đạt.** Operator Reload + chọn Production. Khung extension v0.4.0 chạy trên POS và Nextwaves production (chữ "Kho Nextwaves", dòng "Đầu đọc" chỉ có ở v0.4.0) |
+| Q3 | **Đạt.** Trang phiếu có nút "Nhận hàng bằng RFID" |
+| Q4 | **Đạt — GR84570** (`a4943005…`, SOBD38560757-F, Florita): sau 8 giây khung POS ghi "Nextwaves chưa có đơn chờ nhận — nhận tay"; khung Nextwaves "chưa có đơn chờ nhận cho SOBD38560757" + Tìm lại / Về POS; không treo "Đang tìm…". 20 giây sau không có request nào từ trang (bản cũ lặp liên tục); trang Nextwaves tự gọi 60 s / lần như bình thường. "Tìm lại" → báo lại như cũ. Lệnh gọi của chính extension (content script) không hiện trong công cụ đo mạng — "chỉ tìm một lần" dựa trên test tự động. <br>**`6f961d14…` = GR84724 (`CO001975079`, nhà cung cấp Vivita): phiếu không từ SO Buymed** → extension không hiện nút / khung (đúng thiết kế, `not_linkable`) |
+| Q5 | **Đạt — GR84673** (`aa2701bb…`, PO01974970, SOBD38565378-P1, Florita): POS "Đã khớp đơn Nextwaves — chờ nhận hàng", **PO-2026-000001**, kho Florita. Nextwaves: "Sẵn sàng nhận hàng", 22 UID dự kiến (= 22 item phiếu), "Kho Nextwaves: Florita", "Tìm theo SOBD38565378: total 2, đã đọc 2; ứng viên Buymed 2; refId đúng SO 2", nhắc "2 đơn cùng SO (tách giao): chọn ĐÚNG PO-2026-000001", bảng SL GR = SL Nextwaves từng sản phẩm |
+| Q6 | **Đạt phần extension.** Chọn đơn PO-2026-000001 → màn quét (22 còn lại) → khung "chưa kết nối — extension đang tự kết nối…" → extension bấm "Kết nối đầu đọc" (Nextwaves báo "Không thể bật/tắt quét" vì QR Scan Log giữ cổng) → sau 3 lần: "đang bận ở tab khác — sang tab bán hàng bấm Ngắt RFID rồi quay lại tab này, extension tự kết nối lại". Rời tab rồi quay lại → lượt mới ("đang tự kết nối…") → 3 lần → lại báo bận. Không bấm nút nào khác. **Chưa kiểm:** kết nối thành công sau khi Ngắt — nút Ngắt chỉ có trên trang một đơn bán hàng (`/ban-hang/<mã>`), mở trang bán hàng mới có thể tạo đơn nháp production nên không làm; kiểm ở lượt đầu máy POS |
+| Q7 | **Đạt.** Trang phiếu: khung nằm trong luồng trang, không che HỦY / HOÀN THÀNH. Màn quét Nextwaves: khi "Xác nhận nhận hàng" / "Hủy" hiện, khung tự dời lên; `elementFromPoint` 3 điểm mỗi nút đều trúng nút |
+
+**Finding (P3, không chặn cài):** UI-1 — khung extension che một phần nút "Kết nối đầu đọc" của Nextwaves (màn 1707×812 CSS px) vì luật né chỉ có "Xác nhận nhận hàng". Ít ảnh hưởng: extension tự bấm nút này; dược sĩ thu khung bằng "–" nếu cần bấm tay. Sửa ở bản sau.
+
+**Gate gói cùng lúc:** 219/219 test; đột biến 198 ca: 195 ca áp dụng đều bị bắt (11 ca sống ở lượt đủ → 8 ca thêm test, 3 ca `autoPlanCheck` là mã chết ở v0.4.0 → loại); Edge thật 43/43 trên 79D4269C (Edg/156.0.4314.58, tác vụ dài nhất 21,61 ms).
+
 ## Không nằm trong QA máy dev
 
 - **Lượt ghi thật** (nhận trên Nextwaves → tự điền → HOÀN THÀNH): làm ở lượt đầu trên máy POS vận hành, đúng phiếu operator cho phép, có `kiem-sau.js`. Muốn chạy trên máy dev thì cần phiếu có hàng gắn tem tại máy dev + operator cho phép bằng chữ đúng phiếu.
