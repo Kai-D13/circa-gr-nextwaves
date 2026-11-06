@@ -987,7 +987,10 @@
     if (s.state === "received" && !autoTried.has(autoKey)) {
       autoTried.add(autoKey);
       showGr(gr, { tone: "busy", title: `${gr.code}: Nextwaves đã nhận — chuẩn bị tự điền`, lines: head, table: planTable(plan) });
-      if (await waitAnchored(gr, T.autoAnchorWaitMs)) return runApply(env, gr, s, plan, { how: "auto" });
+      if (await waitAnchored(gr, T.autoAnchorWaitMs)) {
+        runApply(env, gr, s, plan, { how: "auto" }); // không chờ trong vòng đánh giá (applying chặn vẽ lại tới khi xong)
+        return;
+      }
     }
     const cooling = s.retryNotBefore && s.retryNotBefore > Date.now();
     return showGr(gr, {

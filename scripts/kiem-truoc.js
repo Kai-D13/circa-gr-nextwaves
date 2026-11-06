@@ -1,12 +1,13 @@
-// v0.3.1 — kiểm TRƯỚC (chỉ đọc): phiên của một phiếu sau khi bấm "Nhận hàng bằng RFID", trước khi cho phép tự động.
+// v0.4.0 — kiểm TRƯỚC (chỉ đọc): phiên của một phiếu sau khi bấm "Nhận hàng bằng RFID", trước khi dược sĩ bấm "Xác nhận nhận hàng".
 // chrome://extensions → thẻ "Circa GR ← Nextwaves" → "Service worker" → Console → dán cả đoạn → Enter. Đang có nhiều phiếu thì
 // sửa mã phiếu ở dòng GR0; để nguyên thì lấy phiên mới nhất.
 // Chỉ đọc chrome.storage của extension: không ghi, không gọi mạng, không in token / tên người.
-// Kỳ vọng: state "nw_ready"; cuaHang / so / nwPo đúng phiếu; scanOk false; bienNhanTruoc 0; khoa []; kho có; mọi dòng "có tem";
-// tem = temKhongTrung = số tem vật lý; thieuUid 0; grNw mỗi sản phẩm SL GR = SL Nextwaves.
+// Kỳ vọng: state "nw_ready"; cuaHang / so / nwPo / kho đúng phiếu; scanOk false; bienNhanTruoc 0; khoa []; mọi dòng "có tem";
+// tem = temKhongTrung = số tem vật lý; thieuUid 0; grNw mỗi sản phẩm SL GR = SL Nextwaves; dauDoc "released" / "free" (QR Scan Log đã nhả)
+// hoặc "no_qsl" (QR Scan Log chưa hỗ trợ mượn — bấm Ngắt RFID ở tab bán hàng).
 {
   const GR0 = "GR?????"; // ← mã phiếu, ví dụ GR84674 (để nguyên = phiên mới nhất)
-  chrome.storage.local.get(["sessions", "autoGrants", "grants", "config"]).then(({ sessions = {}, autoGrants = {}, grants = {}, config = {} }) => {
+  chrome.storage.local.get(["sessions", "config"]).then(({ sessions = {}, config = {} }) => {
     // Để nguyên GR????? → lấy phiên cập nhật gần nhất ở môi trường đang chọn trong popup (kết quả in rõ mã phiếu đã lấy).
     const GR = /^GR\d+$/.test(GR0) ? GR0 : ((Object.values(sessions).filter((x) => !config.mode || x.envId === config.mode).sort((a, b) => b.updatedAt - a.updatedAt)[0] || {}).grCode || GR0);
     // Chọn phiên theo mã phiếu + môi trường đang chọn trong popup (Production / Staging), mới nhất; có hơn một phiên trùng mã thì báo.
@@ -20,6 +21,7 @@
       JSON.stringify({
         v: chrome.runtime.getManifest().version,
         mode: config.mode,
+        tenant: s.nwTenant,
         env: s.envId,
         phienTrungMa: cands.length - 1,
         gr: s.grCode,
@@ -29,7 +31,8 @@
         cuaHang: s.posName,
         so: s.deliveryCode,
         nwPo: s.nwPoNumber,
-        kho: !!s.warehouseId,
+        kho: s.warehouseId ? [s.warehouseName || "", s.warehouseCode || ""].filter(Boolean).join(" ") || "có" : null,
+        dauDoc: s.reader ? s.reader.state : null,
         scanOk: !!s.scanOk,
         bienNhanTruoc: (s.receiptIdsBefore || []).length,
         khoa: [].concat(s.writeLocks || [], s.nwWriteLocks || []),
@@ -39,8 +42,6 @@
         temKhongTrung: new Set(us.map((u) => u.epc)).size,
         thieuUid: us.filter((u) => !u.uid).length,
         grNw: (s.fpRows || []).map((r) => [r.productId, r.grBase, r.nwBase]),
-        autoGrants: Object.keys(autoGrants).length,
-        capPhepConHan: Object.values(grants).filter((g) => g.expiresAt > Date.now()).map((g) => g.grCode),
       })
     );
   });

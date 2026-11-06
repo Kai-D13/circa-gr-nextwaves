@@ -23,9 +23,6 @@
       .s div { flex: 1; }
       .s b { font-weight: 600; }
       .s span { color: #555; font-size: 12px; display: block; }
-      .auto { margin-top: 6px; } .auto button { margin-top: 4px; }
-      .confirm { margin-top: 6px; padding: 6px 8px; border: 1px solid #b7791f; border-radius: 6px; }
-      .confirm span { color: #111; }
     </style>
   </head>
   <body>
@@ -40,20 +37,18 @@
         <option value="URL">Theo URL…</option>
       </select>
       <input id="url" type="url" placeholder="Dán một URL POS hoặc Nextwaves của môi trường" hidden />
+      <div id="tenantRow" hidden>
+        <label for="tenant">Tenant Nextwaves của máy</label>
+        <input id="tenant" placeholder="circa (để trống = circa)" autocomplete="off" spellcheck="false" />
+        <p class="note warn" id="tenantNote"></p>
+      </div>
       <p class="note" id="envInfo"></p>
       <div class="row"><button id="save">Lưu</button><span class="msg" id="msg"></span></div>
 
-      <!-- v0.3.1 (G3-1): phiên (có nút cho phép TỰ ĐỘNG) đứng trước ô cấp phép THỦ CÔNG — G3 lượt 1 bấm nhầm ô thủ công ở đầu popup. -->
       <h2>Phiên gần đây</h2>
+      <p class="note">Dược sĩ bấm “Nhận hàng bằng RFID” trên POS → nhận trên Nextwaves → POS tự điền → dược sĩ kiểm rồi bấm HOÀN THÀNH.</p>
       <div id="sessions"><p class="note">Chưa có phiên.</p></div>
 
-      <section id="grantBox" hidden>
-        <h2>Cấp phép điền THỦ CÔNG (từng lần)</h2>
-        <p class="note warn">Chỉ dùng khi KHÔNG chạy tự động. Muốn tự động: bấm “Cho phép tự điền và HOÀN THÀNH 1 lần” trong dòng phiên ở trên. Mỗi cấp phép chỉ dùng cho MỘT lượt điền của MỘT phiếu, hết hạn sau 30 phút.</p>
-        <div class="row"><input id="grCode" placeholder="Mã phiếu nhận, ví dụ GR03878" /><button id="grant">Cho phép điền 1 lần</button></div>
-        <p class="msg" id="grantMsg"></p>
-        <div id="grants"></div>
-      </section>
     </main>
     <script src="../lib/env.js"></script>
     <script src="popup.js"></script>

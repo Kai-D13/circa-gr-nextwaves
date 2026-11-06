@@ -1,33 +1,20 @@
-/* Popup: chọn môi trường (STG / PRD / theo URL), cấp phép điền phiếu từng lần, xem / xoá phiên. Không hiển thị token. */
+/* Popup (v0.4.0): chọn môi trường (STG / PRD / theo URL) + tenant Nextwaves của máy, xem / mở / xoá phiên. Không hiển thị token.
+ * Không còn cấp phép điền / quyền tự động: tab POS tự điền sau khi Nextwaves nhận, dược sĩ tự bấm HOÀN THÀNH. */
 (function () {
   "use strict";
   const E = globalThis.__CGN__.env;
   const $ = (id) => document.getElementById(id);
   const STATE_LABEL = {
     waiting_nw: "Chờ nhận trên Nextwaves",
-    nw_ready: "Đã khớp đơn Nextwaves",
-    received: "Nextwaves đã nhận — chờ điền phiếu",
+    no_nw_order: "Nextwaves chưa có đơn chờ nhận — nhận tay",
+    nw_ready: "Đã khớp đơn Nextwaves — chờ nhận hàng",
+    received: "Nextwaves đã nhận — POS đang / sắp tự điền",
     applying: "Đang điền phiếu",
-    applied: "Đã điền phiếu — chờ HOÀN THÀNH",
-    apply_stopped: "Điền phiếu bị dừng",
+    applied: "Đã điền phiếu — dược sĩ kiểm rồi HOÀN THÀNH",
+    apply_stopped: "Điền phiếu bị dừng — mở phiếu, bấm “Đọc lại và điền tiếp”",
     done: "Đã HOÀN THÀNH",
-    auto_completing: "Đang tự HOÀN THÀNH (đã giữ lượt gửi)",
-    auto_complete_unknown: "Chưa rõ đã HOÀN THÀNH chưa — không gửi lại",
   };
-  // Phiên còn hoạt động (như background / trang POS): chỉ các phiên này mới được cấp phép điền.
-  const ACTIVE = new Set(["waiting_nw", "nw_ready", "received", "applying", "applied", "apply_stopped", "auto_completing", "auto_complete_unknown"]);
-  // Tem dự kiến của phiên (phiếu gửi Nextwaves đã khớp) — như background tính khi cấp quyền tự động.
-  const expectedEpcCount = (s) =>
-    new Set(((s.expected && s.expected.shipments) || []).flatMap((sh) => (sh.lines || []).flatMap((l) => (l.units || []).map((u) => String(u.epc || "").toUpperCase()))).filter(Boolean)).size;
-  const hhmm = (ms) => new Date(ms).toLocaleTimeString("vi-VN");
-  // v0.3.1 (G3-1): phiên còn cho phép tự động được — chưa xác nhận nhận hàng, PO chưa có biên nhận (như autoBlock / auto:arm của
-  // background). Gồm cả phiên đang chờ khớp đơn Nextwaves (nút tự động hiện khi khớp xong).
-  const autoPossible = (env, s) =>
-    !!env && env.writeEnabled && env.id === s.envId && (s.state === "nw_ready" || s.state === "waiting_nw") && !s.scanOk && !(s.receiptIdsBefore || []).length;
-  // "<môi trường>:<mã phiếu>" operator đã được hỏi lại "vẫn cấp phép THỦ CÔNG?" — bấm lần hai cùng mã, cùng môi trường mới cấp.
-  let manualConfirmed = null;
-  // Audit v0.3.1 P2-1: bấm đúp — lượt thứ hai chạy chen khi lượt đầu còn chờ background sẽ lọt qua bước hỏi lại. Đang xử lý thì bỏ qua.
-  let grantBusy = false;
+  const READER_LABEL = { released: "đã mượn (tab bán hàng nhả)", free: "đã mượn (đầu đọc trống)", off: "QR Scan Log đang Ngắt", no_qsl: "QR Scan Log chưa hỗ trợ mượn", no_answer: "QR Scan Log không trả lời", busy: "tab bán hàng đang đọc", returned: "đã trả", return_failed: "trả chưa được" };
 
   async function bg(type, extra) {
     const r = await chrome.runtime.sendMessage(Object.assign({ type }, extra || {}));
@@ -49,122 +36,27 @@
 
   function selectedEnv() {
     const mode = $("mode").value;
-    return mode === "URL" ? E.envFromAnyUrl($("url").value.trim()) : E.envById(mode);
+    const base = mode === "URL" ? E.envFromAnyUrl($("url").value.trim()) : E.envById(mode);
+    return base ? E.withTenant(base, $("tenant").value) : null;
   }
 
   function showEnv() {
     const mode = $("mode").value;
     $("url").hidden = mode !== "URL";
     const env = selectedEnv();
+    const base = mode === "URL" ? E.envFromAnyUrl($("url").value.trim()) : E.envById(mode);
+    $("tenantRow").hidden = !base || !!base.nwTenantFixed;
+    const t = $("tenant").value.trim();
+    $("tenantNote").textContent = t && !E.normTenant(t) ? "Tenant chỉ gồm chữ thường, số, gạch ngang (ví dụ circa, circa-medly)." : "";
     if (!env) {
       $("envInfo").textContent = mode === "URL" && $("url").value.trim() ? "URL không thuộc môi trường đã biết." : "";
       return;
     }
-    const store = env.storeAllowlist ? `chỉ cửa hàng ${env.storeAllowlist.join(", ")}` : "theo cửa hàng đang đăng nhập";
-    $("envInfo").textContent = `${env.label}: POS ${env.posOrigin} · Nextwaves ${env.nwUiOrigin} · ${store}${env.writeEnabled ? "" : " · CHỈ ĐỌC"}`;
+    $("envInfo").textContent = `${env.label}: POS ${env.posOrigin} · Nextwaves ${env.nwUiOrigin} · mọi cửa hàng (theo cửa hàng đang đăng nhập POS)${env.writeEnabled ? "" : " · CHỈ ĐỌC"}`;
   }
 
-  async function renderGrants(env) {
-    $("grantBox").hidden = !(env && env.writeEnabled);
-    if (!env || !env.writeEnabled) return;
-    const list = (await bg("grant:list")).filter((g) => g.envId === env.id);
-    const box = $("grants");
-    box.replaceChildren();
-    for (const g of list) {
-      const row = el("div", undefined, "s");
-      const info = el("div");
-      info.appendChild(el("b", `${g.envId} · ${g.grCode}`));
-      info.appendChild(el("span", `Hết hạn ${new Date(g.expiresAt).toLocaleTimeString("vi-VN")}`));
-      row.appendChild(info);
-      const del = el("button", "Thu hồi", "sec");
-      del.addEventListener("click", async () => {
-        await bg("grant:revoke", { key: `${g.envId}:${g.grCode}` });
-        renderGrants(env);
-      });
-      row.appendChild(del);
-      box.appendChild(row);
-    }
-  }
-
-  // v0.3.0 (PM DECISION-ONE-STG-AUTO-FLOW §2.1): quyền tự điền + tự HOÀN THÀNH một lần cho đúng một phiên đã khớp đơn Nextwaves, trước
-  // khi dược sĩ xác nhận nhận hàng. Bấm nút chỉ MỞ khung xác nhận ghi rõ phạm vi; phải bấm "Xác nhận cho phép" mới gửi auto:arm.
-  function autoBlock(env, s, autoGrant) {
-    const wrap = el("div", undefined, "auto");
-    // audit v0.3.0 F3: chỉ hiện quyền gắn ĐÚNG phiên này (phiên tạo lại cùng GR không thừa hưởng quyền cũ).
-    if (autoGrant && autoGrant.sessionCreatedAt === s.createdAt) {
-      wrap.appendChild(el("span", `Tự động: ĐÃ CHO PHÉP 1 lần · hết hạn ${hhmm(autoGrant.expiresAt)}`));
-      const revoke = el("button", "Thu hồi tự động", "sec");
-      revoke.addEventListener("click", async () => {
-        try {
-          const had = await bg("auto:revoke", { key: s.key });
-          // audit F6: không còn quyền để thu hồi = lượt tự động đã bắt đầu / đã dừng / hết hạn.
-          say("msg", had ? `Đã thu hồi quyền tự động ${s.grCode}.` : `Không còn quyền tự động để thu hồi (${s.grCode}): lượt tự động có thể đã bắt đầu hoặc đã dừng.`, !had);
-        } catch (err) {
-          say("msg", String((err && err.message) || err), true);
-        }
-        renderSessions(env);
-      });
-      wrap.appendChild(revoke);
-      return wrap;
-    }
-    // v0.3.0 P2.5: lượt tự động đã bị bỏ qua (kế hoạch / phiếu / trang không đạt, quyền hết hạn / không khớp lúc nhận) → nói rõ đã dừng,
-    // không còn nút / chữ "ĐÃ CHO PHÉP". Đã dùng quyền (claim tự động) → chỉ báo đã dùng.
-    const skipped = (s.autoRun && s.autoRun.skipped) || (s.state !== "nw_ready" && (s.log || []).some((l) => l.type === "auto_skipped"));
-    if (skipped) {
-      wrap.appendChild(el("span", "Tự động đã dừng — xử lý theo luồng thủ công (cấp phép điền + dược sĩ HOÀN THÀNH)."));
-      return wrap;
-    }
-    if (s.authorization && s.authorization.auto) {
-      wrap.appendChild(el("span", "Tự động: đã dùng quyền 1 lần cho lượt nhận này."));
-      return wrap;
-    }
-    if (!env || !env.writeEnabled || s.envId !== env.id || s.state !== "nw_ready") return null;
-    // audit v0.3.0 F1 / F2 (background cũng chặn): quá muộn hoặc PO đã có biên nhận → không có nút, nói rõ lý do.
-    if (s.scanOk) {
-      wrap.appendChild(el("span", "Không cho phép tự động: Nextwaves đã ghi nhận lượt xác nhận nhận hàng."));
-      return wrap;
-    }
-    if ((s.receiptIdsBefore || []).length) {
-      wrap.appendChild(el("span", "Không cho phép tự động: PO Nextwaves đã có biên nhận từ trước."));
-      return wrap;
-    }
-    const epcs = expectedEpcCount(s);
-    const open = el("button", "Cho phép tự điền và HOÀN THÀNH 1 lần", "sec");
-    open.addEventListener("click", () => {
-      wrap.replaceChildren();
-      const box = el("div", undefined, "confirm");
-      box.appendChild(el("b", "Xác nhận cho phép TỰ ĐỘNG một lần"));
-      for (const line of [
-        `Môi trường: ${env.label} · cửa hàng ${s.posName || s.posId}`,
-        `Phiếu nhận: ${s.grCode} · SO ${s.deliveryCode}`,
-        `Nextwaves: ${s.nwPoNumber} · ${epcs} tem dự kiến`,
-        "Sau khi dược sĩ bấm “Xác nhận nhận hàng” trên Nextwaves, extension TỰ ĐIỀN phiếu và POS sẽ TỰ HOÀN THÀNH sau khi đọc lại đúng toàn bộ phiếu.",
-        "Lỗi / không rõ thì dừng, không tự thử lại. Quyền hết hạn sau 30 phút, chỉ dùng một lần.",
-      ])
-        box.appendChild(el("span", line));
-      const yes = el("button", "Xác nhận cho phép");
-      yes.addEventListener("click", async () => {
-        try {
-          const g = await bg("auto:arm", { key: s.key, confirm: { grCode: s.grCode, nwPoNumber: s.nwPoNumber, epcCount: epcs } });
-          say("msg", `Đã cho phép tự động 1 lần: ${g.grCode} → ${g.nwPoNumber}, hết hạn ${hhmm(g.expiresAt)}.`);
-        } catch (err) {
-          say("msg", String((err && err.message) || err), true);
-        }
-        renderSessions(env);
-      });
-      const no = el("button", "Huỷ", "sec");
-      no.addEventListener("click", () => renderSessions(env));
-      box.appendChild(yes);
-      box.appendChild(no);
-      wrap.appendChild(box);
-    });
-    wrap.appendChild(open);
-    return wrap;
-  }
-
-  async function renderSessions(env) {
+  async function renderSessions() {
     const list = await bg("session:list");
-    const autos = new Map((await bg("auto:list").catch(() => [])).map((g) => [g.key, g]));
     const box = $("sessions");
     box.replaceChildren();
     if (!list.length) {
@@ -174,15 +66,16 @@
     for (const s of list.slice(0, 20)) {
       const row = el("div", undefined, "s");
       const info = el("div");
-      info.appendChild(el("b", `${s.envId} · ${s.grCode || s.grId}`));
+      info.appendChild(el("b", `${s.envId} · ${s.grCode || s.grId}${s.posName ? ` · ${s.posName}` : ""}`));
       info.appendChild(el("span", STATE_LABEL[s.state] || s.state));
-      info.appendChild(el("span", `${s.deliveryCode || s.soBase}${s.nwPoNumber ? ` → ${s.nwPoNumber}` : ""} · ${new Date(s.updatedAt).toLocaleString("vi-VN")}`));
-      if (!s.schema) info.appendChild(el("span", "Phiên của bản cũ — không dùng để điền; mở lại phiếu để tạo phiên mới"));
+      const wh = s.warehouseName || s.warehouseCode ? ` · kho ${[s.warehouseName, s.warehouseCode ? `(${s.warehouseCode})` : ""].filter(Boolean).join(" ")}` : "";
+      info.appendChild(el("span", `${s.deliveryCode || s.soBase}${s.nwPoNumber ? ` → ${s.nwPoNumber}` : ""}${wh} · ${new Date(s.updatedAt).toLocaleString("vi-VN")}`));
+      if (s.nwTenant) info.appendChild(el("span", `Tenant Nextwaves: ${s.nwTenant}`));
+      if (s.reader && s.reader.state) info.appendChild(el("span", `Đầu đọc: ${READER_LABEL[s.reader.state] || s.reader.state}`));
+      if (!s.schema || s.schema < 2) info.appendChild(el("span", "Phiên của bản cũ — không dùng để điền; mở lại phiếu để tạo phiên mới"));
       const locks = [].concat(s.writeLocks || [], s.nwWriteLocks || []);
       if (locks.length) info.appendChild(el("span", `Khoá điền: ${locks.join(", ")}`));
       if (s.applyError) info.appendChild(el("span", `Dừng: ${s.applyError.reason}${s.applyError.status ? ` (HTTP ${s.applyError.status})` : ""}`));
-      const ab = autoBlock(env, s, autos.get(s.key));
-      if (ab) info.appendChild(ab);
       row.appendChild(info);
       const del = el("button", "Xoá", "sec");
       del.addEventListener("click", async () => {
@@ -191,7 +84,7 @@
         } catch (err) {
           say("msg", String((err && err.message) || err), true);
         }
-        renderSessions(env);
+        renderSessions();
       });
       row.appendChild(del);
       box.appendChild(row);
@@ -203,62 +96,24 @@
     const c = await bg("config:get");
     $("mode").value = c.mode || (c.url ? "URL" : "");
     $("url").value = c.url || "";
+    $("tenant").value = c.nwTenant || "";
     showEnv();
-    renderGrants(E.envFromConfig(c));
-    renderSessions(E.envFromConfig(c));
+    renderSessions();
   }
 
   $("mode").addEventListener("change", showEnv);
   $("url").addEventListener("input", showEnv);
+  $("tenant").addEventListener("input", showEnv);
   $("save").addEventListener("click", async () => {
     const mode = $("mode").value;
-    const patch = mode === "URL" ? { mode: "", url: $("url").value.trim() } : { mode, url: "" };
+    const nwTenant = $("tenant").value.trim().toLowerCase();
+    const patch = mode === "URL" ? { mode: "", url: $("url").value.trim(), nwTenant } : { mode, url: "", nwTenant };
     try {
-      const c = await bg("config:set", { patch });
-      say("msg", "Đã lưu. Tải lại tab POS / Nextwaves đang mở.");
-      renderGrants(E.envFromConfig(c));
+      await bg("config:set", { patch });
+      say("msg", "Đã lưu. Tải lại (F5) tab POS / Nextwaves đang mở.");
+      showEnv();
     } catch (err) {
       say("msg", String((err && err.message) || err), true);
-    }
-  });
-  $("grant").addEventListener("click", async () => {
-    if (grantBusy) return;
-    grantBusy = true;
-    try {
-      const c = await bg("config:get");
-      const env = E.envFromConfig(c);
-      if (!env) throw new Error("Chưa lưu môi trường");
-      // v0.2.5 (PM AUDIT-A1 P3): chỉ cấp phép khi mã khớp CHÍNH XÁC một phiên còn hoạt động của môi trường đang chọn (A1 28/10: "GR3887"
-      // gõ thiếu số 0 vẫn tạo được cấp phép). So như background (bỏ khoảng trắng hai đầu, chữ hoa); không sửa ô nhập.
-      // Không đọc được phiên → không cấp.
-      const code = String($("grCode").value || "").trim().toUpperCase();
-      let list;
-      try {
-        list = await bg("session:list");
-      } catch (err) {
-        throw new Error(`Không đọc được danh sách phiên — chưa cấp phép (${String((err && err.message) || err)}).`);
-      }
-      const open = (list || []).filter((s) => s && s.schema && s.envId === env.id && ACTIVE.has(s.state));
-      if (!open.some((s) => String(s.grCode || "").toUpperCase() === code)) {
-        const codes = [...new Set(open.map((s) => s.grCode))];
-        const odd = /[^A-Z0-9]/.test(code) ? " Mã có ký tự lạ (khoảng trắng / ký tự ẩn, thường do dán) — hãy gõ tay." : "";
-        throw new Error(`Mã phiếu không khớp phiên đang có — chưa cấp phép.${odd} ${codes.length ? `Phiên đang mở (${env.label}): ${codes.join(", ")}.` : `Không có phiên đang mở ở ${env.label}.`}`);
-      }
-      // v0.3.1 (G3-1): G3 lượt 1 bấm nhầm ô này thay cho nút tự động → mất một lượt tự động. Phiếu còn tự động được thì hỏi lại;
-      // bấm lần hai cùng mã mới cấp phép thủ công.
-      if (open.some((s) => String(s.grCode || "").toUpperCase() === code && autoPossible(env, s)) && manualConfirmed !== `${env.id}:${code}`) {
-        manualConfirmed = `${env.id}:${code}`;
-        throw new Error(`${code} chưa nhận hàng và CÓ THỂ chạy tự động: dùng nút “Cho phép tự điền và HOÀN THÀNH 1 lần” trong dòng phiên ở trên (nút hiện khi phiên “Đã khớp đơn Nextwaves”). Vẫn muốn điền THỦ CÔNG thì bấm “Cho phép điền 1 lần” lần nữa.`);
-      }
-      manualConfirmed = null;
-      const g = await bg("grant:create", { envId: env.id, grCode: $("grCode").value });
-      say("grantMsg", `Đã cho phép điền 1 lần: ${g.grCode} (${env.label}).`);
-      $("grCode").value = "";
-      renderGrants(env);
-    } catch (err) {
-      say("grantMsg", String((err && err.message) || err), true);
-    } finally {
-      grantBusy = false;
     }
   });
 

@@ -1,10 +1,11 @@
-// v0.3.1 — kiểm SAU lượt (chỉ đọc): tóm tắt phiên + nhật ký để gửi Claude, thay cho file xuất storage.
+// v0.4.0 — kiểm SAU lượt (chỉ đọc): tóm tắt phiên + nhật ký để gửi Claude, thay cho file xuất storage.
 // Service worker → Console → dán → Enter (nhiều phiếu thì sửa mã ở dòng GR0) → chép kết quả gửi Claude.
-// Lượt tự động đạt: state "done"; hoanThanh.source "auto"; quyenDaDung.auto true; nwReceipts 1; autoGrantsConLai 0;
-// soLoDaDien = số lô trên phiếu; nhật ký có receive_scan 2xx → scan_ok → nw_received → auto_ready → auto_claimed → applied → auto_completed.
+// Lượt đạt: state "done" (dược sĩ đã HOÀN THÀNH) hoặc "applied" (đã tự điền, chưa HOÀN THÀNH); dien.how "auto"; dungDien null;
+// nwReceipts 1; soLoDaDien = số lô trên phiếu; dauDoc "returned" (hoặc "no_qsl"); nhật ký có receive_scan 2xx → scan_ok → nw_received →
+// pos_focused → apply_claimed → applied (→ gr_completed khi dược sĩ HOÀN THÀNH).
 {
   const GR0 = "GR?????"; // ← mã phiếu, ví dụ GR84674 (để nguyên = phiên mới nhất)
-  chrome.storage.local.get(["sessions", "autoGrants", "grants", "config"]).then(({ sessions = {}, autoGrants = {}, grants = {}, config = {} }) => {
+  chrome.storage.local.get(["sessions", "config"]).then(({ sessions = {}, config = {} }) => {
     // Để nguyên GR????? → lấy phiên cập nhật gần nhất ở môi trường đang chọn trong popup (kết quả in rõ mã phiếu đã lấy).
     const GR = /^GR\d+$/.test(GR0) ? GR0 : ((Object.values(sessions).filter((x) => !config.mode || x.envId === config.mode).sort((a, b) => b.updatedAt - a.updatedAt)[0] || {}).grCode || GR0);
     const t = (v) => (v ? new Date(v).toLocaleTimeString("vi-VN") : null);
@@ -17,22 +18,23 @@
       JSON.stringify(
         {
           v: chrome.runtime.getManifest().version,
+          tenant: s.nwTenant,
           env: s.envId,
           phienTrungMa: cands.length - 1,
           gr: s.grCode,
+          cuaHang: s.posName,
+          kho: [s.warehouseName || "", s.warehouseCode || ""].filter(Boolean).join(" ") || null,
           state: s.state,
           scanOkAt: t(s.scanOkAt),
-          autoRun: s.autoRun ? { at: t(s.autoRun.at), skipped: s.autoRun.skipped || null } : null,
-          quyenDaDung: s.authorization ? { auto: !!s.authorization.auto, plan: s.authorization.planHash, cap: t(s.authorization.grantedAt), dung: t(s.authorization.usedAt) } : null,
-          hoanThanh: s.completeResult ? { source: s.completeResult.source || null, at: t(s.completeResult.at) } : null,
+          nhanAt: t(s.receivedAt),
+          dien: s.applyClaim ? { how: s.applyClaim.how, plan: s.applyClaim.planHash, at: t(s.applyClaim.at) } : null,
           dungDien: s.applyError || null,
+          dauDoc: s.reader ? s.reader.state : null,
           nwUnits: (r.units || []).length,
           nwReceipts: (r.receiptIds || []).length,
-          autoGrantsConLai: Object.keys(autoGrants).filter((k) => autoGrants[k].expiresAt > Date.now()).length,
-          capPhepConHan: Object.values(grants).filter((g) => g.expiresAt > Date.now()).length,
-          // Mỗi lô ghi 2 dòng apply_* (+ dòng plan): chỉ đếm, để phiếu nhiều lô vẫn giữ đủ mốc start … auto_completed (nhật ký tối đa 200 dòng).
+          // Mỗi lô ghi 2 dòng apply_* (+ dòng plan): chỉ đếm, để phiếu nhiều lô vẫn giữ đủ mốc (nhật ký tối đa 200 dòng).
           soLoDaDien: (s.log || []).filter((l) => l.type === "apply_done").length,
-          log: (s.log || []).filter((l) => !/^(apply_sending|apply_done|plan)$/.test(l.type)).slice(-60).map((l) => [t(l.at), l.type, l.reason || l.httpStatus || l.status || l.source || l.epcs || l.units || ""].join(" ")),
+          log: (s.log || []).filter((l) => !/^(apply_sending|apply_done|plan)$/.test(l.type)).slice(-60).map((l) => [t(l.at), l.type, l.reason || l.httpStatus || l.status || l.how || l.why || l.units || ""].join(" ")),
         },
         null,
         1
