@@ -1654,3 +1654,48 @@ test("v0.2.5 P2: hook báo HOÀN THÀNH 2xx → gỡ khung + dừng chờ chỗ 
     b.close();
   }
 });
+
+// ---------- v0.3.1 rà cuối 06/11: SO tách giao — phiếu -P2 của PO khác không khoá; tab Nextwaves gắn đúng phiên đã mở nó (P2-1) ----------
+
+test("v0.3.1 SO tách giao: SO có thêm phiếu nhận của PO KHÁC → phiên không khoá, cấp phép điền được (cùng PO vẫn khoá: test P3 / P1.6 ở trên)", async () => {
+  const otherPo = (d) => {
+    d.goods_receipts.push(Object.assign(JSON.parse(JSON.stringify(d.goods_receipts[0])), { id: TWIN_GR, code: "GR03999", purchase_order_id: "22222222-3333-4444-8555-666666666666", purchase_order_code: "PO00006999" }));
+    d.total = 2;
+  };
+  const { b, srv, pos } = await openToReceived({ server: { soSearch: otherPo } });
+  try {
+    assert.deepEqual(b.session(KEY).writeLocks, []);
+    await grant(b);
+    (await until(() => fillButton(pos))).onClick();
+    await sessionState(b, "applied");
+    assert.equal(codesOnGr(srv).length, 12);
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.3.1 P2-1: hai phiên cùng SO — tab Nextwaves extension mở cho phiên nào gắn đúng phiên đó; tab tự mở chỉ gắn khi có đúng một phiên", async () => {
+  const { b, nw } = await openToReady();
+  try {
+    const OTHER = `STG:${TWIN_GR}`;
+    const a = b.session(KEY);
+    assert.equal(a.nwTabId, nw.id);
+    const ask = async (t) => {
+      const r = await b.sendFromTab(t, { type: "session:findByNw", envId: "STG", po: "SOBD1593858" });
+      return r.data ? r.data.key : null;
+    };
+    const manual = b.openTab(`${NW}/vi/purchases/receive?po=SOBD1593858`);
+    assert.equal(await ask(manual), KEY, "một phiên: tab tự mở vẫn gắn");
+    // Phiếu -P2 cùng SO: phiên thứ hai MỚI HƠN, tab Nextwaves riêng.
+    await b.patchSession(OTHER, Object.assign(H.clone(a), { key: OTHER, grId: TWIN_GR, grCode: "GR03999", nwTabId: 99999, updatedAt: Date.now() + 60000 }));
+    assert.equal(await ask(nw), KEY, "tab của phiên GR03878 vẫn gắn GR03878 dù phiên kia mới hơn");
+    assert.equal(await ask(manual), null, "tab tự mở + hai phiên cùng SO → không đoán");
+    // Phiên kia được mở lại Nextwaves (gắn tab tự mở) → mỗi tab gắn phiên của nó.
+    b.patchSession(OTHER, { nwTabId: manual.id });
+    await settle(30);
+    assert.equal(await ask(manual), OTHER);
+    assert.equal(await ask(nw), KEY);
+  } finally {
+    b.close();
+  }
+});

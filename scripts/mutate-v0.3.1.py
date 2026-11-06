@@ -24,7 +24,12 @@ OLD_PRD = ("src/lib/env.js", "      writeEnabled: false,", "      writeEnabled: 
 # v0.3.1 (06/11): bỏ khoá nw_many_orders khi đúng một đơn khớp số lượng → ca "bỏ khoá" của v0.3.0 không còn neo; thay bằng ca "khoá lại".
 OLD_LOCK = ("src/lib/resolve.js", 'if (verified.length > 1) out.writeLocks.push("nw_many_orders");', "", "P3 bỏ khoá nhiều đơn Nextwaves")
 assert any(tuple(m[:4]) == OLD_LOCK for m in m030.muts), "không tìm thấy ca P3 bỏ khoá nhiều đơn của v0.3.0"
-muts = [m for m in m030.muts if tuple(m[:4]) not in (OLD_PRD, OLD_LOCK)]
+# v0.3.1 (06/11 rà cuối): khoá so_many_gr tính theo PO của phiếu (SO tách giao) → ca "bỏ khoá" của v0.3.0 đổi neo, giữ chỗ cũ.
+OLD_SO = ("src/lib/pos-model.js", 'return live.length === 1 ? null : "so_many_gr";', "return null;", "P3 bỏ khoá SO nhiều GR")
+NEW_SO_ANCHOR = 'return live.filter((g) => g.poId === me.poId).length === 1 ? null : "so_many_gr";'
+assert any(tuple(m[:4]) == OLD_SO for m in m030.muts), "không tìm thấy ca P3 bỏ khoá SO nhiều GR của v0.3.0"
+muts = [(OLD_SO[0], NEW_SO_ANCHOR, "return null;", OLD_SO[3] + " (theo PO, 06/11)") + tuple(m[4:]) if tuple(m[:4]) == OLD_SO else m for m in m030.muts]
+muts = [m for m in muts if tuple(m[:4]) not in (OLD_PRD, OLD_LOCK)]
 assert len(muts) == len(m030.muts) - 2, "không tìm thấy ca P1.3 PRD được ghi của v0.3.0"
 muts.insert(m030.muts.index(next(m for m in m030.muts if tuple(m[:4]) == OLD_PRD)), (
     "src/lib/env.js",
@@ -87,6 +92,12 @@ muts += [
     ("src/lib/resolve.js", 'fp.rows.some((x) => x.productId === "?" || x.problems', "fp.rows.some((x) => x.problems", "v0.3.1 dòng thiếu mã không tính là không so được"),
     ("src/lib/resolve.js", ' || x.problems.includes("tagged_count_mismatch")', "", "v0.3.1 số tem ≠ số lượng không tính là không so được"),
     ("src/lib/resolve.js", "if (!shipped || fp.rows.some(", "if (fp.rows.some(", "v0.3.1 chưa có phiếu gửi không tính là không so được"),
+    # rà cuối 06/11: SO tách giao — khoá POS theo PO của phiếu; tab Nextwaves gắn đúng phiên đã mở nó (P2-1)
+    ("src/lib/pos-model.js", NEW_SO_ANCHOR, 'return live.length === 1 ? null : "so_many_gr";', "v0.3.1 SO tách giao: GR của PO khác vẫn khoá"),
+    ("src/lib/pos-model.js", 'if (!me || live.some((g) => !g.poId)) return "so_gr_unknown";', 'if (!me) return "so_gr_unknown";', "v0.3.1 dòng GR thiếu PO vẫn kết luận"),
+    ("src/background.js", "  if (own.length) return own[0];\n", "", "v0.3.1 P2-1 tab Nextwaves không ưu tiên phiên của nó"),
+    ("src/background.js", "  return list.length === 1 ? list[0] : null;\n", "  return list[0] || null;\n", "v0.3.1 P2-1 tab tự mở đoán phiên mới nhất"),
+    ("src/background.js", "return findByNw(msg.envId, msg.po, sender);", "return findByNw(msg.envId, msg.po);", "v0.3.1 P2-1 không biết tab gửi"),
 ]
 # Chạy lại một phần: CGN_MUT_FILTER="chuỗi 1|chuỗi 2" → chỉ các ca có tên chứa một trong các chuỗi (vd. ca từng sống + ca v0.3.1).
 # CGN_MUT_FILES="src/lib/keys.js|src/lib/resolve.js" → thêm mọi ca trên các file đó (chạy lại sau khi sửa lõi).

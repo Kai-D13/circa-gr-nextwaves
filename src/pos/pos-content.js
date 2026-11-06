@@ -66,7 +66,7 @@
     no_grant: "Chưa có cấp phép điền cho phiếu này (hoặc cấp phép đã dùng / hết hạn)",
     env_read_only: "Môi trường này chỉ đọc",
     warehouse_unmapped: "Cửa hàng chưa có bảng kho Nextwaves",
-    so_many_gr: "SO có nhiều phiếu nhận — chưa chứng minh được đúng lần giao",
+    so_many_gr: "SO có nhiều phiếu nhận trên cùng PO — chưa chứng minh được đúng lần giao",
     so_gr_unknown: "Không kiểm được đủ / rõ danh sách phiếu nhận của SO",
     nw_many_orders: "Nextwaves có nhiều đơn cùng SO — chưa chứng minh được đúng lần giao",
     lease_held: "Tab khác đang điền phiếu này",

@@ -1,11 +1,14 @@
 // v0.3.1 — kiểm TRƯỚC (chỉ đọc): phiên của một phiếu sau khi bấm "Nhận hàng bằng RFID", trước khi cho phép tự động.
-// chrome://extensions → thẻ "Circa GR ← Nextwaves" → "Service worker" → Console → sửa mã phiếu ở dòng GR → dán cả đoạn → Enter.
+// chrome://extensions → thẻ "Circa GR ← Nextwaves" → "Service worker" → Console → dán cả đoạn → Enter. Đang có nhiều phiếu thì
+// sửa mã phiếu ở dòng GR0; để nguyên thì lấy phiên mới nhất.
 // Chỉ đọc chrome.storage của extension: không ghi, không gọi mạng, không in token / tên người.
 // Kỳ vọng: state "nw_ready"; cuaHang / so / nwPo đúng phiếu; scanOk false; bienNhanTruoc 0; khoa []; kho có; mọi dòng "có tem";
 // tem = temKhongTrung = số tem vật lý; thieuUid 0; grNw mỗi sản phẩm SL GR = SL Nextwaves.
 {
-  const GR = "GR?????"; // ← mã phiếu, ví dụ GR03929
+  const GR0 = "GR?????"; // ← mã phiếu, ví dụ GR84674 (để nguyên = phiên mới nhất)
   chrome.storage.local.get(["sessions", "autoGrants", "grants", "config"]).then(({ sessions = {}, autoGrants = {}, grants = {}, config = {} }) => {
+    // Để nguyên GR????? → lấy phiên cập nhật gần nhất ở môi trường đang chọn trong popup (kết quả in rõ mã phiếu đã lấy).
+    const GR = /^GR\d+$/.test(GR0) ? GR0 : ((Object.values(sessions).filter((x) => !config.mode || x.envId === config.mode).sort((a, b) => b.updatedAt - a.updatedAt)[0] || {}).grCode || GR0);
     // Chọn phiên theo mã phiếu + môi trường đang chọn trong popup (Production / Staging), mới nhất; có hơn một phiên trùng mã thì báo.
     const cands = Object.values(sessions).filter((x) => x.grCode === GR && (!config.mode || x.envId === config.mode)).sort((a, b) => b.updatedAt - a.updatedAt);
     const s = cands[0];

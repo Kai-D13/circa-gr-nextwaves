@@ -119,3 +119,27 @@ test("production SO 38567266 (một đơn): GR84674 ↔ PO-2026-000002, mã giao
   assert.equal(r.ok, true, r.reason);
   assert.deepEqual([r.chosen.order.poNumber, r.verified, r.writeLocks], ["PO-2026-000002", 1, []]);
 });
+
+test("production tìm GR theo SO 38567266 (capture 06/11): một phiếu GR84674 → không khoá; SO tách giao thêm phiếu -P2 PO khác → vẫn không khoá; cùng PO / thiếu PO → khoá", () => {
+  const { pos } = H.lib();
+  const GR84674 = "88fef544-d4cc-4aa7-b032-acca6eef5b0d";
+  const real = H.sample("pos-prd-gr-search-so-38567266-20261106.json");
+  const check = (j) => pos.checkSoGrs(j, FLORITA);
+  const c = check(real);
+  assert.deepEqual([c.ok, c.total, c.list.map((g) => [g.code, g.poCode, g.status])], [true, 1, [["GR84674", "PO01974972", "WAITING_TO_RECEIVE"]]]);
+  assert.equal(pos.soWriteLock(c, GR84674), null);
+  const withP2 = (patch) => {
+    const j = H.clone(real);
+    j.data.goods_receipts.push(Object.assign(H.clone(j.data.goods_receipts[0]), { id: "11111111-2222-4333-8444-555555555555", code: "GR84999", purchase_order_id: "22222222-3333-4444-8555-666666666666", purchase_order_code: "PO01974973" }, patch));
+    j.data.total = 2;
+    return check(j);
+  };
+  assert.equal(pos.soWriteLock(withP2({}), GR84674), null, "phiếu -P2 của PO khác");
+  assert.equal(pos.soWriteLock(withP2({ status: "COMPLETED" }), GR84674), null, "phiếu -P2 đã nhận");
+  assert.equal(pos.soWriteLock(withP2({ purchase_order_id: "b82a4401-b6b8-4439-aeea-0c210e3b3a96" }), GR84674), "so_many_gr", "hai phiếu cùng PO");
+  assert.equal(pos.soWriteLock(withP2({ purchase_order_id: "b82a4401-b6b8-4439-aeea-0c210e3b3a96", status: "CANCELED" }), GR84674), null, "phiếu cùng PO đã huỷ");
+  assert.equal(pos.soWriteLock(withP2({ purchase_order_id: null }), GR84674), "so_gr_unknown", "phiếu kia thiếu PO");
+  const noPo = H.clone(real);
+  delete noPo.data.goods_receipts[0].purchase_order_id;
+  assert.equal(pos.soWriteLock(check(noPo), GR84674), "so_gr_unknown", "phiếu đang mở thiếu PO");
+});

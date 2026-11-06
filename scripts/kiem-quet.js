@@ -1,10 +1,12 @@
 // v0.3.1 — CHỐT CHẶN trước khi quét (chỉ đọc): chạy SAU khi bấm "Xác nhận cho phép" tự động, NGAY TRƯỚC khi đặt tem lên đầu đọc.
-// Service worker → Console → sửa mã phiếu ở dòng GR → dán → Enter. Phải in "SẴN SÀNG QUÉT: …". In "DỪNG: …" thì không quét.
+// Service worker → Console → dán → Enter (nhiều phiếu thì sửa mã ở dòng GR0). Phải in "SẴN SÀNG QUÉT: …". In "DỪNG: …" thì không quét.
 // Đối chiếu quyền tự động với phiên theo đúng các trường background kiểm lúc nhận (autoGrantFits), cộng hạn còn ≥ 10 phút và tập tem.
 // Phiên bị Xoá / Huỷ rồi mở lại (G3 lượt 2, 30/10) → quyền cũ mất → in DỪNG: cho phép lại rồi chạy lại đoạn này.
 {
-  const GR = "GR?????"; // ← mã phiếu, ví dụ GR03929
+  const GR0 = "GR?????"; // ← mã phiếu, ví dụ GR84674 (để nguyên = phiên mới nhất)
   chrome.storage.local.get(["sessions", "autoGrants", "config"]).then(({ sessions = {}, autoGrants = {}, config = {} }) => {
+    // Để nguyên GR????? → lấy phiên cập nhật gần nhất ở môi trường đang chọn trong popup (kết quả in rõ mã phiếu đã lấy).
+    const GR = /^GR\d+$/.test(GR0) ? GR0 : ((Object.values(sessions).filter((x) => !config.mode || x.envId === config.mode).sort((a, b) => b.updatedAt - a.updatedAt)[0] || {}).grCode || GR0);
     // Chọn phiên theo mã phiếu + môi trường đang chọn trong popup (Production / Staging), mới nhất; có hơn một phiên trùng mã thì báo.
     const cands = Object.values(sessions).filter((x) => x.grCode === GR && (!config.mode || x.envId === config.mode)).sort((a, b) => b.updatedAt - a.updatedAt);
     const s = cands[0];

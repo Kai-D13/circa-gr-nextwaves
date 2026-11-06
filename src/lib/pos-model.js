@@ -101,12 +101,15 @@
     return Object.assign({ ok: true, list: page.items }, facts);
   }
 
-  // Khoá ghi phía POS (P3): SO phải có đúng một GR chưa huỷ ở cửa hàng, và đó là GR đang mở. null = không khoá.
+  // Khoá ghi phía POS (P3): danh sách GR của SO đọc đủ, GR đang mở có trong đó, và là GR chưa huỷ DUY NHẤT của PO của nó.
+  // v0.3.1 (06/11, SO tách giao): mỗi lần giao (-P1 / -P2 / -F) có PO riêng → GR của PO khác cùng SO không khoá; đơn Nextwaves vẫn
+  // phải khớp số lượng đúng phiếu này (resolve: đúng một đơn khớp, đơn khác lệch rõ). Dòng thiếu PO → không kết luận. null = không khoá.
   function soWriteLock(check, grId) {
     if (!check || !check.ok) return "so_gr_unknown";
     const live = check.list.filter((g) => !/^CANCEL/i.test(g.status));
-    if (!live.some((g) => g.id === lower(grId))) return "so_gr_unknown";
-    return live.length === 1 ? null : "so_many_gr";
+    const me = live.find((g) => g.id === lower(grId));
+    if (!me || live.some((g) => !g.poId)) return "so_gr_unknown";
+    return live.filter((g) => g.poId === me.poId).length === 1 ? null : "so_many_gr";
   }
 
   const isReceivable = (gr) => !!gr && RECEIVABLE.has(gr.status);

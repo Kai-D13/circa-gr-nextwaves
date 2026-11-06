@@ -1,0 +1,22 @@
+{
+ "_note": "Dựng lại từ response THẬT GET /v1/order/goods-receipt/search?query=so_thuocsi=38567266,pos_id=<Florita>,... (Net Capture 06/11 17:00, production). Chỉ giữ trường extension đọc; bỏ items, tên người, giờ.",
+ "success": true,
+ "data": {
+  "goods_receipts": [
+   {
+    "id": "88fef544-d4cc-4aa7-b032-acca6eef5b0d",
+    "code": "GR84674",
+    "status": "WAITING_TO_RECEIVE",
+    "purchase_order_id": "b82a4401-b6b8-4439-aeea-0c210e3b3a96",
+    "purchase_order_code": "PO01974972",
+    "pos_info": {
+     "id": "c476efb2-415c-429a-978e-d389b4b06607"
+    },
+    "seller_code": "BUYMED"
+   }
+  ],
+  "total": 1,
+  "page": 1,
+  "limit": 1000
+ }
+}

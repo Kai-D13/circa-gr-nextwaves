@@ -1128,9 +1128,13 @@ test("v0.3.1 G3-5: kiem-truoc / kiem-quet / kiem-sau trên lượt tự động 
     assert.equal((await arm(b)).ok, true);
     assert.match(await runKiem("kiem-quet.js", b), /^SẴN SÀNG QUÉT: GR03887 · PO13806459 · 15 tem · quyền còn (29|30) phút$/);
     assert.match(await runKiem("kiem-quet.js", b, "GR00000"), /^DỪNG: không có phiên GR00000/);
+    // Để nguyên mã mẫu GR????? → lấy phiên mới nhất của môi trường đang chọn (06/11: operator dán đoạn kiểm chưa sửa mã).
+    assert.equal(JSON.parse(await runKiem("kiem-truoc.js", b, "GR?????")).gr, "GR03887");
+    assert.match(await runKiem("kiem-quet.js", b, "GR?????"), /^SẴN SÀNG QUÉT: GR03887 · /);
     await receive(ctx);
     await sessionState(b, "done", 8000);
     const sau = JSON.parse(await runKiem("kiem-sau.js", b));
+    assert.equal(JSON.parse(await runKiem("kiem-sau.js", b, "GR?????")).state, "done");
     assert.deepEqual([sau.env, sau.state, sau.hoanThanh.source, sau.quyenDaDung.auto, sau.quyenDaDung.plan, sau.nwUnits, sau.nwReceipts, sau.autoGrantsConLai, sau.dungDien, sau.soLoDaDien], ["STG", "done", "auto", true, "EF0E020C", 15, 1, 0, null, 5]);
     assert.deepEqual(
       sau.log.map((l) => l.split(" ")[1]).filter((x) => !/^apply_(sending|done)$/.test(x) && x !== "plan"),

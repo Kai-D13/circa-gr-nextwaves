@@ -1,10 +1,12 @@
 // v0.3.1 — kiểm SAU lượt (chỉ đọc): tóm tắt phiên + nhật ký để gửi Claude, thay cho file xuất storage.
-// Service worker → Console → sửa mã phiếu ở dòng GR → dán → Enter → chép kết quả gửi Claude.
+// Service worker → Console → dán → Enter (nhiều phiếu thì sửa mã ở dòng GR0) → chép kết quả gửi Claude.
 // Lượt tự động đạt: state "done"; hoanThanh.source "auto"; quyenDaDung.auto true; nwReceipts 1; autoGrantsConLai 0;
 // soLoDaDien = số lô trên phiếu; nhật ký có receive_scan 2xx → scan_ok → nw_received → auto_ready → auto_claimed → applied → auto_completed.
 {
-  const GR = "GR?????"; // ← mã phiếu, ví dụ GR03929
+  const GR0 = "GR?????"; // ← mã phiếu, ví dụ GR84674 (để nguyên = phiên mới nhất)
   chrome.storage.local.get(["sessions", "autoGrants", "grants", "config"]).then(({ sessions = {}, autoGrants = {}, grants = {}, config = {} }) => {
+    // Để nguyên GR????? → lấy phiên cập nhật gần nhất ở môi trường đang chọn trong popup (kết quả in rõ mã phiếu đã lấy).
+    const GR = /^GR\d+$/.test(GR0) ? GR0 : ((Object.values(sessions).filter((x) => !config.mode || x.envId === config.mode).sort((a, b) => b.updatedAt - a.updatedAt)[0] || {}).grCode || GR0);
     const t = (v) => (v ? new Date(v).toLocaleTimeString("vi-VN") : null);
     // Chọn phiên theo mã phiếu + môi trường đang chọn trong popup (Production / Staging), mới nhất; có hơn một phiên trùng mã thì báo.
     const cands = Object.values(sessions).filter((x) => x.grCode === GR && (!config.mode || x.envId === config.mode)).sort((a, b) => b.updatedAt - a.updatedAt);

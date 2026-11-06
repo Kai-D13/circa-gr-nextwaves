@@ -413,7 +413,10 @@ async function startSession(msg, sender) {
 }
 
 // Trang Nextwaves ?po=<SO | số PO | id PO> → phiên đang mở tương ứng (mới nhất).
-async function findByNw(envId, po) {
+// Phiên của một tab Nextwaves. v0.3.1 (audit 06/11 P2-1): SO tách giao có thể có nhiều phiên cùng SO (mỗi phiếu -P1/-P2 một phiên,
+// mỗi phiên một tab Nextwaves riêng) → tab do extension mở cho phiên nào thì gắn ĐÚNG phiên đó. Tab khác (dược sĩ tự mở): chỉ gắn
+// khi có đúng MỘT phiên khớp; nhiều phiên thì không đoán (mở lại Nextwaves từ phiếu POS).
+async function findByNw(envId, po, sender) {
   const all = await getSessions();
   const p = String(po || "").trim();
   const base = K.soBase(p);
@@ -425,7 +428,10 @@ async function findByNw(envId, po) {
       ((base && s.soBase === base) || (s.nwPoId && s.nwPoId === p.toLowerCase()) || (s.nwPoNumber && s.nwPoNumber.toUpperCase() === p.toUpperCase()))
   );
   list.sort((a, b) => b.updatedAt - a.updatedAt);
-  return list[0] || null;
+  const tabId = sender && sender.tab ? sender.tab.id : null;
+  const own = tabId === null || tabId === undefined ? [] : list.filter((s) => s.nwTabId === tabId);
+  if (own.length) return own[0];
+  return list.length === 1 ? list[0] : null;
 }
 
 // Lý do không được ghi phiên này (rỗng = được, nếu có cấp phép).
@@ -700,7 +706,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       case "session:start":
         return startSession(msg, sender);
       case "session:findByNw":
-        return findByNw(msg.envId, msg.po);
+        return findByNw(msg.envId, msg.po, sender);
       case "session:update":
         return contentUpdate(msg.key, msg.patch, msg.log);
       case "session:log":

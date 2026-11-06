@@ -118,6 +118,12 @@ test("P1.6: danh sách GR theo SO phải đọc đủ (total / page / limit) và
   assert.equal(pos.soWriteLock(check(j5), GR), "so_many_gr");
   j5.data.goods_receipts[1].status = "CANCELED";
   assert.equal(pos.soWriteLock(check(j5), GR), null);
+  // v0.3.1 (06/11, SO tách giao): GR kia thuộc PO KHÁC (lần giao khác của cùng SO) → không khoá; GR kia thiếu PO → không kết luận.
+  j5.data.goods_receipts[1].status = "WAITING_TO_RECEIVE";
+  j5.data.goods_receipts[1].purchase_order_id = "22222222-3333-4444-8555-666666666666";
+  assert.equal(pos.soWriteLock(check(j5), GR), null);
+  j5.data.goods_receipts[1].purchase_order_id = "";
+  assert.equal(pos.soWriteLock(check(j5), GR), "so_gr_unknown");
   // GR đang mở không có trong danh sách → khoá.
   assert.equal(pos.soWriteLock(ok, "99999999-0000-4000-8000-000000000000"), "so_gr_unknown");
 });
