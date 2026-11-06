@@ -88,6 +88,11 @@ NEW = [
     ("src/background.js", '  if (state === "done" && (NW_OPEN.has(s.state) || s.state === "no_nw_order")) laterCloseNwAndReturn(s2, s.nwTabId, "gr_done");\n', "", "review P3-6 phiếu xong không trả đầu đọc"),
     ("src/background.js", '  if (how === "auto" && s.state !== "received") return no("auto_once");\n', "", "review P3-4 tự điền lần hai không cần bấm"),
 
+    # 07/11 — chưa tích hợp QR Scan Log: quay lại tab Nextwaves sau khi Ngắt RFID ở tab bán hàng → lượt bấm mới (vẫn có giới hạn)
+    ("src/nw/nw-content.js", "      if (rd.gaveUp && r.state === \"disconnected\") {", "      if (false) {", "07/11 quay lại tab Nextwaves không kết nối lại"),
+    ("src/nw/nw-content.js", "    if (hidden) rd.away = true;", "    if (hidden) rd.away = false;", "07/11 không nhớ dược sĩ đã rời tab"),
+    ("src/nw/nw-content.js", "    if (!ctx || r.state !== \"disconnected\" || !r.btn || hidden) return;", "    if (!ctx || r.state !== \"disconnected\" || !r.btn) return;", "07/11 bấm cả khi tab ẩn"),
+
     ("src/lib/resolve.js", '    if (verified.length === 0) return fail("no_order");\n', "", "v0.4 không phân biệt không có đơn"),
     ("src/lib/env.js", "  const TENANT_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])$/;", "  const TENANT_RE = /^.+$/;", "v0.4 tenant nhận mọi chuỗi"),
     ("src/lib/env.js", "    return isNwApiUrl(url, env) ? env : null; // isNwApiUrl", "    return env; // isNwApiUrl", "v0.4 coi mọi URL Nextwaves là API"),

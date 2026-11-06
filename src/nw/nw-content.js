@@ -60,7 +60,7 @@
   let sessionsSig = ""; // chữ ký gọn của mọi phiên (bỏ log) — chỉ đánh giá lại khi đổi
   let authWaitTimer = null;
   let curSession = null; // phiên của trang (để vẽ dòng đầu đọc)
-  const rd = { state: "none", since: 0, clicks: [], lastClick: 0, gaveUp: false, el: null }; // đầu đọc của màn quét (el = đúng nút đầu đọc)
+  const rd = { state: "none", since: 0, clicks: [], lastClick: 0, gaveUp: false, el: null, away: false }; // đầu đọc của màn quét (el = đúng nút đầu đọc; away = dược sĩ đã rời tab)
   const lend = { key: null, last: 0, tries: 0 }; // gia hạn / mượn lại đầu đọc của phiên đang mở (QR Scan Log)
 
   async function bg(type, extra) {
@@ -395,7 +395,7 @@
       case "connected":
         return "Đầu đọc: đã kết nối." + lent;
       case "disconnected":
-        if (rd.gaveUp) return sup && sup.supported ? "Đầu đọc: chưa kết nối được — bấm “Mượn lại đầu đọc”, hoặc bấm “Kết nối đầu đọc” của Nextwaves." : "Đầu đọc: đang bận ở tab khác — vào tab bán hàng bấm Ngắt RFID, extension tự kết nối lại ở đây.";
+        if (rd.gaveUp) return sup && sup.supported ? "Đầu đọc: chưa kết nối được — bấm “Mượn lại đầu đọc”, hoặc bấm “Kết nối đầu đọc” của Nextwaves." : "Đầu đọc: đang bận ở tab khác — sang tab bán hàng bấm Ngắt RFID rồi quay lại tab này, extension tự kết nối lại.";
         return "Đầu đọc: chưa kết nối — extension đang tự kết nối…";
       default:
         return "";
@@ -416,7 +416,20 @@
       if (ctx) renderReady();
     }
     lendTick(now);
-    if (!ctx || r.state !== "disconnected" || !r.btn || (typeof document !== "undefined" && document.visibilityState === "hidden")) return;
+    const hidden = typeof document !== "undefined" && document.visibilityState === "hidden";
+    // 07/11 (chưa tích hợp QR Scan Log): hết lượt bấm vì cổng bị tab bán hàng giữ → dược sĩ sang tab bán hàng Ngắt RFID rồi QUAY LẠI
+    // tab này → mở một lượt bấm mới (vẫn tối đa readerMaxClicks lần, cách readerGapMs). Không quay lại thì không bấm thêm.
+    if (hidden) rd.away = true;
+    else if (rd.away) {
+      rd.away = false;
+      if (rd.gaveUp && r.state === "disconnected") {
+        rd.clicks = [];
+        rd.gaveUp = false;
+        rd.since = now;
+        if (ctx) renderReady();
+      }
+    }
+    if (!ctx || r.state !== "disconnected" || !r.btn || hidden) return;
     // Cho màn quét tự kết nối trước (autoConnect của Nextwaves), rồi mới bấm; tối đa readerMaxClicks lần cho MỘT lượt mất kết nối,
     // cách readerGapMs. Hết lượt: chờ dược sĩ ("Mượn lại đầu đọc" / Ngắt RFID ở tab bán hàng) — không bấm lặp mãi.
     if (now - rd.since < T.readerFirstClickMs || now - rd.lastClick < T.readerGapMs || r.btn.disabled) return;

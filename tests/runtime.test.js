@@ -283,6 +283,29 @@ test("v0.2 S6 (v0.4.0): tra QR một lần mỗi phiên + lượt nhận — 12 
   } finally {
     ctx.b.close();
   }
+  // Lỗi không cache (thay vế "cấp phép đổi → lập lại" của v0.3.x): tra lỗi → dược sĩ sang danh sách rồi quay lại phiếu (SPA, cùng tab)
+  // → lập lại kế hoạch: UID đã tra được lấy cache, CHỈ UID lỗi tra lại → hết chặn → tự điền (lượt nhận này chưa điền lần nào).
+  const down2 = new Set(["1792145819958AA1"]);
+  const c3 = await openToReceived({ server: { qrDown: down2 } });
+  try {
+    await until(() => c3.pos.view && c3.pos.view.buttons && c3.pos.view.buttons.find((x) => x.label === "Kiểm tra lại"));
+    await settle(150);
+    const n0 = qrGets(c3.srv);
+    assert.equal(c3.srv.st.puts.length, 0);
+    down2.clear();
+    const route = (href) => {
+      c3.pos.url = href;
+      c3.pos.post({ mark: "cgn/pos-hook", type: "route", payload: { href } });
+    };
+    route(`${POS}/danh-sach-phieu-nhan-hang`);
+    await settle(80);
+    route(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    await sessionState(c3.b, "applied");
+    assert.equal(qrGets(c3.srv), n0 + 1, "chỉ tra lại UID lỗi (UID đã tra được lấy cache)");
+    assert.equal(c3.srv.st.puts.length, 6);
+  } finally {
+    c3.b.close();
+  }
 });
 
 test("T3 thật (v0.4.0): lượt 2xx mang body receive-scan thật (25/10 23:46) → về POS, TỰ điền đúng kế hoạch #60070071 (6 lô / 12 UID)", async () => {

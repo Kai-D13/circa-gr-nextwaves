@@ -464,6 +464,39 @@ test("v0.4.0 đầu đọc: QR Scan Log chưa hỗ trợ (không pong) → vẫn
   }
 });
 
+test("07/11 chưa tích hợp QR Scan Log: hết 3 lần bấm (cổng bị tab bán hàng giữ) → hướng dẫn Ngắt RFID rồi quay lại; quay lại tab → thêm một lượt tối đa 3 lần; không rời tab thì không bấm thêm", async () => {
+  const ctx = await setup({ qsl: { mode: "none" } });
+  const { b, nw } = ctx;
+  try {
+    nw.post(NW_AUTH());
+    await until(() => viewTitle(nw) === "Sẵn sàng nhận hàng");
+    let clicks = 0;
+    const connect = { textContent: "Kết nối đầu đọc", disabled: false, click: () => (clicks += 1) }; // cổng bận: bấm không ăn
+    nw.dom.hidden = true; // tab Nextwaves mở nền: không bấm hộ khi dược sĩ không nhìn
+    nw.dom.buttons = [connect];
+    await settle(200);
+    assert.equal(clicks, 0, "tab ẩn → không bấm");
+    nw.dom.hidden = false;
+    await until(() => clicks === 3, 3000);
+    await until(() => nw.view && nw.view.lines.some((l) => /^Đầu đọc: đang bận ở tab khác — sang tab bán hàng bấm Ngắt RFID rồi quay lại tab này/.test(l)));
+    assert.ok(!(nw.view.buttons || []).some((x) => x.label === "Mượn lại đầu đọc"), "không có QR Scan Log → không có nút mượn");
+    await settle(300);
+    assert.equal(clicks, 3, "không rời tab → không bấm thêm");
+    nw.dom.hidden = true; // dược sĩ sang tab bán hàng bấm Ngắt
+    await settle(150);
+    assert.equal(clicks, 3, "tab ẩn → không bấm");
+    nw.dom.hidden = false; // quay lại
+    await until(() => clicks === 6, 3000);
+    await settle(300);
+    assert.equal(clicks, 6, "lượt mới vẫn tối đa 3 lần");
+    connect.textContent = "Bắt đầu quét"; // lần này kết nối được
+    await until(() => nw.view && nw.view.lines.some((l) => /^Đầu đọc: đã kết nối\.$/.test(l)));
+    assert.equal(b.qsl.calls.length, 0);
+  } finally {
+    b.close();
+  }
+});
+
 // ---------- C1: một tab Nextwaves nhận hàng ----------
 test("v0.4.0 C1: mở phiếu khác khi tab nhận hàng Nextwaves của phiếu trước còn mở → tái dùng tab đó (một tab giữ đầu đọc); phiên trước mất tab", async () => {
   const ctx = await setup();
