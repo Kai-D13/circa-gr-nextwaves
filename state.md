@@ -604,6 +604,7 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
     - **Chờ operator:** đơn đầu **GR84674** tự động — gửi `kiem-truoc.js` + số tem (39) + câu cho phép; sau đó `kiem-sau.js` + 2 capture.
     - Sau GR84674 đạt: GR84673; merge `batch/v0.3.1-prd` → `main` khi operator đồng ý.
     - Bản sau (v0.3.2): trường mã giao POS từ Nextwaves (khớp chính xác); P2-1 (hai phiên cùng SO tách giao); kiểm hình dạng response production SAU khi nhận (chưa có mẫu thật).
+      - Rà cuối 06/11 thêm: `pos-model.soWriteLock` đếm mọi phiếu nhận chưa huỷ của SO (kể cả đã nhận). Khi SO tách giao có phiếu `-P2`, phiếu `-P2` luôn bị khoá `so_many_gr`; phiếu `-P1` chưa xong cũng bị khoá. Không ghi sai, chỉ phải nhận tay. v0.3.2 khoá theo mã giao đầy đủ (`-P1`/`-P2`) thay vì SO gốc. Lúc rà: SO 38567266 và 38565378 mỗi SO đúng 1 phiếu nhận (GR84674, GR84673), nên chưa bị khoá.
 59. (cũ, thay bằng mục 60) **v0.3.1 production Florita đóng gói, 05/11:** `docs/dev/BATCH-v0.3.1.md`, hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md`.
     - Gói **3E44C1DC** (`batch/v0.3.1-prd` `7719715`): PRD ghi chỉ Florita (`c476efb2…` → kho `eb5e2b4f…`); popup hỏi lại trước cấp phép thủ công khi phiếu còn tự động được; khung POS ghi trạng thái tự động; 3 đoạn kiểm `scripts/kiem-*.js`. Lõi ghi = `4b79c58`.
     - Gate: 231/231; đột biến 213/215 lượt đủ, 2 ca sống → thêm test, chạy lại 13/13; Edge 108/108 (≤ 15,12 ms); audit độc lập 0 P1, P2-1 bấm đúp + P2-2 tài liệu đã sửa.
