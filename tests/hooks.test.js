@@ -210,7 +210,7 @@ test("nw-hook: Authorization của API Nextwaves; POST receive-scan (XHR) → st
   g.open("GET", "https://api-circa-stg.nextwaves.app/api/v1/inter-tenant-orders/receiving?q=SOBD1593858");
   g.setRequestHeader("Authorization", "Bearer nw");
   g.send();
-  assert.deepEqual(h.posted.find((m) => m.type === "auth").payload, { envId: "STG", headers: { authorization: "Bearer nw" } });
+  assert.deepEqual(h.posted.find((m) => m.type === "auth").payload, { envId: "STG", tenant: "circa-stg", headers: { authorization: "Bearer nw" } });
   const cap = H.sample("nw-stg-receive-scan-400-PO28237814.json")[0];
   const x = h.xhr();
   x.open("POST", `https://api-circa-stg.nextwaves.app/api/v1/inter-tenant-shipments/${SHIP}/receive-scan`);

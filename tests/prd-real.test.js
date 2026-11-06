@@ -71,7 +71,7 @@ test("phiếu gửi đọc SAU khi nhận (normalizeShipment): sku trống kiể
 function args(search, orders, receivings, fingerprintSource, soBase) {
   return {
     search: { ok: true, status: 200, json: search },
-    ctx: { soBase, buymedSlug: PRD.buymedSlug, warehouseId: E.warehouseForStore(PRD, FLORITA) },
+    ctx: { soBase, buymedSlug: PRD.buymedSlug, warehouseId: null }, // v0.4.0: kho lấy từ đơn đã khớp
     fingerprintSource,
     getOrder: async (id) => (orders[id] ? { ok: true, status: 200, json: orders[id] } : { ok: false, status: 404 }),
     getReceiving: async (id) => (receivings[id] ? { ok: true, status: 200, json: receivings[id] } : { ok: false, status: 404 }),
@@ -114,7 +114,7 @@ test("production SO 38567266 (một đơn): GR84674 ↔ PO-2026-000002, mã giao
   assert.equal(keys.soBase("SOBD38567266-P1"), "SOBD38567266");
   assert.ok(keys.sameSo("SOBD38567266-16026945", "SOBD38567266-P1"));
   const search = { items: [Object.assign({}, SPLIT.search.items[1], { id: "b99b7252-6461-4279-9948-1917fdddca20", purchaseOrderId: "087bedc0-bdfa-48ff-a06c-60496a168900", purchaseOrderNumber: "PO-2026-000002" })], total: 1 };
-  const orders = { "087bedc0-bdfa-48ff-a06c-60496a168900": { id: "b99b7252-6461-4279-9948-1917fdddca20", status: "shipped", refId: "SOBD38567266-16026945", counterparty: { tenantSlug: "buymed" }, purchaseOrderId: "087bedc0-bdfa-48ff-a06c-60496a168900", purchaseOrderNumber: "PO-2026-000002", warehouse: { id: E.warehouseForStore(PRD, FLORITA) } } };
+  const orders = { "087bedc0-bdfa-48ff-a06c-60496a168900": { id: "b99b7252-6461-4279-9948-1917fdddca20", status: "shipped", refId: "SOBD38567266-16026945", counterparty: { tenantSlug: "buymed" }, purchaseOrderId: "087bedc0-bdfa-48ff-a06c-60496a168900", purchaseOrderNumber: "PO-2026-000002", warehouse: { id: "eb5e2b4f-6f92-413b-90ef-6be1730b94c0" } } };
   const r = await resolve.resolveNwOrder(args(search, orders, { "087bedc0-bdfa-48ff-a06c-60496a168900": RCV2 }, FP.GR84674, keys.soBase("SOBD38567266-P1")));
   assert.equal(r.ok, true, r.reason);
   assert.deepEqual([r.chosen.order.poNumber, r.verified, r.writeLocks], ["PO-2026-000002", 1, []]);

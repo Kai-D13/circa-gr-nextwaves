@@ -12,14 +12,25 @@ const SRC = path.join(__dirname, "..", "src");
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(SRC, "manifest.json"), "utf8"));
 const clone = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
 const TUNING = { pollMs: 10, collectTries: 3, collectDelayMs: 5, reloadDelayMs: 5, qrConcurrency: 4, httpTimeoutMs: 2000, leaseRenewMs: 50 };
-const BG_TUNING = { grantTtlMs: 60000, leaseMs: 2000, retryCooldownMs: 0 };
+const BG_TUNING = { leaseMs: 2000, retryCooldownMs: 0, readerRelayMs: 1500, nwCloseDelayMs: 5 };
+
+// Mẫu match của manifest ("https://*.nextwaves.app/*") → có khớp origin không (như Chrome: * ở đầu host = mọi subdomain).
+function matchesOrigin(pattern, origin) {
+  const m = /^(https?):\/\/([^/]+)\/\*$/.exec(pattern);
+  if (!m) return false;
+  const u = new URL(origin);
+  if (u.protocol !== m[1] + ":") return false;
+  const host = m[2];
+  if (host.startsWith("*.")) return u.hostname.endsWith(host.slice(1)) && u.hostname.length > host.length - 1;
+  return u.hostname === host;
+}
 
 // Như Chrome / Edge: duyệt các mục content_scripts khớp trang theo thứ tự manifest; MỘT file chỉ được nạp MỘT lần mỗi trang
 // (mục đứng trước được nạp, kể cả khác world). Trả danh sách file ISOLATED thực sự được nạp (MAIN world không chạy trong
 // trình duyệt giả — hook được mô phỏng bằng tab.post). ui/panel.js thay bằng panel giả.
 function isolatedScriptsFor(url) {
   const origin = new URL(url).origin;
-  const matching = MANIFEST.content_scripts.filter((c) => c.matches.some((m) => m.replace(/\/\*$/, "") === origin));
+  const matching = MANIFEST.content_scripts.filter((c) => c.matches.some((m) => matchesOrigin(m, origin)));
   if (!matching.some((c) => c.world !== "MAIN")) return null;
   const injected = new Set();
   const isolated = [];
@@ -50,7 +61,9 @@ function createBrowser(server, opts = {}) {
   let nextTabId = 1;
   let bgListener = null;
   const installedListeners = [];
-  const removedListeners = []; // chrome.tabs.onRemoved (v0.3.0: tab POS được giao bị đóng)
+  const removedListeners = []; // chrome.tabs.onRemoved
+  // v0.4.0: QR Scan Log giả (circa-reader/v1) trên mọi tab POS — opts.qsl: {mode: "ok" | "none" | "busy" | "silent_lend"}; mọi lệnh ghi lại.
+  const qsl = Object.assign({ mode: "none", calls: [], lent: null }, opts.qsl || {});
   // Sau close(): không mở tab / nạp trang, không tạo timer, không chuyển message hay sự kiện storage.
   // (Một message background đang dở lúc test kết thúc có thể mở tab mới → timer mới không ai dọn → tiến trình test sống mãi.)
   let closed = false;
@@ -110,6 +123,8 @@ function createBrowser(server, opts = {}) {
   bg.chrome = {
     storage: { local: storage, onChanged: { addListener: (l) => storageListeners.push(l) } },
     runtime: {
+      id: "cgn-test",
+      lastError: undefined,
       onMessage: { addListener: (l) => (bgListener = l) },
       onInstalled: { addListener: (l) => installedListeners.push(l) },
       getManifest: () => clone(MANIFEST),
@@ -119,6 +134,32 @@ function createBrowser(server, opts = {}) {
         const t = tabs.get(id);
         if (!t || t.closed) throw new Error("No tab with id " + id);
         return { id: t.id, url: t.url, windowId: 1 };
+      },
+      remove: async (id) => {
+        const t = tabs.get(id);
+        if (!t || t.closed) throw new Error("No tab with id " + id);
+        api.closeTab(t);
+      },
+      query: async (q) => {
+        const pat = q && q.url ? String(q.url).replace(/\*$/, "") : "";
+        return [...tabs.values()].filter((t) => !t.closed && (!pat || t.url.startsWith(pat))).map((t) => ({ id: t.id, url: t.url, windowId: 1 }));
+      },
+      // background → content script của một tab (như chrome.tabs.sendMessage: sender không có tab, id = extension).
+      sendMessage: (id, msg, cb) => {
+        const t = tabs.get(id);
+        const ls = t && !t.closed && t.ctx && !t.ctx.dead ? t.ctx.runtimeListeners.slice() : [];
+        if (!ls.length) return setImmediate(() => cb && cb(undefined));
+        let answered = false;
+        const reply = (r) => {
+          if (answered) return;
+          answered = true;
+          setImmediate(() => cb && cb(clone(r)));
+        };
+        setImmediate(() => {
+          let keep = false;
+          for (const l of ls) if (l(clone(msg), { id: "cgn-test" }, reply) === true) keep = true;
+          if (!keep && !answered) reply(undefined);
+        });
       },
       update: async (id, props) => {
         const t = tabs.get(id);
@@ -152,7 +193,7 @@ function createBrowser(server, opts = {}) {
     if (closed) return;
     const files = isolatedScriptsFor(t.url);
     if (!files) return;
-    const c = { dead: false, timers: new Set(), listeners: [] };
+    const c = { dead: false, timers: new Set(), listeners: [], runtimeListeners: [] };
     const win = Object.assign({ console, URL, URLSearchParams, AbortController }, timerApi(c.timers));
     win.window = win;
     win.location = {
@@ -206,7 +247,11 @@ function createBrowser(server, opts = {}) {
           });
       });
     win.chrome = {
-      runtime: { sendMessage: (msg) => (c.dead ? new Promise(() => {}) : sendMessage(t, msg)) },
+      runtime: {
+        id: "cgn-test",
+        sendMessage: (msg) => (c.dead ? new Promise(() => {}) : sendMessage(t, msg)),
+        onMessage: { addListener: (l) => c.runtimeListeners.push(l) },
+      },
       storage: {
         local: storage,
         onChanged: {
@@ -313,6 +358,30 @@ function createBrowser(server, opts = {}) {
     };
     vm.createContext(win);
     c.global = vm.runInContext("globalThis", win);
+    const posOrigins = ["https://pos.stg.circa-v2.buymed.tech", "https://pos.v2.circa.vn"];
+    if (posOrigins.includes(new URL(t.url).origin) && qsl.mode !== "none") {
+      c.listeners.push((e) => {
+        const m = e.data;
+        if (!m || m.ns !== "circa-reader/v1" || m.from !== "gr-nextwaves") return;
+        qsl.calls.push({ tab: t.id, type: m.type, leaseId: m.leaseId || null, ttlMs: m.ttlMs || null, label: m.label || null });
+        const out = { ns: "circa-reader/v1", from: "qsl", reqId: m.reqId };
+        if (m.type === "ping") Object.assign(out, { type: "pong", protocol: 1, version: "0.9.x-test", holder: qsl.lent ? "none" : "tab", lent: qsl.lent });
+        else if (m.type === "lend") {
+          if (qsl.mode === "silent_lend") return;
+          if (qsl.mode === "busy") Object.assign(out, { type: "lend:result", leaseId: m.leaseId, ok: false, reason: "busy" });
+          else {
+            qsl.lent = { leaseId: m.leaseId, label: m.label, until: Date.now() + (m.ttlMs || 0) };
+            Object.assign(out, { type: "lend:result", leaseId: m.leaseId, ok: true, state: "released", until: qsl.lent.until });
+          }
+        } else if (m.type === "return") {
+          if (qsl.lent && qsl.lent.leaseId === m.leaseId) {
+            qsl.lent = null;
+            Object.assign(out, { type: "return:result", leaseId: m.leaseId, ok: true, state: "reclaiming" });
+          } else Object.assign(out, { type: "return:result", leaseId: m.leaseId, ok: false, reason: "unknown_lease" });
+        } else return;
+        win.postMessage(out);
+      });
+    }
     t.ctx = c;
     t.loads += 1;
     t.post = (data) => win.postMessage(data);
@@ -355,6 +424,7 @@ function createBrowser(server, opts = {}) {
 
   const api = {
     store,
+    qsl,
     openTab,
     tabs: () => [...tabs.values()].filter((t) => !t.closed),
     closeTab: (t) => {

@@ -111,6 +111,15 @@ class FakeXHR {
   }
 }
 
+// Mẫu match của manifest → có khớp origin không (như Chrome: "*." ở đầu host = mọi subdomain).
+function matchesOrigin(pattern, origin) {
+  const m = /^(https?):\/\/([^/]+)\/\*$/.exec(pattern);
+  if (!m) return false;
+  const u = new URL(origin);
+  if (u.protocol !== m[1] + ":") return false;
+  return m[2].startsWith("*.") ? u.hostname.endsWith(m[2].slice(1)) : u.hostname === m[2];
+}
+
 function loadHook(origin, file, pagePath = "/") {
   const posted = [];
   const listeners = [];
@@ -148,7 +157,7 @@ function loadHook(origin, file, pagePath = "/") {
   const g = vm.runInContext("globalThis", win);
   // Đúng danh sách file MAIN world trong manifest cho trang này (env + hook).
   const manifest = JSON.parse(fs.readFileSync(path.join(SRC, "manifest.json"), "utf8"));
-  const entry = manifest.content_scripts.find((c) => c.world === "MAIN" && c.js.includes(file) && c.matches.some((m) => m.startsWith(origin)));
+  const entry = manifest.content_scripts.find((c) => c.world === "MAIN" && c.js.includes(file) && c.matches.some((m) => matchesOrigin(m, origin)));
   assert.ok(entry, `manifest không có mục MAIN cho ${file} trên ${origin}`);
   for (const f of entry.js) vm.runInContext(fs.readFileSync(path.join(SRC, f), "utf8"), win, { filename: f });
   const xhr = () => vm.runInContext("new XMLHttpRequest()", win);

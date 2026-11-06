@@ -73,31 +73,39 @@ test("đường dẫn API đúng từng môi trường (staging /backend/v1, pro
   }
 });
 
-test("phạm vi cửa hàng: STG chỉ 2222; PRD (v0.3.1) chỉ cửa hàng đã khai kho = Florita; bảng kho", () => {
-  assert.ok(env.storeAllowed(STG, "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d"));
-  assert.ok(!env.storeAllowed(STG, "c476efb2-415c-429a-978e-d389b4b06607"));
-  assert.ok(!env.storeAllowed(STG, ""));
-  assert.ok(env.storeAllowed(PRD, "c476efb2-415c-429a-978e-d389b4b06607"));
-  assert.ok(env.storeAllowed(PRD, "C476EFB2-415C-429A-978E-D389B4B06607"), "so không phân biệt hoa / thường");
-  assert.ok(!env.storeAllowed(PRD, "bat-ky"));
-  assert.ok(!env.storeAllowed(PRD, "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d"), "cửa hàng staging không chạy ở PRD");
-  assert.ok(!env.storeAllowed(PRD, ""));
-  assert.equal(env.warehouseForStore(STG, "64A8663B-0C9E-49C6-9626-0A4C7C4BD53D"), "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57");
-  assert.equal(env.warehouseForStore(PRD, "c476efb2-415c-429a-978e-d389b4b06607"), "eb5e2b4f-6f92-413b-90ef-6be1730b94c0");
-  assert.equal(env.warehouseForStore(PRD, "khong-co"), null);
-});
-
-test("v0.3.1: cả hai môi trường được ghi (vẫn cần cấp phép từng lần); mọi cửa hàng được phép đều có kho Nextwaves, chữ thường", () => {
+test("v0.4.0 mọi cửa hàng: không còn danh sách cửa hàng / bảng kho; cả hai môi trường được ghi", () => {
   for (const e of [STG, PRD]) {
     assert.equal(e.writeEnabled, true, e.id);
-    assert.ok(Array.isArray(e.storeAllowlist) && e.storeAllowlist.length > 0, `${e.id}: phải có danh sách cửa hàng, không mở cho mọi cửa hàng`);
-    assert.deepEqual([...e.storeAllowlist].sort(), Object.keys(e.warehouseByStore).sort(), `${e.id}: danh sách cửa hàng = các cửa hàng đã khai kho`);
-    for (const [store, wh] of Object.entries(e.warehouseByStore)) {
-      assert.equal(store, store.toLowerCase(), store);
-      assert.ok(env.isUuid(store) && env.isUuid(wh), `${e.id}: ${store} → ${wh}`);
-    }
+    assert.equal(e.storeAllowlist, undefined, `${e.id}: không còn danh sách cửa hàng`);
+    assert.equal(e.warehouseByStore, undefined, `${e.id}: không còn bảng cửa hàng → kho (kho lấy từ đơn Nextwaves đã khớp)`);
   }
-  assert.deepEqual(PRD.storeAllowlist, ["c476efb2-415c-429a-978e-d389b4b06607"], "đợt đầu production chỉ Florita");
+  assert.equal(env.storeAllowed, undefined);
+  assert.equal(env.warehouseForStore, undefined);
+});
+
+test("v0.4.0 tenant Nextwaves: PRD mặc định circa, đổi được theo máy; STG cố định circa-stg; tenant sai → mặc định", () => {
+  const prd = env.envFromConfig({ mode: "PRD" });
+  assert.deepEqual([prd.nwTenant, prd.nwUiOrigin, prd.nwApiBase], ["circa", "https://circa.nextwaves.app", "https://api-circa.nextwaves.app/api"]);
+  assert.equal(prd, PRD, "tenant mặc định = chính môi trường gốc");
+  const medly = env.envFromConfig({ mode: "PRD", nwTenant: "Circa-Medly " });
+  assert.deepEqual([medly.id, medly.nwTenant, medly.nwUiOrigin, medly.nwApiBase, medly.posOrigin], ["PRD", "circa-medly", "https://circa-medly.nextwaves.app", "https://api-circa-medly.nextwaves.app/api", PRD.posOrigin]);
+  assert.equal(env.envFor("PRD", "circa-medly"), medly, "cùng tenant → cùng object");
+  assert.equal(env.envFromConfig({ mode: "STG", nwTenant: "circa" }).nwUiOrigin, "https://circa-stg.nextwaves.app", "staging không đổi tenant");
+  for (const bad of ["", "a", "-x", "x-", "có dấu", "circa.evil", "a/b", "x".repeat(41)]) assert.equal(env.envFor("PRD", bad).nwTenant, "circa", JSON.stringify(bad));
+  assert.equal(env.normTenant(" CIRCA-medly "), "circa-medly");
+  // API / trang Nextwaves → môi trường + tenant của CHÍNH URL đó.
+  assert.equal(env.nwApiEnvOf("https://api-circa-medly.nextwaves.app/api/v1/inter-tenant-orders/receiving?q=1").nwTenant, "circa-medly");
+  assert.equal(env.nwApiEnvOf("https://api-circa-stg.nextwaves.app/api/v1/x").id, "STG");
+  assert.equal(env.nwApiEnvOf("https://circa.nextwaves.app/api/v1/x"), null, "trang UI không phải API");
+  assert.equal(env.nwApiEnvOf("https://api-circa.nextwaves.app/api/v2/x"), null);
+  assert.equal(env.nwApiEnvOf("https://api-circa.nextwaves.app.evil.com/api/v1/x"), null);
+  assert.equal(env.nwApiEnvOf("http://api-circa.nextwaves.app/api/v1/x"), null, "chỉ https");
+  assert.equal(env.envFromAnyUrl("https://circa-medly.nextwaves.app/vi/purchases/receive?po=SOBD1").nwUiOrigin, "https://circa-medly.nextwaves.app");
+  assert.equal(env.envFromAnyUrl("https://pos.v2.circa.vn/x"), PRD);
+  // Trang nhận hàng chỉ thuộc env khi đúng tenant đang chọn.
+  assert.ok(env.classifyNwPage("https://circa-medly.nextwaves.app/vi/purchases/receive?po=SOBD1", medly));
+  assert.equal(env.classifyNwPage("https://circa.nextwaves.app/vi/purchases/receive?po=SOBD1", medly), null);
+  assert.equal(env.classifyNwPage("https://circa-medly.nextwaves.app/vi/purchases/receive?po=SOBD1", PRD), null);
 });
 
 test("nhận dạng lời gọi xác nhận nhận hàng Nextwaves và hoàn tất GR POS", () => {
