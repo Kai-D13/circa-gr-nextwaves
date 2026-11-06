@@ -1,6 +1,6 @@
 # state.md — circa-gr-nextwaves
 
-Cập nhật: **06/11/2026 (lần 61, rà cuối: v0.3.1 đóng lại AEE4447F — khoá theo PO cho SO tách giao, tab Nextwaves gắn đúng phiên; chờ operator cài máy POS Florita + chạy luồng thật)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). Staging done v0.3.0. Production Florita: một bản v0.3.1 cài một lần, đơn đầu tự động (`agent.md` §3). 06/11 chạy thử chỉ đọc trên production tìm 2 lỗi chặn của gói 3E44C1DC (sku Nextwaves trống; khoá SO tách giao) → sửa, gói **C7D1641F** (`batch/v0.3.1-prd` `691cfc3`): 237/237 test, đột biến 36/36 phần sửa, Edge 108/108, audit lần 2 0 P1 — `docs/dev/BATCH-v0.3.1.md`. Cặp thật: GR84674 ↔ PO-2026-000002 (đơn đầu), GR84673 ↔ PO-2026-000001. v0.3.2 khi Nextwaves thêm trường mã giao `-F`/`-P1`/`-P2`. Ghi production chỉ khi operator cho phép bằng chữ đúng phiếu.** Luật làm việc và môi trường: `agent.md`.
+Cập nhật: **06/11/2026 (lần 62: v0.3.1 AEE4447F đã cài máy POS Florita; luồng thật production GR84674 ĐẠT theo đường thủ công — Nextwaves nhận 39 tem, extension điền 15 lô, dược sĩ HOÀN THÀNH)**. Giai đoạn: **Chỉ còn operator + một phiên Claude Code (kiêm PM / engineer / QC / audit), quy tắc một người ghi (`agent.md` §2.1). Staging done v0.3.0. Production Florita: một bản v0.3.1 cài một lần, đơn đầu tự động (`agent.md` §3). 06/11 chạy thử chỉ đọc trên production tìm 2 lỗi chặn của gói 3E44C1DC (sku Nextwaves trống; khoá SO tách giao) → sửa, gói **C7D1641F** (`batch/v0.3.1-prd` `691cfc3`): 237/237 test, đột biến 36/36 phần sửa, Edge 108/108, audit lần 2 0 P1 — `docs/dev/BATCH-v0.3.1.md`. Cặp thật: GR84674 ↔ PO-2026-000002 (đơn đầu), GR84673 ↔ PO-2026-000001. v0.3.2 khi Nextwaves thêm trường mã giao `-F`/`-P1`/`-P2`. Ghi production chỉ khi operator cho phép bằng chữ đúng phiếu.** Luật làm việc và môi trường: `agent.md`.
 
 ## 0. Tóm tắt 30 giây
 
@@ -587,6 +587,7 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
 
 - 06/11/2026 (lần 60): chạy thử chỉ đọc production → 2 lỗi chặn gói 3E44C1DC; operator cho phép sửa lõi; Claude chốt nới khoá SO tách giao có điều kiện (đúng một đơn khớp, đơn khác lệch rõ; không so được thì vẫn khoá). Gói v0.3.1 đóng lại **C7D1641F**. Operator: Nextwaves sẽ thêm trường mã giao POS → v0.3.2.
 - 06/11/2026 (lần 61): lượt thử chỉ đọc GR84674 trên máy dev đạt (capture chỉ GET). Operator: cài máy POS, chạy luồng thật, dược sĩ thao tác thật, không chờ Claude giữa các chốt. Claude chốt sửa trước khi cài: khoá POS theo PO (SO tách giao), P2-1 gắn tab Nextwaves theo phiên, đoạn kiểm tự lấy phiên. Gói **AEE4447F**.
+- 06/11/2026 (lần 62): operator cài AEE4447F trên máy POS Florita, chạy luồng thật GR84674 (dược sĩ thao tác thật), chọn **đường thủ công** (extension điền, dược sĩ tự HOÀN THÀNH). **ĐẠT** theo `kiem-sau.js` — chi tiết §9 mục 62. Tự động HOÀN THÀNH chưa chạy trên production (đã đạt trên staging G3).
 
 ## 9. Việc tiếp theo
 1. ~~Operator quyết repo public / private~~ — đã chốt public (24/10).
@@ -600,7 +601,19 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-61. **Hiện hành (06/11 tối): gói v0.3.1 AEE4447F sẵn sàng cài máy POS Florita** — `docs/dev/BATCH-v0.3.1.md` (mục 06/11 tối), hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md` (viết lại: tự đối chiếu, tự động hoặc thủ công).
+62. **Hiện hành (06/11 tối): v0.3.1 AEE4447F chạy trên máy POS Florita; luồng thật GR84674 ĐẠT (đường thủ công).**
+    - `kiem-sau.js` (operator gửi, máy POS): v 0.3.1, PRD, `phienTrungMa` 0, `state` done.
+      - Nhật ký: start 19:14:16 → nw_matched → receive_scan 200 + scan_ok 19:17:16 → nw_received 39 (19:17:17) → apply_claimed 19:18:30 → applied 19:18:41 → gr_completed_seen 19:19:11.
+      - `quyenDaDung` auto false, kế hoạch `E090844E` (trùng kế hoạch chạy thử chỉ đọc lần 60), cấp 19:18:21, dùng 19:18:30. `autoRun` / `hoanThanh` null, đúng đường thủ công.
+      - `nwUnits` 39, `nwReceipts` 1, `soLoDaDien` 15 (= 15 lần điền của kế hoạch), `dungDien` null; `autoGrantsConLai` 0, `capPhepConHan` 0.
+    - Ý nghĩa:
+      - **Response Nextwaves production SAU khi nhận đã qua bộ đọc fail closed** (`buildReceivedUnits` ra đủ 39 UID, 1 biên nhận), không phải "chưa đủ bằng chứng". Câu hỏi mở "hình dạng response sau nhận" coi như đã trả lời cho đơn này.
+      - Mỗi lần điền POS đã được đọc lại và so (`lib/apply.js`: chi tiết đúng trạng thái sau, chi tiết khác không đổi) — 15/15 khớp.
+      - Thời gian: Nextwaves xác nhận → điền xong ≈ 1 phút 25 giây (gồm bước cấp phép tay); điền 15 lô 11 giây.
+    - **Capture chưa nhận:** file operator gửi (`Downloads/circa-gr-nextwaves-v0.3.1.zip`) là chính gói cài (SHA-256 AEE4447F), không phải Net Capture. Không chặn kết luận. Capture (trên máy POS) chỉ dùng để lưu mẫu response Nextwaves sau nhận vào test hồi quy.
+    - Không kiểm độc lập được trên trình duyệt lúc ghi (Claude in Chrome không kết nối).
+    - Tiếp: GR84673 (↔ PO-2026-000001, SO 38565378 tách giao, còn PO-2026-000003 cùng SO → màn quét yêu cầu chọn đúng PO); merge `batch/v0.3.1-prd` → `main` khi operator đồng ý; v0.3.2 khi Nextwaves có trường mã giao.
+61. (cũ, thay bằng mục 62) **Gói v0.3.1 AEE4447F sẵn sàng cài máy POS Florita** — `docs/dev/BATCH-v0.3.1.md` (mục 06/11 tối), hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md` (viết lại: tự đối chiếu, tự động hoặc thủ công).
     - **Chờ operator:** cài trên máy POS (`C:\circa-gr-nextwaves`), chạy một luồng thật có capture, gửi `kiem-sau.js` + 2 capture.
     - 06/11 17:51 — operator yêu cầu: `nang-cap-v0.3.1.ps1` nâng thư mục Chrome máy dev `C:/circa-gr-nextwaves-v0.2.3` C7D1641F → **AEE4447F** (khớp từng byte 19 file; sao lưu `backup/v0.3.1-C7D1641F-dang-tai-20261106-175155`). Cùng số 0.3.1, cùng schema → Reload giữ phiên / cấu hình.
     - Máy dev (trước khi nâng): Chrome còn C7D1641F + phiên GR84674 nw_ready (39 tem đã quét trên màn Nextwaves, CHƯA xác nhận) — đóng tab Nextwaves đó, Xoá phiên trong popup.
