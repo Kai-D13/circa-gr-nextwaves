@@ -115,6 +115,54 @@ test("P2.2: thiếu kết quả tra QR / QR thiếu productId hoặc lô → ch�
   assert.deepEqual(codesOf(plan.buildPlan(gr, units, null)).filter((c) => c !== "fraction")[0], "qr_lookup_missing");
 });
 
+// ---- v0.4.0: khớp cuối cả phiếu sau khi tự điền (verifyFinal) — mỗi kiểu lệch có diff riêng ----
+
+test("verifyFinal: phiếu đọc lại đúng kế hoạch → ok; lệch trạng thái / lô / lượng / tập mã / mã nối trùng / chi tiết lạ → không ok", () => {
+  const { gr, units, qr } = inputs();
+  const p = plan.buildPlan(gr, units, qr);
+  assert.equal(p.ok, true, JSON.stringify(p.blocked));
+  assert.ok(p.steps.length >= 2);
+  const finalGr = () => {
+    const g = H.clone(gr);
+    g.status = "RECEIVING";
+    for (const st of p.steps) put(g, st.productId, st.lotDate, st.uids, st.target);
+    return g;
+  };
+  assert.deepEqual(plan.verifyFinal(p, finalGr(), units), { ok: true, diffs: [] });
+  const [s0, s1] = p.steps;
+  const d = (g, st) => detailOf(g, st.lotDate, st.productId);
+  const whys = (mut) => {
+    const g = finalGr();
+    mut(g);
+    const v = plan.verifyFinal(p, g, units);
+    assert.equal(v.ok, false);
+    return v.diffs.map((x) => x.why);
+  };
+  assert.deepEqual(whys((g) => (g.status = "WAITING_TO_RECEIVE")), ["status"]);
+  assert.deepEqual(whys((g) => (d(g, s0).lotId = "lo-khac")), ["lot"]);
+  assert.deepEqual(whys((g) => (d(g, s0).received += 1)), ["received"]);
+  assert.deepEqual(whys((g) => (d(g, s0).qrCodeCount += 1)), ["duplicate_codes"]);
+  // Hai lô đổi chéo một UID: tổng mã trên phiếu vẫn đúng tập UID Nextwaves, chỉ so tập mã từng lô mới thấy.
+  assert.deepEqual(
+    whys((g) => {
+      const a = d(g, s0);
+      const c = d(g, s1);
+      const x = a.qrCodes[a.qrCodes.length - 1];
+      const y = c.qrCodes[c.qrCodes.length - 1];
+      a.qrCodes[a.qrCodes.length - 1] = y;
+      c.qrCodes[c.qrCodes.length - 1] = x;
+    }),
+    ["codes", "codes"]
+  );
+  assert.deepEqual(
+    whys((g) => {
+      const it = g.items.find((i) => i.productId === s0.productId);
+      it.details.push(Object.assign(H.clone(it.details[0]), { id: "chi-tiet-moi", qrCodes: [], qrCodeCount: 0, received: 0 }));
+    }),
+    ["detail_new"]
+  );
+});
+
 // ---- P1.2: UID đã có trên GR phải được đối chiếu như UID mới ----
 
 test("P1.2: UID đã nằm ĐÚNG lô, lượng nhất quán → bỏ qua; đủ 12 → complete, không bước nào", () => {

@@ -765,6 +765,30 @@ test("khớp cuối (plan C3): đọc lại CẢ phiếu sau khi điền thấy 
     await settle(100);
     assert.equal(pos.reloads, 0, "không tải lại (giữ thông báo)");
     assert.equal(srv.st.puts.length, 5);
+    // F5 / vẽ lại bất kỳ: khung "đã điền" đọc phiếu thật vẫn phải báo mã lạ (vàng), không chuyển sang xanh.
+    pos.reload();
+    await until(() => pos.loads >= 2);
+    pos.post(POS_AUTH);
+    const v2 = await until(() => pos.view && /chưa khớp hoàn toàn|kiểm danh sách rồi bấm HOÀN THÀNH/.test(pos.view.title || "") && pos.view);
+    assert.match(v2.title, /chưa khớp hoàn toàn/);
+    assert.equal(v2.tone, "warn");
+    assert.ok(v2.lines.some((l) => /1 mã không thuộc lượt nhận Nextwaves: MA_LA_123/.test(l)), v2.lines.join(" | "));
+  } finally {
+    b.close();
+  }
+});
+
+test("audit F4 (v0.4.0): dược sĩ đóng tab Nextwaves khi phiên còn ở bước nhận → phiên bỏ nwTabId, nhật ký nw_tab_closed, trả đầu đọc", async () => {
+  const ctx = await setup({ qsl: { mode: "ok" } });
+  const { b, nw } = ctx;
+  try {
+    const lease = session(b).reader.leaseId;
+    nw.post(NW_AUTH());
+    await until(() => viewTitle(nw) === "Sẵn sàng nhận hàng");
+    b.closeTab(nw);
+    await until(() => session(b).nwTabId === null && session(b).log.some((l) => l.type === "nw_tab_closed"), 2000);
+    await until(() => b.qsl.calls.some((c) => c.type === "return" && c.leaseId === lease), 3000);
+    assert.equal(session(b).state, "nw_ready", "phiên vẫn chờ nhận (mở lại Nextwaves từ POS được)");
   } finally {
     b.close();
   }

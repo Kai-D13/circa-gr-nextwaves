@@ -30,8 +30,12 @@ def anchored(m):
 
 
 old = list(m030.muts)
-kept = [m for m in old if anchored(m)]
-print(f"ca cũ: {len(old)}; còn neo trên v0.4.0: {len(kept)}; bỏ (mã đã xoá / đổi): {len(old) - len(kept)}", flush=True)
+# 07/11: plan.autoPlanCheck (luật "tự HOÀN THÀNH chỉ khi phiếu sạch" của v0.3.0) KHÔNG còn được gọi ở v0.4.0 — tự điền không gửi
+# COMPLETED; nhận thiếu / UID ngoài kế hoạch được báo ở khung "đã điền" (test review P2-2). Mã chết → đột biến không quan sát được.
+# Xoá hàm ở bản sau (không đổi gói 79D4269C chỉ vì mã chết).
+DEAD = {"v0.3.0 tự chạy khi nhận thiếu (cảnh báo)", "v0.3.0 tự chạy khi phiếu đã có UID", "v0.3.0 kế hoạch không phủ hết UID vẫn tự chạy"}
+kept = [m for m in old if anchored(m) and m[3] not in DEAD]
+print(f"ca cũ: {len(old)}; còn neo trên v0.4.0: {len(kept)}; bỏ (mã đã xoá / đổi / mã chết): {len(old) - len(kept)}", flush=True)
 
 NEW = [
     # A1 — tab Nextwaves tìm đơn một lần (lỗi GR84570)
