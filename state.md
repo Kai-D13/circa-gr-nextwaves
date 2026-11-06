@@ -602,7 +602,8 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
 61. **Hiện hành (06/11 tối): gói v0.3.1 AEE4447F sẵn sàng cài máy POS Florita** — `docs/dev/BATCH-v0.3.1.md` (mục 06/11 tối), hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md` (viết lại: tự đối chiếu, tự động hoặc thủ công).
     - **Chờ operator:** cài trên máy POS (`C:\circa-gr-nextwaves`), chạy một luồng thật có capture, gửi `kiem-sau.js` + 2 capture.
-    - Máy dev: Chrome còn C7D1641F + phiên GR84674 nw_ready (39 tem đã quét trên màn Nextwaves, CHƯA xác nhận) — đóng tab Nextwaves đó, Xoá phiên trong popup.
+    - 06/11 17:51 — operator yêu cầu: `nang-cap-v0.3.1.ps1` nâng thư mục Chrome máy dev `C:/circa-gr-nextwaves-v0.2.3` C7D1641F → **AEE4447F** (khớp từng byte 19 file; sao lưu `backup/v0.3.1-C7D1641F-dang-tai-20261106-175155`). Cùng số 0.3.1, cùng schema → Reload giữ phiên / cấu hình.
+    - Máy dev (trước khi nâng): Chrome còn C7D1641F + phiên GR84674 nw_ready (39 tem đã quét trên màn Nextwaves, CHƯA xác nhận) — đóng tab Nextwaves đó, Xoá phiên trong popup.
 60. (cũ, thay bằng mục 61) **Gói v0.3.1 C7D1641F sẵn sàng cài** — `docs/dev/BATCH-v0.3.1.md` (mục 06/11), hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md`, plan `docs/dev/PLAN-TRIEN-KHAI-PRD-20261106.md`.
     - **06/11 16:43 — đã chép đè (operator yêu cầu):** `nang-cap-v0.3.1.ps1` nâng `C:\circa-gr-nextwaves-v0.2.3` (thư mục Chrome máy này đang tải, giữ Extension ID → giữ phiên / cấu hình) từ v0.3.0 45E07F60 lên **v0.3.1 C7D1641F**, khớp từng byte 19 file; sao lưu `C:\circa-gr-nextwaves-release\backup\v0.3.0-dang-tai-20261106-164347`. Operator bấm Reload + chọn Production.
     - **Chờ operator:** đơn đầu **GR84674** tự động — gửi `kiem-truoc.js` + số tem (39) + câu cho phép; sau đó `kiem-sau.js` + 2 capture.
