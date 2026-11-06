@@ -487,7 +487,7 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
   - `quantity` của PO Nextwaves (`purchase-orders/<id>`) tính theo đơn vị gốc (100 viên). POS tính theo đơn vị dòng (1 hộp).
   - Bên inter-tenant: `lines[].quantity` + `unit` trùng đơn vị dòng POS; `localQuantity` trùng `base_quantity` POS; nhãn `localUnit` không đáng tin (staging).
 - R4. JWT Nextwaves sống 1 giờ.
-- R5. QR nhân đôi sau COMPLETED (§1).
+- R5. QR nhân đôi sau COMPLETED (§1); 06/11 GR84674: POS còn thêm received_quantity mã thuocsi mới mỗi chi tiết (§9 mục 62).
 - R6. Dữ liệu staging không giữ bất biến đơn vị của production (§5.3). Test xanh trên staging chưa đủ chứng minh production.
 - R7. ~~Staging không thử được chuỗi SO~~ — **đã hết** (24/10 chiều): GR03878 / PO00006750 có SO 1593858 (§2.2). GR03877 vẫn là ca không SO.
 - R8. Unit Nextwaves trước khi nhận chỉ có `productTitle` + `lineId` dòng giao, không có productId. Gán theo tên là rủi ro, cần API khác (D3).
@@ -610,8 +610,13 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
       - **Response Nextwaves production SAU khi nhận đã qua bộ đọc fail closed** (`buildReceivedUnits` ra đủ 39 UID, 1 biên nhận), không phải "chưa đủ bằng chứng". Câu hỏi mở "hình dạng response sau nhận" coi như đã trả lời cho đơn này.
       - Mỗi lần điền POS đã được đọc lại và so (`lib/apply.js`: chi tiết đúng trạng thái sau, chi tiết khác không đổi) — 15/15 khớp.
       - Thời gian: Nextwaves xác nhận → điền xong ≈ 1 phút 25 giây (gồm bước cấp phép tay); điền 15 lô 11 giây.
-    - **Capture chưa nhận:** file operator gửi (`Downloads/circa-gr-nextwaves-v0.3.1.zip`) là chính gói cài (SHA-256 AEE4447F), không phải Net Capture. Không chặn kết luận. Capture (trên máy POS) chỉ dùng để lưu mẫu response Nextwaves sau nhận vào test hồi quy.
-    - Không kiểm độc lập được trên trình duyệt lúc ghi (Claude in Chrome không kết nối).
+    - File đầu operator gửi (`Downloads/circa-gr-nextwaves-v0.3.1.zip`) là chính gói cài (SHA-256 AEE4447F). Gửi lại: `net-capture-2026-11-06T12-19-50 (1).zip` — **chỉ tab POS** (19:13:23 → 19:19:29), không có tab Nextwaves. Đọc theo luật (không mở tokens / cookies / storage / HAR / meta.json):
+      - Ghi của extension đúng **15 PUT** `…/goods-receipt/<gr>/item/<item>/detail/<detail>` 19:18:30 → 19:18:41, body `{detail:{received_quantity, lot_id, thuocsi_qr_codes}}`, tổng 39 mã. Mỗi PUT có GET phiếu trước và sau (đọc lại). Ngoài ra extension chỉ GET (tìm GR theo SO, GR, PO).
+      - Phiếu: WAITING_TO_RECEIVE (trước điền) → RECEIVING (sau điền: 15 chi tiết đổi, đúng 39 mã, `received_quantity` = SL dòng, DAY42AXH 2 lô × 1) → COMPLETED.
+      - **19:17:36 `PUT …/status/COMPLETED` → 400** `NotAllowedByStatusGoodsReceipt` (phiếu còn WAITING_TO_RECEIVE): nút HOÀN THÀNH của POS được bấm trước khi điền; POS từ chối, không đổi gì. Không phải extension (đường thủ công không gửi HOÀN THÀNH, nhật ký phiên không có auto_*). Lưu ý vận hành: bấm khi đang điền dở (phiếu đã RECEIVING) thì POS sẽ nhận → phiếu đóng thiếu; extension dừng ở lần đọc lại kế tiếp nhưng không mở lại phiếu được.
+      - 19:19:08 `PUT …/status/COMPLETED` → 200 (dược sĩ), `is_done_auto` false.
+      - **Sự thật mới (chỉnh R5):** lúc COMPLETED, server POS nhân đôi mọi mã đã có trong `thuocsi_qr_codes` **và thêm `received_quantity` mã thuocsi mới** mỗi chi tiết (dạng khác, ví dụ `…Y2177`; CDL-ALD-001 rq 5 → 5 mã mới). GR84674: 39 mã → 97 phần tử / 58 mã khác nhau. Bên đọc mã phiếu sau COMPLETED phải loại trùng và chờ có mã ngoài danh sách đã ghi. Extension không đọc mã sau khi phiên `done`.
+    - Không kiểm độc lập được trên trình duyệt lúc ghi (Claude in Chrome không kết nối). Response Nextwaves sau nhận vẫn chưa có mẫu thật trong repo (capture không có tab Nextwaves); bộ đọc đã nhận đơn này.
     - Tiếp: GR84673 (↔ PO-2026-000001, SO 38565378 tách giao, còn PO-2026-000003 cùng SO → màn quét yêu cầu chọn đúng PO); merge `batch/v0.3.1-prd` → `main` khi operator đồng ý; v0.3.2 khi Nextwaves có trường mã giao.
 61. (cũ, thay bằng mục 62) **Gói v0.3.1 AEE4447F sẵn sàng cài máy POS Florita** — `docs/dev/BATCH-v0.3.1.md` (mục 06/11 tối), hướng dẫn `docs/dev/RUNBOOK-PRD-FLORITA-v0.3.1.md` (viết lại: tự đối chiếu, tự động hoặc thủ công).
     - **Chờ operator:** cài trên máy POS (`C:\circa-gr-nextwaves`), chạy một luồng thật có capture, gửi `kiem-sau.js` + 2 capture.
