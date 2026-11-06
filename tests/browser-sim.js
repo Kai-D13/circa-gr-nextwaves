@@ -75,6 +75,15 @@ function createBrowser(server, opts = {}) {
       for (const k of ks) if (k in store) out[k] = clone(store[k]);
       return out;
     },
+    remove: async (keys) => {
+      const changes = {};
+      for (const k of [].concat(keys)) {
+        if (!(k in store)) continue;
+        changes[k] = { oldValue: clone(store[k]), newValue: undefined };
+        delete store[k];
+      }
+      if (!closed && Object.keys(changes).length) for (const l of storageListeners.slice()) setImmediate(() => !closed && l(clone(changes), "local"));
+    },
     set: async (obj) => {
       const changes = {};
       for (const [k, v] of Object.entries(obj)) {
