@@ -43,6 +43,21 @@ Gói **79D4269C**. Chỉ đọc trang và bấm nút của extension; không b�
 
 **Gate gói cùng lúc:** 219/219 test; đột biến 198 ca: 195 ca áp dụng đều bị bắt (11 ca sống ở lượt đủ → 8 ca thêm test, 3 ca `autoPlanCheck` là mã chết ở v0.4.0 → loại); Edge thật 43/43 trên 79D4269C (Edg/156.0.4314.58, tác vụ dài nhất 21,61 ms).
 
+## Mẫu Lumina 07/11/2026 — SO 38569460 tách giao (Claude chạy trên Chrome máy dev, chỉ đọc) — **ĐẠT**
+
+POS chuyển Florita → **Lumina (POS0012)** để xem, xong chuyển lại Florita (POS0068). Phiên tạo ra đã huỷ; không bấm "Xác nhận nhận hàng" / HOÀN THÀNH; SL nhận POS vẫn 0.
+
+| | POS (Lumina) | Nextwaves (kho Lumina) | Extension |
+|---|---|---|---|
+| Phiếu 1 | **GR84749** `10ab1183…` PO01975105, mã giao **SOBD38569460-P1**, 1 dòng: 4572 Aerius desloratadine 5mg (h/10v) × 1 hộp | **PO-2026-000007** `5dcb8e32…` (refId SOBD38569460-**16028756**, phiếu gửi IT-BUYMED-20261107002537-4558): Aerius × 10 (gốc), 1 tem | Khớp PO-2026-000007, kho Lumina, **1 UID dự kiến**, bảng 4572: 10 = 10 |
+| Phiếu 2 | **GR84748** `eae0a309…` PO01975104, mã giao **SOBD38569460-P2**, 37 dòng / 44 sản phẩm | **PO-2026-000008** (refId SOBD38569460-**16028754**, phiếu gửi IT-BUYMED-20261107002548-8114): màn quét "0 / 62" | Khớp PO-2026-000008, kho Lumina, **62 UID dự kiến** = 62 Nextwaves đòi quét; bảng 37 dòng SL GR (gốc) = SL Nextwaves (gốc) **cả 37 dòng** |
+
+- Trang `/chi-tiet-so/38569460`: khung "SO 38569460 có 2 phiếu nhận đang chờ" + nút chọn từng phiếu. Khung Nextwaves mỗi phiếu: "Nextwaves có 2 đơn cùng SO (tách giao): trên màn quét chọn ĐÚNG đơn PO-… — đơn khớp số lượng phiếu".
+- **Hậu tố refId không theo thứ tự -P1 / -P2** (P1 ↔ …756, P2 ↔ …754) → không suy được đơn từ số đuôi; vân tay số lượng chọn đúng. Trường mã giao Nextwaves (bản sau) sẽ thay cách này.
+- 62 tem cho 44 sản phẩm: 6 dòng Nextwaves gắn tem theo đơn vị nhỏ hơn dòng POS — Panadol (H/120v) 1 hộp = **10 vỉ**, khẩu trang 5D kids 1 bịch = **10 gói**, siro ong vàng 2, xịt Ha'sol 3, Alpha choay 2, nước tẩy trang Cocoon 4. Kế hoạch điền quy đổi tem → đơn vị dòng (đã chạy với GR03878: 3 vỉ = 1 hộp); còn phụ thuộc tra QR của từng tem ra đúng lô có trên phiếu — chỉ thấy khi nhận thật.
+- Hai phiên cùng SO mở cùng lúc: mỗi phiên tự khớp đúng đơn; tab Nextwaves tự mở bằng tay (không do extension mở) không gắn phiên nào khi có hai phiên cùng SO (luật P2-1 v0.3.1). Vận hành: nhận **từng phiếu một**, mở bằng nút của chính phiếu.
+- Lumina còn GR84750 (PO01975106) chờ nhận — chưa xem (không thuộc SO 38569460).
+
 ## Không nằm trong QA máy dev
 
 - **Lượt ghi thật** (nhận trên Nextwaves → tự điền → HOÀN THÀNH): làm ở lượt đầu trên máy POS vận hành, đúng phiếu operator cho phép, có `kiem-sau.js`. Muốn chạy trên máy dev thì cần phiếu có hàng gắn tem tại máy dev + operator cho phép bằng chữ đúng phiếu.

@@ -606,7 +606,8 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
    - Cách ghi khi 1 UID ≠ 1 đơn vị dòng (R11).
    - Chốt spec v0.2 hoặc giao B1.
 7. ~~PM audit `docs/dev/LOGIC-v0.1.md`~~ → thay bằng mục 8.
-67. **Hiện hành (07/11): QA máy dev v0.4.0 `79D4269C` ĐẠT — chờ operator chép gói vào máy POS Florita + lượt đầu GR84673.**
+68. **Hiện hành (07/11): mẫu Lumina SO 38569460 (tách giao) chạy chỉ đọc trên máy dev — ĐẠT.** GR84749 (-P1, Aerius 1 hộp) ↔ PO-2026-000007 (1 UID); GR84748 (-P2, 37 dòng / 44) ↔ PO-2026-000008 (62 UID = Nextwaves "0 / 62", 37/37 dòng khớp). Hậu tố refId không theo thứ tự P1/P2. 62 tem / 44 sản phẩm do 6 dòng gắn tem theo vỉ / gói (Panadol 10 vỉ, khẩu trang kids 10 gói…) → kế hoạch quy đổi khi điền. Chi tiết `docs/dev/QA-v0.4.0-MAY-DEV.md` §Mẫu Lumina. POS máy dev đã chuyển lại Florita. Hai phiếu này dùng được cho lượt đầu Lumina khi cài máy POS Lumina.
+67. (cũ) **07/11: QA máy dev v0.4.0 `79D4269C` ĐẠT — chờ operator chép gói vào máy POS Florita + lượt đầu GR84673.**
     - Operator: "hãy QA đạt đi rồi cài lên máy POS" (cho phép cài máy POS khi QA đạt). Claude chạy QA trên Chrome máy dev qua Claude in Chrome (operator Reload + Production + kết nối): Q1–Q5, Q7 đạt; Q6 đạt phần extension (chưa thấy kết nối thành công sau Ngắt — kiểm ở lượt đầu). Chi tiết `docs/dev/QA-v0.4.0-MAY-DEV.md` §Kết quả. Finding P3 UI-1 (khung che một phần nút "Kết nối đầu đọc").
     - `6f961d14…` = GR84724 (`CO001975079`, Vivita) không phải phiếu SO → extension không đụng (đúng). GR84673 `aa2701bb…` khớp PO-2026-000001 (tách giao, PO-2026-000003 cùng SO), 22 UID, kho Florita.
     - Gate: 219/219; đột biến 195 ca áp dụng đều bắt (3 ca `autoPlanCheck` mã chết loại); Edge 43/43 trên 79D4269C. Nhánh `ec4293c` (src = `8a28fc4`).
