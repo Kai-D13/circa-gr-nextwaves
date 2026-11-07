@@ -88,3 +88,11 @@ Chỉ lấy body, kèm url / status / giờ. Tên nhân viên → `<nhân viên>
 | `pos-stg-gr-status-COMPLETED-GR03887-20261028.json` | STG | `PUT …/goods-receipt/<id>/status/COMPLETED` | HOÀN THÀNH (trang POS gửi lúc 21:54:25): không body, 200, response rỗng. `4fdb8cdf` |
 | `pos-stg-gr-GR03887-completed-20261028.json` | STG | `GET …/goods-receipt/<id>` | 21:54:26: COMPLETED. **Mỗi lô thêm đúng một mã = mã QR của lô** (3 lô chung với GR03880 có cùng mã). `29b095ba` |
 | `ext-stg-storage-GR03887-20261028.json` | STG | `chrome.storage.local` (operator export 21:56) | Một phiên GR03887 (tạo 21:32:57 bởi 0.2.4, `done`, #EF0E020C, 5 apply_done, gr_completed, ui_anchor_missing) + cấp phép gõ nhầm `STG:GR3887`. Có `expected` + `nwResult.units`. Không có token. `bea04fff` |
+
+**Case phiếu phần còn lại (07/11, production Florita): GR84673 → GR84803, cùng PO01974970 / SO 38565378 ↔ Nextwaves PO-2026-000001.**
+Nguồn: operator "Copy response" `GET /v1/order/goods-receipt/<id>` (Downloads `response_GR84673.json`, `response_GR84803.json`). Rút gọn còn trường extension đọc: bỏ tên người / người hoàn tất, địa chỉ / điện thoại cửa hàng, giá, ảnh, danh sách lô của sản phẩm; `_source_sha256` = sha256 file gốc. Phân tích: `docs/dev/CASE-PHIEU-PHAN-CON-LAI-20261107.md`.
+
+| File | Môi trường | Nguồn API | Ghi chú |
+|---|---|---|---|
+| `gr-prod-GR84673-tach-20261107.json` | PRD | `GET /v1/order/goods-receipt/<id>` | COMPLETED 04:27:28Z khi mới nhận 1/18 dòng (Arrahan, bán gấp); 17 dòng nhận 0 vẫn nằm trên phiếu. `01dd8ade` |
+| `gr-prod-GR84803-phan-con-lai-20261107.json` | PRD | `GET /v1/order/goods-receipt/<id>` | Phiếu POS tự sinh 04:27:28Z (17 dòng còn lại), trạng thái **cuối** COMPLETED 05:02:16Z nhận tay; Femalto chi tiết SL 0 / nhận 1 / không mã. Chưa có trạng thái lúc vừa sinh. `67e72d78` |

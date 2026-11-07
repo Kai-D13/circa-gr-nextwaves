@@ -78,6 +78,7 @@ Báo cáo tách ba mức bằng chứng: **đã kiểm từ source / gói**, **�
 | 07/11 | **Production chỉ có hai cửa hàng: CIRCA FLORITA và CIRCA LUMINA**, cả hai tenant Nextwaves `circa` (`docs/BUSINESS-FLOW.md` §2) |
 | 07/11 | **Mượn / trả đầu đọc với QR Scan Log (`circa-reader/v1`) hoãn**, làm sau. Hiện hành: dược sĩ Ngắt RFID ở tab bán hàng trước khi nhận, Kết nối lại sau. Mã phía extension giữ nguyên (không có QR Scan Log trả lời thì bỏ qua) |
 | 07/11 | **Quy trình phát hành:** cài máy dev → QA / QC trên máy dev đạt → mới cài máy POS vận hành (`docs/BUSINESS-FLOW.md` §6) |
+| 07/11 | **Bán gấp → POS tách phiếu là thao tác thật** (dược sĩ nhận vài món, HOÀN THÀNH để bán ngay, quay lại nhận phần còn lại trên phiếu POS tự sinh). Extension phải **hỗ trợ** phiếu phần còn lại (H2), không chỉ cảnh báo. Operator cho phép tái hiện trên staging. `docs/dev/CASE-PHIEU-PHAN-CON-LAI-20261107.md` |
 
 Hệ quả của "một gói":
 - `manifest.json` phải khai quyền cho host của **cả hai** môi trường.

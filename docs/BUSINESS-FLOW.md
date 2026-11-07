@@ -56,6 +56,7 @@ Hiện hành: **v0.4.0** (07/11/2026). Tài liệu này là nguồn chuẩn củ
 | Nextwaves đã nhận nhưng phiên mất | "Nextwaves ĐÃ nhận — POS CHƯA điền" (đỏ) | Nhận tay phiếu đó |
 | Có sản phẩm Nextwaves không gắn tem (thiếu lượng) | Vàng: "còn K sản phẩm CHƯA nhận đủ" + tên | Nhận tay phần thiếu rồi HOÀN THÀNH |
 | Chưa thấy token Nextwaves | "Chưa thấy Nextwaves tải dữ liệu — F5" | F5, kiểm đăng nhập đúng địa chỉ |
+| **Bán gấp** (07/11): nhận một vài món, bấm HOÀN THÀNH → POS tự sinh **phiếu phần còn lại** cùng PO | v0.4.0 chưa hỗ trợ: phiếu phần còn lại báo "số lượng không khớp" / "chưa có đơn chờ nhận" (dừng an toàn) | Món bán gấp: **quét QR** (không nhập số tay). Phần còn lại: hiện nhận tay; sau H2 bấm "Nhận hàng bằng RFID" trên phiếu mới. `docs/dev/CASE-PHIEU-PHAN-CON-LAI-20261107.md` |
 
 ## 5. Chưa làm / làm sau (ghi nhận 07/11)
 
@@ -64,6 +65,7 @@ Hiện hành: **v0.4.0** (07/11/2026). Tài liệu này là nguồn chuẩn củ
 | **Mượn / trả đầu đọc tự động với QR Scan Log** (`circa-reader/v1`, spec `docs/dev/SPEC-QSL-MUON-DAU-DOC-v1.md`) | **Hoãn** (operator 07/11). Phía extension này đã có mã (hỏi QR Scan Log; không trả lời trong 300 ms → bỏ qua, không ảnh hưởng luồng). Hiện hành: bước 3 + 8 làm tay | Khi đội QR Scan Log làm xong hợp đồng → kiểm lại với bản của họ |
 | Trường mã giao `-F` / `-P1` / `-P2` trên đơn Nextwaves | Chờ Nextwaves | Bản sau: tra đơn theo mã giao thay vì vân tay số lượng |
 | Tự HOÀN THÀNH | Bỏ từ v0.4.0 (dược sĩ bấm) | Không có kế hoạch |
+| **Phiếu phần còn lại** (bán gấp → POS tách phiếu, operator 07/11: thao tác thật, lặp lại) | Đã định nghĩa (H2, D1–D8), chưa code; chờ tái hiện staging lấy phiếu lúc vừa sinh | v0.4.1 (cùng các finding audit) |
 
 ## 6. Quy trình phát hành
 
