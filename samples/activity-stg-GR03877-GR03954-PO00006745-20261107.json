@@ -1,0 +1,100 @@
+{
+  "_note": "STG 07/11: GET /backend/v1/activity-log/<GOODS_RECEIPT|PURCHASE_ORDER>/<id> (trang POS staging tự tải). Chỉ giữ action / giờ / chữ tiêu đề / chữ chi tiết / metadata; bỏ người làm, IP, trình duyệt. _trim_sha256 như trên.",
+  "_trim_sha256": "6bb1598dfc978e975bafb58ddbf818ea02a0159654b48a417e4d0749e8a0ca03",
+  "data": {
+    "GR03877": [
+      {
+        "action": "GOODS_RECEIPT_COMPLETED",
+        "at": "2026-11-07T10:53:04.365Z",
+        "title": "đã hoàn thành phiếu nhận hàng",
+        "detail": "Nhận 3/12 sản phẩm",
+        "meta": {
+          "after.status": "COMPLETED",
+          "before.status": "RECEIVING",
+          "goods_receipt_code": "GR03877",
+          "purchase_order_id": "b191075a-f48a-44f0-accc-f940bfef1c82",
+          "source_rpc": "/service.OrderService/UpdateStatusGetGoodsReceipt"
+        }
+      },
+      {
+        "action": "GR_DETAIL_UPDATED",
+        "at": "2026-11-07T10:52:41.444Z",
+        "title": "đã cập nhật lô của Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+        "detail": "Đã đổi: Số lượng nhận",
+        "meta": {
+          "after.received_quantity": "1",
+          "before.received_quantity": "0",
+          "product_id": "5451",
+          "sku_code": "CXH7DN9F1YA.THI-FE-001",
+          "source_rpc": "/service.OrderService/UpdateGoodsReceiptDetail",
+          "unit": "túi"
+        }
+      },
+      {
+        "action": "GR_DETAIL_UPDATED",
+        "at": "2026-11-07T10:52:40.263Z",
+        "title": "đã cập nhật lô của Kem xua muỗi Soffell hương cam",
+        "detail": "Đã đổi: Số lượng nhận",
+        "meta": {
+          "after.received_quantity": "2",
+          "before.received_quantity": "1",
+          "product_id": "2.431732e+06",
+          "sku_code": "CXH7DN9F1YA.7YPBW961",
+          "source_rpc": "/service.OrderService/UpdateGoodsReceiptDetail",
+          "unit": "chai"
+        }
+      },
+      {
+        "action": "GR_DETAIL_UPDATED",
+        "at": "2026-11-07T10:52:39.193Z",
+        "title": "đã cập nhật lô của Kem xua muỗi Soffell hương cam",
+        "detail": "Đã đổi: Số lượng nhận",
+        "meta": {
+          "after.received_quantity": "1",
+          "before.received_quantity": "0",
+          "product_id": "2.431732e+06",
+          "sku_code": "CXH7DN9F1YA.7YPBW961",
+          "source_rpc": "/service.OrderService/UpdateGoodsReceiptDetail",
+          "unit": "chai"
+        }
+      },
+      {
+        "action": "GOODS_RECEIPT_RECEIVING_STARTED",
+        "at": "2026-11-07T10:52:39.193Z",
+        "title": "đã bắt đầu nhận hàng",
+        "meta": {
+          "goods_receipt_code": "GR03877",
+          "purchase_order_id": "b191075a-f48a-44f0-accc-f940bfef1c82",
+          "source_rpc": "/service.OrderService/UpdateGoodsReceiptDetail"
+        }
+      }
+    ],
+    "GR03954": [
+      {
+        "action": "GOODS_RECEIPT_CREATED",
+        "at": "2026-11-07T10:53:04.365Z",
+        "title": "đã tạo phiếu nhận hàng",
+        "detail": "Từ phiếu mua hàng PO00006745",
+        "meta": {
+          "goods_receipt_code": "GR03954",
+          "po_code": "PO00006745",
+          "purchase_order_id": "b191075a-f48a-44f0-accc-f940bfef1c82",
+          "source_rpc": "/service.OrderService/UpdateStatusGetGoodsReceipt"
+        }
+      }
+    ],
+    "PO00006745": [
+      {
+        "action": "PURCHASE_ORDER_STATUS_CHANGED",
+        "at": "2026-11-07T10:52:39.193Z",
+        "title": "đã đổi trạng thái phiếu mua hàng",
+        "detail": "Từ Chờ nhận hàng sang Đang nhận hàng",
+        "meta": {
+          "after.status": "PROCESSING",
+          "before.status": "WAIT_FOR_PROCESS",
+          "source_rpc": "/service.OrderService/UpdateGoodsReceiptDetail"
+        }
+      }
+    ]
+  }
+}

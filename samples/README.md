@@ -96,3 +96,13 @@ Nguồn: operator "Copy response" `GET /v1/order/goods-receipt/<id>` (Downloads 
 |---|---|---|---|
 | `gr-prod-GR84673-tach-20261107.json` | PRD | `GET /v1/order/goods-receipt/<id>` | COMPLETED 04:27:28Z khi mới nhận 1/18 dòng (Arrahan, bán gấp); 17 dòng nhận 0 vẫn nằm trên phiếu. `01dd8ade` |
 | `gr-prod-GR84803-phan-con-lai-20261107.json` | PRD | `GET /v1/order/goods-receipt/<id>` | Phiếu POS tự sinh 04:27:28Z (17 dòng còn lại), trạng thái **cuối** COMPLETED 05:02:16Z nhận tay; Femalto chi tiết SL 0 / nhận 1 / không mã. Chưa có trạng thái lúc vừa sinh. `67e72d78` |
+
+**Tái hiện staging case phiếu phần còn lại (07/11 17:52–17:53, cửa hàng 2222): GR03877 → GR03954, PO00006745 (nhập tay, không SO).**
+Nguồn: response mà chính trang POS staging tải (bắt trong trang qua Chrome máy dev, chỉ đọc body, không đọc header). Rút gọn như hai mẫu production ở trên; nhật ký hoạt động chỉ giữ action / giờ / chữ / metadata, bỏ người làm, IP, trình duyệt. Bản chép đã kiểm SHA-256 với trang. Phân tích: `docs/dev/CASE-PHIEU-PHAN-CON-LAI-20261107.md` §8.
+
+| File | Môi trường | Nguồn API | Ghi chú |
+|---|---|---|---|
+| `gr-stg-GR03954-phan-con-lai-moi-sinh-20261107.json` | STG | `GET /backend/v1/order/goods-receipt/<id>` | **Phiếu POS tự sinh, lúc vừa sinh, chưa ai chạm**: WAITING_TO_RECEIVE, 2 dòng (5451 SL 3 = 4 − 1, 1110 SL 6), mỗi dòng 1 lô = lô cũ, SL lô = phần còn lại, không mã; `item.ref_id` + `ref_id` lô giữ nguyên. `4a2f7568` |
+| `gr-stg-GR03877-tach-20261107.json` | STG | `GET /backend/v1/order/goods-receipt/<id>` | Phiếu gốc sau HOÀN THÀNH khi nhận 2/2 + 1/4 + 0/6 (nhập số, không QR): COMPLETED, PUT03495, đủ 3 dòng, không mã nào. `e869ee2a` |
+| `po-stg-PO00006745-sau-tach-20261107.json` | STG | `GET /backend/v1/pos/<posId>/po/<poId>` | PROCESSING; `goods_receipts` GR03877 COMPLETED + GR03954 WAITING_TO_RECEIVE; `items[].received_quantity` cộng qua mọi phiếu; `details[].id` = `ref_id` lô trên phiếu. `c8879a73` |
+| `activity-stg-GR03877-GR03954-PO00006745-20261107.json` | STG | `GET /backend/v1/activity-log/<loại>/<id>` | GR03877: RECEIVING_STARTED → 3 × GR_DETAIL_UPDATED → COMPLETED "Nhận 3/12 sản phẩm"; GR03954: CREATED "Từ phiếu mua hàng PO00006745" (cùng RPC `UpdateStatusGetGoodsReceipt`, không nhắc phiếu gốc); PO: WAIT_FOR_PROCESS → PROCESSING ở lần nhận đầu. `1e2ed834` |

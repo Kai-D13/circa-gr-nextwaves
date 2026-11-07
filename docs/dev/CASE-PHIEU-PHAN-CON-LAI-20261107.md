@@ -1,13 +1,14 @@
 # Case "phiếu phần còn lại": POS tự tách phiếu khi HOÀN THÀNH một phần (07/11/2026)
 
-**Trạng thái:** định nghĩa + phát hiện vấn đề. **Chưa sửa mã** (operator 07/11: batch này chỉ bàn, định nghĩa, tìm vấn đề). Tái hiện trên staging được operator cho phép, chờ đăng nhập POS staging trên máy dev.
+**Trạng thái:** định nghĩa + phát hiện vấn đề. **Chưa sửa mã** (operator 07/11: batch này chỉ bàn, định nghĩa, tìm vấn đề). **Đã tái hiện trên staging 07/11 17:52–17:53** (operator cho phép): GR03877 → GR03954, kết quả ở §8. P5 / V3 / I5 đã có câu trả lời.
 
 **Nguồn:**
 - operator 07/11: hai Copy response GR84673 và GR84803 (mẫu đã bỏ tên người: `samples/gr-prod-GR84673-tach-20261107.json`, `samples/gr-prod-GR84803-phan-con-lai-20261107.json`);
 - trang phiếu mua hàng PO01974970 trên POS, đọc qua Chrome máy dev;
 - trang Nextwaves PO-2026-000001, đọc qua Chrome máy dev;
 - mã v0.4.0 (nhánh `batch/v0.4-moi-pos` `ec4293c`, `src/` = `8a28fc4`, gói 79D4269C đang chạy trên máy POS Florita);
-- mẫu staging T3 25/10 (`samples/nw-stg-receiving-search-q-SOBD1593858-T3-sau-20261025.json`).
+- mẫu staging T3 25/10 (`samples/nw-stg-receiving-search-q-SOBD1593858-T3-sau-20261025.json`);
+- tái hiện staging 07/11 (§8): `samples/gr-stg-GR03877-tach-20261107.json`, `samples/gr-stg-GR03954-phan-con-lai-moi-sinh-20261107.json`, `samples/po-stg-PO00006745-sau-tach-20261107.json`, `samples/activity-stg-GR03877-GR03954-PO00006745-20261107.json`.
 
 ## 1. Nghiệp vụ (operator 07/11)
 
@@ -37,7 +38,7 @@ Phía POS:
   - `item.ref_id` giữ nguyên (cùng dòng PO), lô giữ nguyên (`lot_id`, `lot_date`), id chi tiết mới.
 - **P3.** Không có trường nào trỏ về phiếu gốc; hai phiếu chỉ nối với nhau qua PO. PO liệt kê cả hai phiếu (`goods_receipts`), vẫn **một** mã giao / SO. Trang PO ghi "Đã nhập kho"; "PO con" để trống.
 - **P4.** Sau COMPLETED, mỗi đơn vị có 2 mã: UID đã quét và 1 mã POS tự sinh (dạng `17939…C11`), không phải UID Nextwaves. Hiện tượng này đã biết từ R5 / D1.
-- **P5.** Dòng Femalto trên GR84803 có chi tiết `quantity` 0, `received_quantity` 1, không mã. Trang PO hiện hai dòng lô "010826" (1 và 0). **Chưa rõ** POS sinh như vậy hay dược sĩ sửa tay; cần tái hiện (§7).
+- **P5.** Dòng Femalto trên GR84803 có chi tiết `quantity` 0, `received_quantity` 1, không mã. Trang PO hiện hai dòng lô "010826" (1 và 0). **Đã rõ (§8, S4 + S10): không phải POS sinh lúc tách.** Phiếu phần còn lại lúc vừa sinh luôn có SL lô = phần còn lại và dùng lại đúng dòng lô của PO (`ref_id` chi tiết). Trên GR84803, 16/17 dòng dùng lại `ref_id` lô của GR84673; riêng Femalto mang một dòng lô PO **mới** (`358e29ce…` ≠ `f52af836…`, cùng `lot_id`). Nghĩa là lô đó được thêm lại bằng tay sau khi tách. Trang POS production không có nhật ký hoạt động, nên không biết chính xác thao tác.
 
 Phía Nextwaves:
 - **N1.** Đơn Nextwaves không biết POS tách phiếu: một đơn ↔ một PO POS, nhận một lần 22/22.
@@ -69,7 +70,7 @@ Không kẹt: quét tay vài món trên phiếu mà **không** bấm HOÀN THÀN
 |---|---|---|
 | V1 | Bán gấp **trước** khi nhận Nextwaves (case 07/11) | Thường gặp nhất |
 | V2 | Nextwaves đã nhận + extension đã điền / đang điền, dược sĩ bớt dòng rồi HOÀN THÀNH | Kết quả nhận nằm trong phiên phiếu gốc, nhưng phiên đó đã `done` |
-| V3 | Nhận một **phần** của một dòng (dòng SL 3, nhận 1) | Phiếu phần còn lại có dòng SL 2? Chưa thấy — tái hiện §7 |
+| V3 | Nhận một **phần** của một dòng (dòng SL 3, nhận 1) | **Đã thấy (§8 S3):** phiếu cũ giữ SL 4 / nhận 1; phiếu mới có dòng SL 3, cùng lô, cùng `ref_id` dòng + lô PO |
 | V4 | Tách nhiều lần (GR → GR′ → GR″) | Mọi phiếu đã xong của PO đều phải tính |
 | V5 | Món bán gấp nhận bằng cách **nhập số tay** (không quét QR) | Không biết tem nào đã ra khỏi kho |
 | V6 | Extension điền thiếu (dòng Nextwaves không gắn tem), dược sĩ HOÀN THÀNH luôn | Extension tự tạo ra V1 / V3 |
@@ -82,8 +83,9 @@ Không kẹt: quét tay vài món trên phiếu mà **không** bấm HOÀN THÀN
 | I2 | P3 | Lời báo sai lý do (§3) |
 | I3 | P2 | Nextwaves đã nhận trước khi mở phiếu phần còn lại → không tìm lại được đơn theo SO (N2). Chỉ cứu được nếu cùng máy còn phiên phiếu gốc có kết quả nhận (V2) |
 | I4 | P3 | Món bán gấp nhập số tay (V5): với lô đó, số tem Nextwaves nhiều hơn phần còn lại, không biết tem nào đã bán → phải chặn sản phẩm đó |
-| I5 | ? | P5 (chi tiết SL 0): nếu POS sinh như vậy, kế hoạch hiện hành chặn `over` (`plan.js:187`) → cần dữ liệu |
+| I5 | P3 | P5 (chi tiết SL 0): **không do tách phiếu** (§8). Bất kỳ phiếu nào bị thêm lại lô bằng tay đều có dòng lô SL 0. Tem của lô đó → kế hoạch chặn `over` (`plan.js:187`), dừng an toàn. Không riêng phiếu phần còn lại; xử lý chung ở v0.4.1 hoặc giữ chặn |
 | I6 | ngoài phạm vi, cần kiểm | Bán gấp **trước** khi Nextwaves nhận tem đó → lệnh trừ tồn của QR Scan Log cho tem đó gặp tem chưa vào kho Nextwaves; sau đó Nextwaves nhận lại chính tem đã bán. Cần kiểm với dự án QR Scan Log |
+| I7 | P3 | POS **không hỏi xác nhận** khi HOÀN THÀNH phiếu chưa nhận đủ (§8 S1): một lần bấm là tách phiếu. Sau khi extension điền thiếu (dòng Nextwaves không gắn tem, V6), lời báo của extension là chỗ duy nhất nhắc dược sĩ. Lời báo v0.4.1 phải nói rõ: "còn K sản phẩm chưa đủ — bấm HOÀN THÀNH bây giờ thì POS tách phần thiếu sang phiếu mới" |
 
 ## 6. Hướng xử lý (đề xuất, chưa code)
 
@@ -91,7 +93,7 @@ H2, hỗ trợ phiếu phần còn lại:
 
 | # | Thiết kế |
 |---|---|
-| D1 | **Nhận diện** phiếu phần còn lại khi đủ cả bốn điều kiện: PO có ≥ 2 phiếu; mọi phiếu khác COMPLETED; phiếu đang mở là phiếu chờ nhận duy nhất; **cộng sổ theo dòng PO** (`item.ref_id`, đơn vị gốc) khớp: Σ đã nhận ở phiếu đã xong + SL phiếu đang mở = SL dòng PO. Thiếu điều kiện nào → giữ khoá như v0.4.0 |
+| D1 | **Nhận diện** phiếu phần còn lại khi đủ cả bốn điều kiện: PO có ≥ 2 phiếu; mọi phiếu khác COMPLETED; phiếu đang mở là phiếu chờ nhận duy nhất; **cộng sổ theo dòng PO** (`item.ref_id`, đơn vị gốc) khớp: Σ đã nhận ở phiếu đã xong + SL phiếu đang mở = SL dòng PO. Thiếu điều kiện nào → giữ khoá như v0.4.0. Staging xác nhận (§8 S3–S4, S7): `item.ref_id` = id dòng PO, không đổi qua các phiếu; PO `items[].received_quantity` đã cộng sẵn qua mọi phiếu. Cộng sổ theo **dòng** (không theo lô), vì dòng lô có thể bị thêm lại bằng tay (P5) |
 | D2 | **Khoá ghi POS:** thay luật "một phiếu chưa huỷ mỗi PO" bằng D1. Vẫn khoá khi hai phiếu cùng PO cùng mở hoặc sổ lệch |
 | D3 | **Khớp đơn Nextwaves theo cả PO** (tổng mọi phiếu của PO), không theo phiếu đang mở. SO tách giao vẫn chọn đúng một đơn |
 | D4 | **Tập tem phải nhận** = tem của đơn trừ tem có UID đã nằm trên phiếu đã xong của PO (lọc mã POS tự sinh, P4). Màn quét coi là "đủ" khi đủ tập này; tem của món bán gấp có hay không đều được |
@@ -106,7 +108,7 @@ H3, hướng dẫn dược sĩ:
 
 Kiểm: fixture từ hai mẫu production + mẫu staging (§7); đột biến cho D1–D5; E2E staging trên phiếu phần còn lại có tem vật lý. Gom vào v0.4.1 cùng các finding audit (một lần cài máy POS).
 
-## 7. Tái hiện trên staging (operator cho phép 07/11)
+## 7. Tái hiện trên staging (operator cho phép 07/11) — ĐÃ LÀM, kết quả §8
 
 **Mục đích:** lấy phiếu phần còn lại **lúc vừa sinh, chưa nhận** (POS sinh lô, SL, mã, trạng thái thế nào), trả lời P5 / V3 / I5.
 
@@ -125,3 +127,51 @@ Kiểm: fixture từ hai mẫu production + mẫu staging (§7); đột biến c
 **Cần:**
 - Operator đăng nhập POS staging (`sso.stg.buymed.tech`) trên Chrome máy dev. Claude không nhập mật khẩu.
 - Một phiếu chờ nhận ở cửa hàng 2222. Từ 30/10 hết PO staging, nên có thể cần SO staging mới (`buymed-stag`, có tem vật lý + đơn `circa-stg`). Nếu phiếu có SO và đơn Nextwaves chưa nhận, **phiếu phần còn lại sinh ra giữ lại làm E2E cho H2** (không nhận tay).
+
+## 8. Kết quả tái hiện staging (07/11, 17:52–17:53 giờ VN)
+
+**Phiếu dùng:** GR03877 / PO00006745, cửa hàng 2222. PO nhập tay (`source_type` IMPORT_STOCK), **không SO**, nên extension không dùng được phiếu này cho E2E. Ba dòng, mỗi dòng một lô.
+- GR03879 có SO (1593859-F) nên để nguyên. Đơn Nextwaves của SO này đã nhận (§9).
+- Claude thao tác trên POS staging qua Chrome máy dev, bằng tài khoản operator đăng nhập.
+- Không đụng Nextwaves, không quét QR. Nhận bằng nút +, giống dược sĩ nhập số.
+
+| Dòng | SL | Nhận | Vai trò |
+|---|---|---|---|
+| 2431732 Soffell (chai) | 2 | 2 | A, nhận đủ |
+| 5451 Vinmotop (túi) | 4 | 1 | B, nhận một phần |
+| 1110 Pymefucan (vỉ) | 6 | 0 | C, không nhận |
+
+Bấm **HOÀN THÀNH** → GR03877 COMPLETED (PUT03495), POS sinh **GR03954** (`ac0c25c0-926a-473e-9aba-0c4a50deb773`). GR03954 **để nguyên, chưa ai chạm** (giữ làm mẫu sống).
+
+| # | Sự thật |
+|---|---|
+| S1 | **Không có hộp xác nhận.** Bấm HOÀN THÀNH một lần là phiếu chưa đủ thành COMPLETED, rồi trang **tự tải lại** (`navigation.type = reload`). Nhật ký ghi "Nhận 3/12 sản phẩm" |
+| S2 | Phiếu mới sinh **trong cùng request** HOÀN THÀNH (RPC `UpdateStatusGetGoodsReceipt`). `created_at` GR03954 = 10:53:04.059Z, trước `updated_at` GR03877 = 10:53:04.363Z (giống production P2). `created_by` = người bấm. Nhật ký GR03954: `GOODS_RECEIPT_CREATED` "Từ phiếu mua hàng PO00006745", **không nhắc GR03877** (P3) |
+| S3 | Phiếu mới chỉ có dòng **chưa nhận đủ**, SL = SL dòng PO − đã nhận: 5451 **3** túi (`base_quantity` 30), 1110 6 vỉ (12). Dòng nhận đủ (2431732) không có. Trạng thái WAITING_TO_RECEIVE, chưa có PUT |
+| S4 | Mỗi dòng của phiếu mới có **một lô = đúng lô cũ** (`lot_id`, `lot_date`, `expired_date`), `quantity` = phần còn lại (3, 6), `received_quantity` 0, **không mã**. Id dòng / id lô mới, nhưng `item.ref_id` (dòng PO) và **`ref_id` lô (dòng lô PO) giữ nguyên**. Phiếu vừa sinh **không có lô SL 0** |
+| S5 | Phiếu cũ giữ đủ 3 dòng: 2431732 2/2, 5451 SL 4 nhận 1, 1110 SL 6 nhận 0 (P1) |
+| S6 | Nhận bằng nhập số → lúc COMPLETED POS **không thêm mã nào** (`thuocsi_qr_codes` / `internal_qr_codes` rỗng mọi lô). Mã POS tự thêm (P4, A1 28/10) chỉ thấy ở lô đã có mã quét |
+| S7 | PO: WAIT_FOR_PROCESS → PROCESSING ngay ở lần nhận đầu tiên (không đợi HOÀN THÀNH). `items[].received_quantity` **cộng qua mọi phiếu** (2/2, 1/4, 0/6). `goods_receipts` = GR03877 COMPLETED + GR03954 WAITING_TO_RECEIVE. PO giữ PROCESSING. `list_child_po` / `origin_po_id` rỗng. Mỗi dòng PO một lô; `details[].id` của PO = `ref_id` lô trên phiếu |
+| S8 | Mỗi lần bấm +/− = một `PUT …/item/<itemId>/detail/<detailId>` gửi ngay, body `{"detail":{"received_quantity":N,"lot_id":…}}` (cùng API extension ghi). Lần đầu chuyển phiếu sang RECEIVING (`GOODS_RECEIPT_RECEIVING_STARTED`) |
+| S9 | **Ca cũ trên staging:** PO00006550 (ADMIN, 08/09/2026): GR03765 COMPLETED khi nhận 4/1100 → GR03766 SL 1096 sinh cùng giây. Hành vi tách đã có từ trước, không phải bản POS mới |
+| S10 | Đối chiếu ngược production: GR84803 dùng lại `ref_id` lô của GR84673 ở 16/17 dòng (đúng S4). Riêng Femalto mang dòng lô PO mới SL 0 → **thêm lại lô bằng tay sau khi tách** (P5) |
+
+**Hệ quả cho thiết kế (chưa code):**
+- D1 / D2: nhận diện theo `item.ref_id` + `received_quantity` trên PO là đủ dữ liệu, không cần nhật ký hoạt động (production không có).
+- D4 / D5: mã của phần đã nhận nằm trên phiếu **cũ** (phiếu mới không mang mã sang), nên phải đọc mọi phiếu COMPLETED của PO. Món bán gấp nhập số tay thì không có mã nào (S6) → đúng I4: không biết tem nào đã ra.
+- I5: không riêng phiếu phần còn lại, hạ P3.
+- I7: lời báo sau khi điền thiếu (mới).
+
+## 9. E2E v0.4.1 trên staging — cần gì (chưa làm)
+
+Đọc Nextwaves staging 07/11 (chỉ đọc):
+- Đơn buymed-stag **chưa nhận** ở kho FLORITA (kho của cửa hàng 2222): **PO-2026-000001** ↔ SOBD1594228-1056895 (1110 ×6, 2431732 ×2; 31/10), **PO69611541** ↔ SOBD1594067-1056814 (1110 ×12, 5451 ×40, 2431732 ×2; 26/10), cùng 3 đơn ngày 12/10.
+- POS staging cửa hàng 2222 **chưa có phiếu** cho các SO đó.
+- Đơn của GR03879 (SO 1593859, PO60017570) không còn trong "Đã xác nhận", tức không còn chờ nhận → không dùng được (N2).
+
+Muốn chạy E2E H2 thật:
+1. Tạo phiếu POS cho một SO ở trên (nút "Nhập SO thuocsi" trên danh sách phiếu nhận; là lượt ghi staging, cần operator cho phép).
+2. Có tem vật lý đúng đơn Nextwaves đó.
+3. Trên phiếu: nhận 1 món bằng **quét QR** (bán gấp) → HOÀN THÀNH → bấm "Nhận hàng bằng RFID" trên phiếu phần còn lại với bản v0.4.1.
+
+Việc này để sau, khi v0.4.1 đã code.
