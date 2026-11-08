@@ -6,6 +6,16 @@ Cập nhật: **08/11/2026 (lần 75: trước khi cài máy dev, operator đị
 
 **Phiên giữ quyền ghi (`agent.md` §2.1):** Claude Code — phiên **"QR code scan log project (fork)"** (session `bf911b64…`). Operator chỉ định lại 29/10 tối trong chính phiên này (chọn "Phiên này giữ quyền ghi"), sau G2 / G3 lượt 1. Lịch sử: phiên này giữ quyền từ đêm 28/10 đến khi G1 v0.3.0 đạt; lần 56 (10:26) chuyển sang `qr-code-6a` (session `77fef381…`, không ghi gì thêm sau `34092a8`); lần 57 về lại đây. `qr-code-6a` và mọi phiên khác (gốc, `qr-code-b2`, fork mới, Codex) **chỉ đọc**. Worktree mã: `C:\QR_code\circa-gr-nextwaves-dev` (chuyển từ thư mục tạm của phiên sau khi đột biến v0.3.0 chạy xong).
 
+**Hiện hành (08/11, lần 75):**
+- **Máy POS Florita:** chạy v0.4.0 `79D4269C`.
+- **v0.4.1 `BF5A9AD9`** (nhánh `batch/v0.4.1`): đã cài máy dev 08/11, đang QA (`docs/dev/QA-v0.4.1-MAY-DEV.md`); chưa cài máy POS.
+- **Luồng:** chính `docs/BUSINESS-FLOW.md` §3, ngoại lệ §4, làm sau §5 (`thuocsi_delivery_code`, `circa-reader/v1`, I2).
+- **Cửa hàng production:** Florita, Lumina (tenant `circa`).
+- **Quy trình mỗi batch:** `agent.md` §2.2 (case → plan → code → QC → review → gói + tài liệu giao → QA máy dev → máy POS → merge).
+- **Việc đang chờ:** §9, mục số lớn nhất. Mã / gói / lệnh / bẫy: `docs/dev/HANDOFF-DEV.md`.
+
+**Nhật ký sớm** (từ 19/10; giữ để tra, không phải trạng thái hiện hành):
+
 - Đã hiểu luồng nhận hàng trên POS hiện tại (capture production 19/10, §1).
 - Đã kiểm chuỗi khoá ba bên trên SO 38468903 (§2). Mã SO là khoá chung **ở production**. GR không có SO, nhưng PO của GR có SO.
 - 24/10: người dùng chốt **build trên staging trước**.
@@ -614,7 +624,8 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
     - Phiếu một GR / PO: không chạy nhánh phiếu phần còn lại (cần PO ≥ 2 phiếu); khác v0.4.0 chỉ ở nút lấy đầu đọc, dòng kiểm trước, khung đỏ (nhầm phiếu gửi / sai kho), sửa ổn định.
     - Bán gấp: điều kiện quét QR (không bấm +) trên GR gốc, không nhận riêng trên Nextwaves; phiếu phần còn lại thêm "Giữ đơn mở".
     - `thuocsi_delivery_code`: chờ mẫu response Nextwaves (API, định dạng, staging trước) → batch sau; v0.4.1 bỏ qua trường lạ (nw-model / resolve không kiểm khoá thừa).
-    - **Chờ operator:** cho cài máy dev → QA (`QA-v0.4.1-MAY-DEV.md`, chỉ đọc trên production) → cài máy POS.
+    - Operator cho phép cài gói (máy dev) 08/11 tối → đã chép `BF5A9AD9` đè `C:\circa-gr-nextwaves-v0.2.3` (trước đó đúng gói v0.4.0 `79D4269C`, cùng 19 file — bản lùi = ZIP v0.4.0 trong thư mục giao); `diff -r` với ZIP không khác. **Chờ operator Reload + chuẩn bị tab bán hàng QR Scan Log đã kết nối RFID → QA Q1–Q8.**
+    - Operator hỏi quy trình có được ghi đủ không → sửa `agent.md` §2.2 (thêm bước 0 case, review ghi trong BATCH, tài liệu giao, máy dev → POS, merge), §6 bản đồ thư mục (thay bản 24/10), `state.md` §0 tóm tắt hiện hành.
 74. **08/11 tối: v0.4.1 gói `BF5A9AD9` — gate đủ, chưa cài** — `docs/dev/BATCH-v0.4.1.md`.
     - Nhánh `batch/v0.4.1` (src `41718e6`). Giao `C:\circa-gr-nextwaves-release\v0.4.1\` (ZIP + `kiem-*.js` + `HUONG-DAN-v0.4.1.md` + `THAY-DOI-v0.4.1.md` + `QA-v0.4.1-MAY-DEV.md` + `SHA256SUMS.txt`).
     - Operator 08/11 tối: đọc tài liệu vẫn chưa nắm → viết `docs/dev/THAY-DOI-v0.4.1.md` (trước / sau, bằng lời thường, đúng chữ trên khung).

@@ -36,21 +36,42 @@ Project chỉ còn **hai người**:
 - **Không để mã sửa dở chưa commit.** Mỗi bước xong là commit lên nhánh `batch/*`. Trước khi sửa: `git status` phải sạch hoặc chỉ có thay đổi của chính mình. Thấy thay đổi lạ thì **dừng, chụp lại diff, báo operator**, không sửa đè.
 - **Worktree mã ở đường dẫn cố định** `C:\QR_code\circa-gr-nextwaves-dev`, không đặt trong thư mục tạm của một phiên.
 
-### 2.2 Nhịp làm việc mỗi batch
+### 2.2 Nhịp làm việc mỗi batch (sửa 08/11 cho khớp cách làm thật)
 
-1. **Plan:** `docs/dev/PLAN-<batch>.md` — phạm vi, hợp đồng, gate. Batch chạm ghi thật (POS / Nextwaves) hoặc đổi luật nghiệp vụ: operator đọc plan và đồng ý trước khi code.
-2. **Implement** trên nhánh `batch/<tên>`. Test cho lỗi / hàng rào mới viết **trước**, chạy trên mã cũ phải trượt.
+Một tính năng / case đi qua các bước dưới đây. Mỗi bước để lại file trong repo, để operator, phiên Claude sau hay đội khác đọc lại được. Ví dụ đủ vết: v0.4.1 — `CASE-PHIEU-PHAN-CON-LAI-20261107.md` → `PLAN-v0.4.1.md` → nhánh `batch/v0.4.1` → `BATCH-v0.4.1.md` → `RUNBOOK-v0.4.1.md` / `THAY-DOI-v0.4.1.md` / `QA-v0.4.1-MAY-DEV.md` → `state.md` lần 70–75.
+
+0. **Bàn, định nghĩa, phát hiện** (case mới, sự cố): `docs/dev/CASE-<tên>-<ngày>.md`.
+   - Nội dung: chuyện đã xảy ra, dữ liệu thật chỉ đọc (mẫu `samples/`), tái hiện staging khi operator cho phép, danh sách vấn đề, câu hỏi cho operator.
+   - Phản hồi của operator ghi lại trong chính file đó.
+   - Quyết định chốt → `agent.md` §3. Luồng nghiệp vụ đổi → `docs/BUSINESS-FLOW.md`.
+1. **Plan:** `docs/dev/PLAN-<batch>.md` — phạm vi, hợp đồng, gate.
+   - Batch chạm ghi thật (POS / Nextwaves) hoặc đổi luật nghiệp vụ: operator đọc plan và đồng ý trước khi code.
+   - Việc cần đội khác làm: `docs/dev/REQUEST-*` / `SPEC-*`, operator chuyển.
+2. **Implement** trên nhánh `batch/<tên>` (worktree mã). Test cho lỗi / hàng rào mới viết **trước**, chạy trên mã cũ phải trượt. Mỗi bước xong là commit.
 3. **QC:**
    - `npm test`;
    - đột biến cho mọi hàng rào mới;
    - Edge trên gói giải nén + trace hiệu năng;
-   - source = ZIP, SHA-256;
-   - diễn tập script nâng.
+   - source = ZIP: dựng lại từ `git archive` ra cùng SHA-256.
 
    Báo **con số thật**, không làm tròn.
-4. **Audit độc lập:** với batch có ghi POS / Nextwaves, một sub-agent review không mang kết luận của phiên chính đọc diff. Finding và cách xử lý ghi vào `docs/dev/AUDIT-<batch>.md`.
-5. **Giao operator:** gói + SHA + hướng dẫn ngắn. Operator cài / chạy khi cho phép.
-6. **Ghi thật** chỉ khi operator cho phép bằng chữ, đúng mã phiếu, đúng một lượt.
+4. **Review độc lập:** một sub-agent chỉ đọc, không mang kết luận của phiên chính, đọc diff.
+   - Finding và cách xử lý ghi vào `BATCH-<batch>.md` (mục review) hoặc `docs/dev/AUDIT-<batch>.md`.
+   - Mỗi finding đã sửa có test.
+5. **Đóng gói + tài liệu giao:**
+   - `BATCH-<batch>.md`: thay đổi kỹ thuật, kết quả gate.
+   - `RUNBOOK-<batch>.md`: hướng dẫn vận hành.
+   - `THAY-DOI-<batch>.md`: thay đổi bằng lời thường cho operator — trước / sau, dược sĩ thấy / làm gì (operator 08/11).
+   - `QA-<batch>-MAY-DEV.md`: danh sách kiểm trên máy dev.
+   - Thư mục giao `C:\circa-gr-nextwaves-release\v<ver>\`: ZIP + `kiem-*.js` + tài liệu + `SHA256SUMS.txt`.
+6. **Máy dev → máy POS** (operator cho phép từng lần):
+   - cài máy dev → QA / QC theo `QA-…-MAY-DEV.md`;
+   - đạt mới cài máy POS;
+   - lượt đầu mỗi máy chạy `kiem-truoc.js` / `kiem-sau.js`.
+7. **Ghi thật** chỉ khi operator cho phép bằng chữ, đúng mã phiếu, đúng một lượt.
+8. **Đóng batch:** lượt thật đạt → merge nhánh vào `main` (`docs/BUSINESS-FLOW.md` §6).
+
+Mỗi bước xong: cập nhật `state.md` (mục mới nhất ở §9) trong cùng lượt làm việc.
 
 Báo cáo tách ba mức bằng chứng: **đã kiểm từ source / gói**, **đã thấy trên môi trường thật** (staging / production), **còn thiếu** (cần operator / Nextwaves). Không gọi thiếu bằng chứng là lỗi đã xác nhận.
 
@@ -139,26 +160,36 @@ Hệ quả của "một gói":
 
 ## 6. Bản đồ thư mục
 
-Hiện có (24/10):
+Hiện có (08/11). Mỗi loại file ứng với một bước ở §2.2.
 
 | Đường dẫn | Nội dung |
 |---|---|
-| `agent.md` | File này: vai trò, quyết định, luật, môi trường |
-| `state.md` | Trạng thái, sự thật đã kiểm, khác biệt stg / prd, câu hỏi mở, việc tiếp theo |
-| `AGENTS.md`, `CLAUDE.md` | Trỏ về `agent.md` + `state.md` (Codex / Claude Code tự đọc) |
-| `docs/BUSINESS-FLOW.md` | **Luồng nghiệp vụ hiện hành** (từ 07/11): bên liên quan, cửa hàng, các bước dược sĩ / extension, ngoại lệ, việc hoãn, quy trình phát hành |
-| `docs/PROMPT-PM-CODEX.md` | Prompt mở session PM Codex — **không còn dùng từ 29/10** |
-| `docs/SPEC-STG-v0.1.md` | Spec staging v0.1 của PM (đề xuất) |
-| `docs/dev/` | Báo cáo / phản hồi của dev gửi PM: `DEV-REVIEW-SPEC-STG-v0.1.md`, `LOGIC-v0.3.md` (logic hiện hành), `BATCH-v0.1-STG.md` (batch đầu, chờ audit) |
-| `samples/README.md` | Danh sách mẫu: môi trường, API nguồn, ghi chú |
-| `samples/gr-stg-GR03878-20261024.json`, `samples/po-stg-PO00006750-SOBD1593858.json` | Cặp staging **có SO** 1593858 (đề xuất làm cặp thử chính) |
-| `samples/nw-stg-po-PO28237814-detail.json` | PO Nextwaves staging dạng chi tiết (`GET /purchase-orders/<id>`), chưa nhận |
-| `samples/gr-prod-GR83174-20261024.json` | GR production (WAITING_TO_RECEIVE, 10 dòng), không token |
-| `samples/gr-stg-GR03877-20261023.json` | GR staging (WAITING_TO_RECEIVE, 3 dòng), không token |
-| `samples/po-prod-PO01970951-SOBD38468903.json` | PO production của SO 38468903 (có `thuocsi_delivery_code`, `goods_receipts`) |
-| `samples/nw-stg-intertenant-PO28237814-SOBD1593858.json` | Inter-tenant order Nextwaves staging, ghép với GR03877 (12 UID dự kiến, chưa nhận), không token |
+| `CLAUDE.md`, `AGENTS.md` | Lối vào: thứ tự đọc, luật một người ghi (Claude Code / Codex tự đọc) |
+| `agent.md` | File này: vai trò, nhịp làm việc (§2.2), quyết định đã chốt (§3), luật, môi trường, bản đồ, git |
+| `state.md` | Trạng thái: §0 tóm tắt hiện hành + phiên giữ quyền ghi; sự thật đã kiểm, câu hỏi mở, nhật ký quyết định; **§9 việc tiếp theo — mục số lớn nhất là hiện hành** |
+| `docs/BUSINESS-FLOW.md` | **Luồng nghiệp vụ hiện hành** (từ 07/11): bên liên quan, cửa hàng, luồng chính, ngoại lệ, việc làm sau, quy trình phát hành |
+| `docs/dev/CASE-*` | Bước 0: định nghĩa / phát hiện một case, kèm phản hồi operator |
+| `docs/dev/PLAN-*` | Bước 1: plan đã duyệt |
+| `docs/dev/REQUEST-*`, `SPEC-*` | Yêu cầu / spec gửi đội khác (QR Scan Log, Nextwaves) |
+| `docs/dev/BATCH-*` | Bước 3–5: thay đổi kỹ thuật, kết quả gate, review |
+| `docs/dev/AUDIT-*`, `FIX-*` | Audit độc lập và phần sửa (các batch trước) |
+| `docs/dev/RUNBOOK-*`, `*-HUONG-DAN*` | Hướng dẫn vận hành từng bản / từng lượt thử |
+| `docs/dev/THAY-DOI-*` | Thay đổi bằng lời thường cho operator (từ v0.4.1) |
+| `docs/dev/QA-*-MAY-DEV.md` | Danh sách QA / QC trên máy dev |
+| `docs/dev/*KET-QUA*` | Kết quả lượt thử thật (staging / production) |
+| `docs/dev/HANDOFF-DEV.md` | Mã, phiên bản / gói, lệnh kiểm thử, bẫy môi trường |
+| `docs/dev/LOGIC-*`, `DESIGN-*`, `PERF-*`, `DE-XUAT-*` | Thiết kế / logic / đo hiệu năng (lịch sử, đọc khi cần) |
+| `docs/pm/`, `docs/SPEC-STG-v0.1.md`, `docs/PROMPT-PM-CODEX.md` | Tài liệu PM Codex — lịch sử, tới 29/10 |
+| `samples/` + `README.md` | Dữ liệu thật đã bỏ token / tên người (ghi API nguồn, SHA-256 khi có) |
 
-Mã (từ 24/10, **trên nhánh `batch/*`**, chưa có ở `main` cho tới khi PM duyệt; batch đầu `batch/v0.1-staging`, báo cáo `docs/dev/BATCH-v0.1-STG.md`):
+Ngoài repo:
+- `C:\QR_code\circa-gr-nextwaves-dev`: worktree mã.
+- `C:\circa-gr-nextwaves-release\v<ver>\`: thư mục giao gói.
+- `C:\circa-gr-nextwaves-v0.2.3`: thư mục extension máy dev. Giữ tên để giữ Extension ID.
+- `C:\circa-gr-nextwaves` trên máy POS Florita.
+- `C:\QR_code\requests\net-capture\`: Net Capture.
+
+Mã (**trên nhánh `batch/*`**; `main` chỉ có tài liệu + mẫu, merge khi batch đóng):
 
 ```
 src/                 thư mục extension (Load unpacked / nội dung ZIP)
@@ -167,11 +198,13 @@ src/                 thư mục extension (Load unpacked / nội dung ZIP)
   lib/               logic thuần, chạy được cả Node test: env, keys, pos-model, nw-model, match, plan, apply
   pos/               pos-hook.js (MAIN, chỉ quan sát), pos-content.js (luồng POS + W1)
   nw/                nw-hook.js (MAIN, chỉ quan sát), nw-content.js (tìm / kiểm đơn, đọc kết quả nhận)
-  popup/, ui/        cấu hình môi trường + cấp phép điền từng lần; khung trạng thái Shadow DOM
+  popup/, ui/        môi trường (STG / PRD / URL) + tenant Nextwaves, xem / mở / xoá phiên; khung trạng thái Shadow DOM
 tests/               node --test: lib, resolve, hook (node:vm), chạy trọn luồng trên trình duyệt giả (browser-sim.js)
 scripts/pack.py      src/ → dist/circa-gr-nextwaves-v<ver>.zip + SHA-256 (8 ký tự đầu = mã gói)
 scripts/mutate-*.py  đột biến có chủ đích cho các hàng rào (chạy trên bản sao tạm, không sửa src/)
-dist/                gói phát hành (không đưa vào git); bản giải nén để cài: C:\circa-gr-nextwaves-v<ver>
+scripts/edge-*.js    Edge thật trên gói giải nén (trang giả + trace hiệu năng)
+scripts/kiem-*.js    dán vào Console máy POS để kiểm lượt đầu (chỉ đọc)
+dist/                gói phát hành (không đưa vào git)
 ```
 
 Lệnh: `npm test` (= `node --test "tests/*.test.js"`); đóng gói `python -I scripts/pack.py` (chạy ở nhánh batch).

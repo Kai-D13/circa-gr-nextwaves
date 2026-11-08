@@ -12,6 +12,9 @@ Project `circa-gr-nextwaves`. Từ 29/10/2026 project chỉ có **operator** (ng
 1. [`agent.md`](agent.md) — vai trò (§2), một người ghi (§2.1), nhịp làm việc (§2.2), quyết định đã chốt, luật, môi trường STG / PRD.
 2. [`state.md`](state.md) — trạng thái hiện tại, phiên giữ quyền ghi, sự thật đã kiểm, câu hỏi mở, việc tiếp theo.
 3. [`docs/dev/HANDOFF-DEV.md`](docs/dev/HANDOFF-DEV.md) — mã, phiên bản / gói, lệnh kiểm thử, bẫy môi trường, việc tiếp theo.
+4. [`docs/BUSINESS-FLOW.md`](docs/BUSINESS-FLOW.md) — luồng nghiệp vụ hiện hành (luồng chính, ngoại lệ, việc làm sau, quy trình phát hành).
+
+Mỗi tính năng đi theo nhịp `agent.md` §2.2: case → plan → code → QC → review → gói + tài liệu giao → QA máy dev → máy POS → merge.
 
 Lượt ghi thật (POS / Nextwaves, staging hay production) và mọi lần cài / nâng gói chỉ khi operator cho phép bằng chữ, từng lần.
 Không sửa `C:\QR_code\circa-qr-scan-log`. Không ghi token / Authorization / cookie vào bất kỳ file nào.
