@@ -625,6 +625,7 @@ T3 tra `1791877162941B81` / `1791877427805C13`; T4 `goods-receipt/search?query=s
     - Bán gấp: điều kiện quét QR (không bấm +) trên GR gốc, không nhận riêng trên Nextwaves; phiếu phần còn lại thêm "Giữ đơn mở".
     - `thuocsi_delivery_code`: chờ mẫu response Nextwaves (API, định dạng, staging trước) → batch sau; v0.4.1 bỏ qua trường lạ (nw-model / resolve không kiểm khoá thừa).
     - Operator cho phép cài gói (máy dev) 08/11 tối → đã chép `BF5A9AD9` đè `C:\circa-gr-nextwaves-v0.2.3` (trước đó đúng gói v0.4.0 `79D4269C`, cùng 19 file — bản lùi = ZIP v0.4.0 trong thư mục giao); `diff -r` với ZIP không khác. **Chờ operator Reload + chuẩn bị tab bán hàng QR Scan Log đã kết nối RFID → QA Q1–Q8.**
+    - **QA lượt 1 (08/11 tối):** Q1 đạt (0.4.1, không lỗi, chạy production). GR84724 (CO, không mã giao) và GR70770 (PO nhiều mã giao) dừng đúng, không tạo phiên. **Q2–Q8 chưa chạy: Nextwaves production 14/14 đơn "Đã nhận", không đơn chờ nhận.** Lượt 2 khi có giao mới — operator báo trước khi dược sĩ nhận (`QA-v0.4.1-MAY-DEV.md` mục kết quả).
     - Operator hỏi quy trình có được ghi đủ không → sửa `agent.md` §2.2 (thêm bước 0 case, review ghi trong BATCH, tài liệu giao, máy dev → POS, merge), §6 bản đồ thư mục (thay bản 24/10), `state.md` §0 tóm tắt hiện hành.
 74. **08/11 tối: v0.4.1 gói `BF5A9AD9` — gate đủ, chưa cài** — `docs/dev/BATCH-v0.4.1.md`.
     - Nhánh `batch/v0.4.1` (src `41718e6`). Giao `C:\circa-gr-nextwaves-release\v0.4.1\` (ZIP + `kiem-*.js` + `HUONG-DAN-v0.4.1.md` + `THAY-DOI-v0.4.1.md` + `QA-v0.4.1-MAY-DEV.md` + `SHA256SUMS.txt`).
