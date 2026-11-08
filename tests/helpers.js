@@ -168,4 +168,17 @@ function loadHook(origin, file, pagePath = "/") {
   return { win, posted, xhr, fetch, hello, fetchCalls, history, popstate, loc };
 }
 
-module.exports = { FakeXHR, loadHook, sample, lib, clone, receivingPO28237814, poDetailPO28237814Received, shipmentPO28237814Received, qrByUidPO28237814, STG_CTX, STORE_2222, RECEIPT_ID };
+// scripts/kiem-*.js chạy như dán vào Console service worker: chỉ đọc chrome.storage của trình duyệt giả `b`; bản = src/manifest.json.
+async function runKiem(file, b, gr, until) {
+  const vm = require("node:vm");
+  const src = fs.readFileSync(path.join(__dirname, "..", "scripts", file), "utf8");
+  if (src.split('"GR?????"').length !== 2) throw new Error(`${file}: phải có đúng một chỗ sửa mã phiếu`);
+  const out = [];
+  const version = require(path.join(__dirname, "..", "src", "manifest.json")).version;
+  const chrome = { runtime: { getManifest: () => ({ version }) }, storage: { local: { get: async (keys) => Object.fromEntries([].concat(keys).filter((k) => k in b.store).map((k) => [k, clone(b.store[k])])) } } };
+  vm.runInContext(src.replace('"GR?????"', JSON.stringify(gr)), vm.createContext({ chrome, console: { log: (x) => out.push(String(x)) }, JSON, Date, Object, Set, Math }), { filename: file });
+  await until(() => out.length > 0);
+  return out.join("\n");
+}
+
+module.exports = { FakeXHR, loadHook, sample, lib, clone, runKiem, receivingPO28237814, poDetailPO28237814Received, shipmentPO28237814Received, qrByUidPO28237814, STG_CTX, STORE_2222, RECEIPT_ID };

@@ -6,7 +6,6 @@
 // cũ (v0.3.x) đã thay bằng file này.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const vm = require("node:vm");
 const fs = require("node:fs");
 const path = require("node:path");
 const H = require("./helpers.js");
@@ -129,15 +128,7 @@ async function receive(ctx, payload) {
   assert.equal(r2.ok, true, r2.error);
 }
 
-async function runKiem(file, b, gr = "GR03887") {
-  const src = fs.readFileSync(path.join(__dirname, "..", "scripts", file), "utf8");
-  assert.equal(src.split('"GR?????"').length, 2, `${file}: đúng một chỗ sửa mã phiếu`);
-  const out = [];
-  const chrome = { runtime: { getManifest: () => ({ version: "0.4.0" }) }, storage: { local: { get: async (keys) => Object.fromEntries([].concat(keys).filter((k) => k in b.store).map((k) => [k, H.clone(b.store[k])])) } } };
-  vm.runInContext(src.replace('"GR?????"', JSON.stringify(gr)), vm.createContext({ chrome, console: { log: (x) => out.push(String(x)) }, JSON, Date, Object, Set, Math }), { filename: file });
-  await until(() => out.length > 0);
-  return out.join("\n");
-}
+const runKiem = (file, b, gr = "GR03887") => H.runKiem(file, b, gr, until);
 
 // ---------- luồng chính ----------
 test("v0.4.0 A1 thật: mượn đầu đọc → nhận 2xx → về POS → TỰ điền 5 PUT đúng body thật (không cấp phép) → đóng tab Nextwaves → trả đầu đọc; KHÔNG gửi HOÀN THÀNH; dược sĩ HOÀN THÀNH → done", async () => {
@@ -192,12 +183,14 @@ test("v0.4.0 kiem-truoc / kiem-sau trên lượt A1 giả lập: trước (nw_re
       [truoc.env, truoc.tenant, truoc.phienTrungMa, truoc.gr, truoc.state, truoc.so, truoc.nwPo, truoc.kho, truoc.dauDoc, truoc.scanOk, truoc.bienNhanTruoc, truoc.tem, truoc.temKhongTrung, truoc.thieuUid],
       ["STG", "circa-stg", 0, "GR03887", "nw_ready", "SOBD1594095-F", "PO13806459", "CIRCA FLORITA 30145", "released", false, 0, 15, 15, 0]
     );
+    assert.deepEqual([truoc.v, truoc.phanConLai, truoc.temBanGap, truoc.layDauDoc], [require("../src/manifest.json").version, null, 0, null], "v0.4.1: phiếu thường — không phải phiếu phần còn lại");
     assert.equal(JSON.parse(await runKiem("kiem-truoc.js", b, "GR?????")).gr, "GR03887", "để nguyên mã mẫu → phiên mới nhất");
     await receive(ctx);
     await sessionState(b, "applied", 8000);
     await until(() => (session(b).reader || {}).state === "returned", 2000);
     const sau = JSON.parse(await runKiem("kiem-sau.js", b));
     assert.deepEqual([sau.env, sau.state, sau.dien.how, sau.dien.plan, sau.nwUnits, sau.nwReceipts, sau.dungDien, sau.soLoDaDien, sau.dauDoc], ["STG", "applied", "auto", "EF0E020C", 15, 1, null, 5, "returned"]);
+    assert.deepEqual([sau.khopCuoi, sau.phanConLai, sau.thieu, sau.khiThieu, sau.banGapVanNhan, sau.layDauDoc], ["ok", null, null, null, 0, null], "v0.4.1: khớp cuối đạt; phiếu thường");
     assert.ok(!/Bearer|authorization/i.test(JSON.stringify(sau)), "không in token");
     await b.setConfig({ mode: "PRD", url: "" });
     assert.match(await runKiem("kiem-sau.js", b), /^KHÔNG có phiên GR03887/);

@@ -683,6 +683,8 @@ test("v0.4.1 E2E phiếu phần còn lại: cộng sổ theo PO → không khoá
     assert.match(text, /Giữ đơn mở/);
     assert.match(text, /Kiểm trước khi nhận: số lượng khớp phiếu — điền được 11 UID/);
     assert.ok(Array.isArray(s1.grSummary) && s1.grSummary.length === 3);
+    const truoc = JSON.parse(await H.runKiem("kiem-truoc.js", b, "GR03878", until));
+    assert.deepEqual([truoc.state, truoc.phanConLai, truoc.temBanGap], ["nw_ready", { phieuXong: ["GR03999"], maDaXong: 2 }, 1], "kiem-truoc: phiếu phần còn lại, 1 tem món đã bán gấp");
     srv.st.nwReceived = true;
     nw.post(scan(200, { onMissing: "keep_open", lines: [{ missingUnitUids: [SOLD_UID] }] }));
     await sessionState(b, "applied");
@@ -696,6 +698,8 @@ test("v0.4.1 E2E phiếu phần còn lại: cộng sổ theo PO → không khoá
     assert.ok(s2.log.some((l) => l.type === "nw_result_remainder" && l.soldMissing === 1 && l.onMissing === "keep_open"));
     assert.ok(s2.log.some((l) => l.type === "receive_scan" && l.onMissing === "keep_open" && l.nwMissing === 1));
     assert.equal(s2.nwResult.soldMissing, 1);
+    const sau = JSON.parse(await H.runKiem("kiem-sau.js", b, "GR03878", until));
+    assert.deepEqual([sau.state, sau.khopCuoi, sau.phanConLai, sau.thieu, sau.khiThieu, sau.banGapVanNhan], ["applied", "ok", { phieuXong: ["GR03999"], maDaXong: 2 }, 1, "keep_open", 0], "kiem-sau: phiếu phần còn lại");
   } finally {
     b.close();
   }
