@@ -71,6 +71,7 @@
     so_many_gr: "SO có nhiều phiếu nhận trên cùng PO — chưa chứng minh được đúng lần giao",
     so_gr_unknown: "Không kiểm được đủ / rõ danh sách phiếu nhận của SO",
     nw_many_orders: "Nextwaves có nhiều đơn cùng SO — chưa chứng minh được đúng lần giao",
+    warehouse_mismatch: "Đơn Nextwaves đã khớp nằm ở kho khác kho của cửa hàng đang đăng nhập — không điền (nhận tay, báo vận hành)",
     lease_held: "Tab khác đang điền phiếu này",
     cooldown: "Lần ghi trước có kết quả chưa rõ — chờ thêm rồi thử lại",
     session_outdated: "Phiên tạo bởi bản extension cũ — mở lại phiếu để tạo phiên mới",
@@ -915,6 +916,8 @@
     // v0.4.1 — phiếu phần còn lại (bán gấp → POS tách phiếu).
     if (s.remainder) out.push(`Phiếu phần còn lại của ${s.poPosCode} — đã nhận trước ở ${s.remainder.completed.map((g) => g.code).join(", ")}; món đã bán gấp không điền lại.`);
     else if (s.remainderNote) out.push(`PO ${s.poPosCode} có nhiều phiếu nhận nhưng chưa nhận ra được phiếu phần còn lại: ${REMAINDER_NOTE[s.remainderNote] || s.remainderNote} — nhận tay.`);
+    // v0.4.1: extension đã bấm hộ "Ngắt kết nối" của QR Scan Log cho lượt này → QR Scan Log đang Ngắt, không tự lấy lại.
+    if (s.readerTakenAt && !["waiting_nw", "nw_ready"].includes(s.state)) out.push("Đầu đọc: đã lấy từ tab bán hàng cho lượt nhận này — xong việc, sang tab bán hàng bấm “Kết nối RFID” (chọn cổng) để bán tiếp.");
     return out;
   }
 

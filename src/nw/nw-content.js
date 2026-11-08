@@ -244,6 +244,7 @@
       remainder: s.remainder || null,
       lastScan: null, // lượt "Xác nhận nhận hàng" 2xx gần nhất: {onMissing, missingUids[]} (đối chiếu với kết quả đọc lại)
       grSummary: Array.isArray(s.grSummary) ? s.grSummary : null, // v0.4.1 (audit F2): kiểm trước khi xác nhận
+      posId: s.posId || "", // v0.4.1 (audit F3): cửa hàng của phiếu — đối chiếu bảng kho đã biết
     };
   }
 
@@ -371,6 +372,9 @@
       panel.show(view);
       return null;
     }
+    // v0.4.1 (audit F3): cửa hàng đã biết mà đơn đã khớp nằm kho khác → khoá ghi (cửa hàng lạ: chỉ cảnh báo trên khung).
+    const wc = E.warehouseCheck(env.id, s.posId, r.warehouseId);
+    const nwLocks = r.writeLocks.concat(wc.known && !wc.ok ? ["warehouse_mismatch"] : []);
     const fpRows = g.fp.rows.map((x) => ({ productId: x.productId, grBase: x.grBase, nwBase: x.nwBase }));
     const shipmentIds = g.receiving.shipments.map((x) => x.id);
     const receiptIdsBefore = poDetail.receipts.map((x) => x.id);
@@ -392,10 +396,10 @@
           expected: g.receiving,
           fpRows,
           receiptIdsBefore,
-          nwWriteLocks: r.writeLocks,
+          nwWriteLocks: nwLocks,
           nwSearch: { total: r.total, read: r.read, candidates: r.candidates, verified: r.verified },
         },
-        log: { type: "nw_matched", nwPoNumber: g.order.poNumber, refId: g.order.refId, warehouseId: r.warehouseId, shipments: shipmentIds.length, total: r.total, candidates: r.candidates, verified: r.verified, receiptsBefore: receiptIdsBefore.length, preReceived, writeLocks: r.writeLocks },
+        log: { type: "nw_matched", nwPoNumber: g.order.poNumber, refId: g.order.refId, warehouseId: r.warehouseId, warehouseKnown: wc.known, warehouseOk: wc.ok, shipments: shipmentIds.length, total: r.total, candidates: r.candidates, verified: r.verified, receiptsBefore: receiptIdsBefore.length, preReceived, writeLocks: nwLocks },
       });
     } catch (err) {
       panel.show({ tone: "err", title: "Không ghi được kết quả khớp đơn vào phiên", lines: [String((err && err.message) || err), "Huỷ phiên ở tab POS rồi mở lại phiếu."], buttons: [{ label: "Tìm lại", onClick: retry }] });
@@ -743,8 +747,17 @@
     else lines.push("Đặt hàng lên đầu đọc rồi bấm “Xác nhận nhận hàng”. Nhận đủ xong extension về POS và TỰ điền phiếu; dược sĩ kiểm rồi bấm HOÀN THÀNH trên POS.");
     const q = ctx.nwSearch;
     if (q) lines.push(`Tìm theo ${ctx.soBase}: total ${q.total}, đã đọc ${q.read}; ứng viên Buymed ${q.candidates}; refId đúng SO ${q.verified}.`);
-    if (ctx.nwWriteLocks && ctx.nwWriteLocks.length) lines.push("Lưu ý: Nextwaves có nhiều đơn cùng SO chưa so được — điền phiếu POS sẽ bị khoá (chỉ xem).");
+    const locks = ctx.nwWriteLocks || [];
+    if (locks.includes("warehouse_mismatch")) {
+      choiceWarn = true;
+      lines.push("⚠ Đơn Nextwaves đã khớp nằm ở kho KHÁC kho của cửa hàng này — extension sẽ không điền phiếu POS (nhận tay, báo vận hành).");
+    } else if (!E.warehouseCheck(ctx.env.id, ctx.posId, ctx.warehouseId).known) lines.push("Cửa hàng chưa có trong bảng kho đã biết — kiểm “Kho Nextwaves” ở trên đúng là kho của cửa hàng này.");
+    if (locks.includes("nw_many_orders")) lines.push("Lưu ý: Nextwaves có nhiều đơn cùng SO chưa so được — điền phiếu POS sẽ bị khoá (chỉ xem).");
     else if (q && q.verified > 1) lines.push(`Nextwaves có ${q.verified} đơn cùng SO (tách giao): trên màn quét chọn ĐÚNG đơn ${ctx.nwPoNumber} — đơn khớp số lượng phiếu ${ctx.grCode}.`);
+    // v0.4.1 (audit F1): modal đang mở phiếu gửi KHÔNG thuộc đơn của phiên (SO tách giao, chọn nhầm đơn) → đỏ, trước khi xác nhận.
+    const mine = ((ctx.expected && ctx.expected.shipments) || []).map((x) => String(x.number || "").toUpperCase()).filter(Boolean);
+    const wrongShipment = rh.open && rh.shipment && mine.length && !mine.includes(rh.shipment);
+    if (wrongShipment) lines.unshift(`ĐANG MỞ NHẦM phiếu gửi ${rh.shipment} — không thuộc đơn ${ctx.nwPoNumber} của phiếu ${ctx.grCode}. Đóng hộp thoại, chọn đúng phiếu gửi ${mine.join(", ")} rồi mới quét / xác nhận.`);
     const buttons = [
       { label: "Đọc lại kết quả nhận", secondary: true, onClick: () => collectOrPeek() },
       { label: "Về POS", secondary: true, onClick: () => bg("session:focusPos", { key }) },
@@ -752,8 +765,8 @@
     if (rd.state === "disconnected" && rd.gaveUp && curSession && curSession.reader && curSession.reader.supported) buttons.unshift({ label: "Mượn lại đầu đọc", onClick: () => lendAgain() });
     buttons.unshift(...readerButtons()); // v0.4.1: "Lấy đầu đọc cho Nextwaves" / "Mở tab bán hàng" (QR Scan Log chưa có circa-reader/v1)
     panel.show({
-      tone: note ? note.tone : choiceWarn ? "warn" : "info",
-      title: note ? note.title : "Sẵn sàng nhận hàng",
+      tone: wrongShipment ? "err" : note ? note.tone : choiceWarn ? "warn" : "info",
+      title: wrongShipment ? `Đang mở nhầm phiếu gửi ${rh.shipment}` : note ? note.title : "Sẵn sàng nhận hàng",
       lines,
       table: ctx.fingerprint && ctx.fingerprint.length ? { head: ["Sản phẩm POS", "SL GR (gốc)", "SL Nextwaves (gốc)"], rows: ctx.fingerprint.map((r) => [r.productId, String(r.grBase), String(r.nwBase)]) } : null,
       buttons,

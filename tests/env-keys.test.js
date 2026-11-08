@@ -73,14 +73,21 @@ test("đường dẫn API đúng từng môi trường (staging /backend/v1, pro
   }
 });
 
-test("v0.4.0 mọi cửa hàng: không còn danh sách cửa hàng / bảng kho; cả hai môi trường được ghi", () => {
+test("v0.4.0 mọi cửa hàng: không còn danh sách cửa hàng; cả hai môi trường được ghi. v0.4.1 (audit F3): bảng kho đã biết chỉ để KIỂM, không chặn cửa hàng lạ", () => {
   for (const e of [STG, PRD]) {
     assert.equal(e.writeEnabled, true, e.id);
     assert.equal(e.storeAllowlist, undefined, `${e.id}: không còn danh sách cửa hàng`);
-    assert.equal(e.warehouseByStore, undefined, `${e.id}: không còn bảng cửa hàng → kho (kho lấy từ đơn Nextwaves đã khớp)`);
+    assert.equal(e.warehouseByStore, undefined, `${e.id}: kho của phiên vẫn lấy từ đơn Nextwaves đã khớp`);
   }
   assert.equal(env.storeAllowed, undefined);
-  assert.equal(env.warehouseForStore, undefined);
+  const FLORITA = "c476efb2-415c-429a-978e-d389b4b06607";
+  const LUMINA = "31493e74-3404-4c0e-a906-93691a6ee319";
+  assert.deepEqual(env.warehouseCheck("PRD", FLORITA, "EB5E2B4F-6F92-413B-90EF-6BE1730B94C0"), { known: true, ok: true, expected: "eb5e2b4f-6f92-413b-90ef-6be1730b94c0" });
+  assert.equal(env.warehouseCheck("PRD", FLORITA, "3f7bd541-7370-4ce0-9048-231cf061e91a").ok, false, "Florita mà đơn ở kho Lumina");
+  assert.equal(env.warehouseCheck("PRD", LUMINA, "3f7bd541-7370-4ce0-9048-231cf061e91a").ok, true);
+  assert.deepEqual(env.warehouseCheck("PRD", "00000000-0000-4000-8000-000000000001", "x"), { known: false, ok: true, expected: null }, "cửa hàng lạ: không kết luận");
+  assert.equal(env.warehouseCheck("STG", "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d", "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57").ok, true);
+  assert.equal(env.warehouseCheck("STG", FLORITA, "eb5e2b4f-6f92-413b-90ef-6be1730b94c0").known, false, "bảng theo từng môi trường");
 });
 
 test("v0.4.0 tenant Nextwaves: PRD mặc định circa, đổi được theo máy; STG cố định circa-stg; tenant sai → mặc định", () => {

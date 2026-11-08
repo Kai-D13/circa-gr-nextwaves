@@ -55,6 +55,7 @@ function completedGr03999(mut) {
 
 function makeServer(opts = {}) {
   const it = H.sample("nw-stg-intertenant-PO28237814-SOBD1593858.json");
+  if (opts.nwWarehouseId) it.warehouse = Object.assign({}, it.warehouse, { id: opts.nwWarehouseId }); // v0.4.1 F3: đơn nằm kho khác
   const st = { gr: H.clone(H.sample("gr-stg-GR03878-20261024.json")), nwReceived: false, puts: [], log: [], putFailures: opts.putFailures || 0 };
   if (opts.remainder) remainderGr(st.gr);
   if (opts.remainderOpenMut) opts.remainderOpenMut(st.gr.data);
@@ -165,6 +166,7 @@ function makeServer(opts = {}) {
         }
         const po = H.poDetailPO28237814Received();
         if (opts.dropReceivedEpc) for (const x of po.items) x.receivedUnits = x.receivedUnits.filter((r) => r.epc !== opts.dropReceivedEpc);
+        if (opts.nwWarehouseId) for (const r of po.receipts || []) r.warehouseId = opts.nwWarehouseId; // biên nhận cùng kho với đơn (F3)
         return { status: 200, json: po };
       }
       if (u.pathname === `/api/v1/inter-tenant-shipments/${SHIP}`) return { status: 200, json: st.nwReceived ? H.shipmentPO28237814Received() : H.sample("nw-stg-shipment-34e67fb9-PO28237814.json") };
@@ -794,6 +796,44 @@ test("v0.4.1 phiên cũ 'không có đơn' mang khoá so_many_gr (v0.4.0) → b�
     await b.sendFromTab(pos, Object.assign({}, msg, { remainder: { completed: [{ id: "khong-phai-uuid", code: "GR03999" }], excludeUids: [] } }));
     assert.equal(b.session(KEY).remainder, null);
     assert.deepEqual(b.session(KEY).writeLocks, ["so_many_gr"]);
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.4.1 audit F3: cửa hàng đã biết (2222) mà đơn Nextwaves khớp nằm kho KHÁC → khoá ghi warehouse_mismatch, khung Nextwaves + POS báo, không điền", async () => {
+  const { b, srv, pos, nw } = await openToReady({ server: { nwWarehouseId: "99999999-9999-4999-8999-999999999999" } });
+  try {
+    const s = b.session(KEY);
+    assert.deepEqual(s.nwWriteLocks, ["warehouse_mismatch"]);
+    assert.ok(s.log.some((l) => l.type === "nw_matched" && l.warehouseKnown === true && l.warehouseOk === false));
+    assert.match(nw.view.lines.join("\n"), /kho KHÁC kho của cửa hàng này — extension sẽ không điền/);
+    assert.equal(nw.view.tone, "warn");
+    srv.st.nwReceived = true;
+    nw.post(scan(200));
+    await until(() => pos.view && pos.view.title === "Chỉ xem kế hoạch — chưa được điền phiếu", 5000);
+    assert.ok(pos.view.lines.some((l) => /kho khác kho của cửa hàng đang đăng nhập/.test(l)));
+    await settle(200);
+    assert.equal(srv.st.puts.length, 0);
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.4.1 audit F1: modal nhận hàng đang mở phiếu gửi KHÔNG thuộc đơn của phiên (SO tách giao chọn nhầm) → khung đỏ trước khi xác nhận; mở đúng → hết đỏ", async () => {
+  const { b, nw } = await openToReady();
+  try {
+    const modal = (ship) => {
+      const dlg = { textContent: `Nhận hàng bằng cách quét Quét tem của phiếu gửi ${ship}. Hàng được nhận vào CIRCA FLORITA.` };
+      nw.dom.byId["scan-receive-qr"] = { closest: (sel) => (sel === '[role="dialog"]' ? dlg : null) };
+    };
+    modal("IT-BUYMED-STAG-20261019092009-9999");
+    await until(() => viewTitle(nw) === "Đang mở nhầm phiếu gửi IT-BUYMED-STAG-20261019092009-9999", 3000);
+    assert.equal(nw.view.tone, "err");
+    assert.match(nw.view.lines[0], /chọn đúng phiếu gửi IT-BUYMED-STAG-20261019092009-7938/);
+    modal("IT-BUYMED-STAG-20261019092009-7938");
+    await until(() => viewTitle(nw) === "Sẵn sàng nhận hàng", 3000);
+    assert.equal(b.session(KEY).state, "nw_ready");
   } finally {
     b.close();
   }

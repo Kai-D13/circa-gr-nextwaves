@@ -217,8 +217,27 @@
     return m ? { grId: m[1].toLowerCase(), status: m[2].toUpperCase() } : null;
   }
 
+  // v0.4.1 (audit v0.4.0 F3): cửa hàng POS đã biết → kho Nextwaves (operator 07/11: production chỉ Florita + Lumina, tenant `circa`).
+  // Đơn Nextwaves đã khớp nằm kho KHÁC kho của cửa hàng đã biết → khoá ghi. Cửa hàng lạ (chưa có trong bảng) → chỉ cảnh báo để cửa hàng
+  // mới vẫn chạy (kho vẫn lấy từ đơn đã khớp như v0.4.0).
+  const KNOWN_WAREHOUSE = Object.freeze({
+    STG: Object.freeze({ "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57" }), // cửa hàng 2222 ↔ CIRCA FLORITA (stg)
+    PRD: Object.freeze({
+      "c476efb2-415c-429a-978e-d389b4b06607": "eb5e2b4f-6f92-413b-90ef-6be1730b94c0", // CIRCA FLORITA (410478)
+      "31493e74-3404-4c0e-a906-93691a6ee319": "3f7bd541-7370-4ce0-9048-231cf061e91a", // CIRCA LUMINA (406918)
+    }),
+  });
+  // → {known, ok, expected}: known = cửa hàng có trong bảng; ok = kho đơn đã khớp đúng kho của cửa hàng (cửa hàng lạ: ok, không kết luận).
+  function warehouseCheck(envId, storeId, warehouseId) {
+    const exp = (KNOWN_WAREHOUSE[envId] || {})[String(storeId || "").toLowerCase()];
+    if (!exp) return { known: false, ok: true, expected: null };
+    return { known: true, ok: exp === String(warehouseId || "").toLowerCase(), expected: exp };
+  }
+
   const lib = {
     ENVS,
+    KNOWN_WAREHOUSE,
+    warehouseCheck,
     envById,
     envFor,
     withTenant,

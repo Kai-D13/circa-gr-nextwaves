@@ -48,7 +48,7 @@ const LOG_MAX = 200;
 // session:update từ content script CHỈ đổi được `state`, và chỉ sang các trạng thái này.
 const UPDATE_STATES = new Set(["applied", "done"]);
 // Khoá ghi phía Nextwaves mà tab khớp đơn được phép đặt.
-const NW_LOCKS = new Set(["nw_many_orders"]);
+const NW_LOCKS = new Set(["nw_many_orders", "warehouse_mismatch"]); // v0.4.1 (audit F3): kho đơn đã khớp ≠ kho của cửa hàng đã biết
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const LEASE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
