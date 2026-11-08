@@ -139,7 +139,7 @@ Nguồn: JS công khai của Nextwaves production, tải 08/11 (chỉ GET).
 
 **gr v0.4.2 (mượn không phiếu):** gửi `return` khi modal đã biến khỏi trang ≥ 1,5 s, hoặc khi tab Nextwaves đóng.
 
-**Cần QR Scan Log xác nhận một điểm:** `pong.lent` có đủ `{ leaseId, label, until }` như §3.2 của spec, kể cả khi `pong` lấy từ trạng thái của tab. (§4.1 chỉ ghi `{ label, until }` cho góc nhìn tab.) gr v0.4.2 dùng `leaseId` này để không tự gia hạn lượt mượn sau khi dược sĩ đã bấm "Lấy lại đầu đọc".
+**Đã có câu trả lời trong mã (xem §9.1):** `pong.lent` có đủ `{ leaseId, label, until }` như §3.2 của spec, kể cả khi `pong` lấy từ trạng thái của tab. gr v0.4.2 dùng `leaseId` này để không tự gia hạn lượt mượn sau khi dược sĩ đã bấm "Lấy lại đầu đọc".
 
 **Trước khi cài v0.9.7 lên máy POS: chạy thử chung trên máy dev** (gr v0.4.1 đã cài ở đó).
 - gr v0.4.0 / v0.4.1 thấy `pong` là tự chuyển đường có phiếu sang mượn / trả. Vì vậy cài v0.9.7 cũng làm đổi hành vi phía gr.
@@ -174,7 +174,33 @@ var qslTest = (() => {
 })();
 ```
 
-**Câu hỏi QR Scan Log gửi Nextwaves (trừ tồn ở cửa hàng thứ hai):** không thuộc gr, vì gr không gọi `/integrations/circa/*`. Nếu cần gửi kèm: bảng cửa hàng ↔ kho gr dùng từ v0.4.1 (`src/lib/env.js`):
+### 9.1 Bổ sung của QR Scan Log sau code + review (08/11 khuya) — gr đối chiếu với mã v0.9.7
+
+Nguồn: `C:\QR_code\circa-qr-scan-log\docs\batches\v0.9.7\PLAN-1108.md`, mục "Bổ sung sau khi code + review". gr đọc mã QR Scan Log `70755ea` (chỉ đọc): `rfid-core.js` `readerMessage` / `readerRateAllow` / `readerPong` / `brokerStep` / `brokerViewFor`, `rfid-content.js` kênh `circa-reader/v1`.
+
+**Kết luận: đồng ý cả 5 chỗ lệch. gr v0.4.1 không phải sửa.**
+
+| # | QR Scan Log v0.9.7 | gr v0.4.1 |
+|---|---|---|
+| 1 | Tần suất tính riêng: `ping` ≤ 10 / 10 s, `lend` + `return` ≤ 10 / 10 s mỗi tab | Tệ nhất 5 `ping` + 5 `return` trong ~8 s trên một tab (trả thử lại 5 lần × 2 s). Trong hạn |
+| 2 | `lend` khi đã Ngắt: cổng trống → `ok state:"off"`, không đặt lượt mượn; tab chủ còn đóng cổng (chờ món đang gõ, tối đa ~12 s) → `busy` | `busy` ∉ `LEASE_DONE` → `lendTick` gửi lại cùng `leaseId` mỗi 15 s, tối đa 8 lần. Trong lúc đó tự bấm "Kết nối đầu đọc" của Nextwaves (~1,5 / 11,5 / 21,5 s), nên cổng trống là kết nối được. Sau `off`, `return` của gr nhận `unknown_lease` → gr coi là xong. Đúng |
+| 3 | Mỗi `reqId` một trả lời; worker im 6 s → tab tự trả `lend:result busy` / `return:result no_broker` | gr sinh `reqId` mới cho mỗi lệnh. gr chờ 5,5 s, nên trả lời lúc 6 s gr coi như không trả lời. Cách xử lý giống nhau: lend thử lại sau 15 s, return thử lại 5 × 2 s |
+| 4 | `data-state` cũng có `lent`; khi cho mượn không có nút Ngắt, chỉ có "Lấy lại đầu đọc" | gr chỉ bấm khi `data-connection` ∈ {`connected`, `waiting_clear`, `paused`} và nút Ngắt đang bật → không bấm |
+| 5 | Sau mỗi lượt mượn, lần mở lại đầu đọc đầu tiên luôn chờ đầu đọc trống (~1,5 s không thấy tem) | Không chạm gr. Hướng dẫn dược sĩ (gr v0.4.2): nhận xong thì nhấc hàng khỏi đầu đọc |
+
+**Đọc thêm trong mã v0.9.7:**
+- `pong.lent` có `leaseId` (`brokerViewFor` → tab giữ `broker.lent` → `readerPong`). Khi tab chưa nối được worker thì `holder: "unknown"`, `lent: null`. **gr v0.4.2 không được suy "đã lấy lại" từ `lent: null` khi `holder` là `"unknown"`.**
+- `lend` cùng `leaseId` sau khi người dùng đã "Lấy lại đầu đọc" sẽ đặt lại lượt mượn và xin tab chủ nhả. Đây là đúng spec. gr v0.4.2 phải tự tránh: ping trước khi gia hạn, `pong.lent.leaseId` khác thì không gia hạn.
+- Định dạng khớp:
+  - `ttlMs` 900000 trong [60000, 1800000];
+  - `leaseId` / `reqId` của gr hợp `/^[A-Za-z0-9_-]{1,64}$/`;
+  - `label` = mã GR ≤ 40 ký tự;
+  - QR Scan Log kiểm `event.source === window` và origin, rồi trả lời bằng `window.postMessage(…, location.origin)` — đúng điều kiện gr nghe.
+- **Chưa bên nào chạy kênh này giữa hai extension thật.** gr thử bằng trình duyệt giả; QR Scan Log e2e dùng script gr giả trong trang. Lượt thử chung trên máy dev là lần đầu.
+
+### 9.2 Câu hỏi QR Scan Log gửi Nextwaves (trừ tồn ở cửa hàng thứ hai)
+
+Không thuộc gr, vì gr không gọi `/integrations/circa/*`. Nếu cần gửi kèm: bảng cửa hàng ↔ kho gr dùng từ v0.4.1 (`src/lib/env.js`):
 
 | Cửa hàng | POS | Kho Nextwaves |
 |---|---|---|
