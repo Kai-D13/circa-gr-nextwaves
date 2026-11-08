@@ -124,6 +124,7 @@ Mã thêm có thể là mã QR thuocsi kho Buymed đã gán cho đơn vị hàng
 - **Ca A — bán hàng giữ reader.** Tab bán hàng đang giữ reader thì màn quét Nextwaves báo thông báo trên. Cách xử lý: "Ngắt toàn bộ tab" trong `circa-qr-scan-log` (hoặc đóng tab bán hàng), rồi kết nối lại trên Nextwaves.
 - **Ca B — Nextwaves giữ reader.** Sau khi nhận, nếu tab Nextwaves còn giữ cổng thì bán hàng RFID không tự nối được (tự kết nối thất bại thì bỏ cuộc tới sự kiện kế). Cần một bước "ngắt reader / đóng tab Nextwaves" sau khi nhận xong.
 - Hai ca trên là suy luận từ cách Web Serial cho một cổng mở ở một nơi.
+- **08/11 đã kiểm Ca B** (bundle Nextwaves production): đóng modal "Nhận hàng bằng cách quét" là Nextwaves đóng cổng (`disconnect()` → `port.close()`, ~0,5–1 s). Tab Nextwaves còn mở sau khi nhận không giữ cổng — `state.md` §9 mục 76.
 
 ### Cần xác nhận tại Florita (B0)
 
