@@ -406,14 +406,18 @@
       const p = await posGet(env, E.api.poDetail(env, gr.posId, gr.poId), signal);
       guard();
       if (!p.ok) return fail(httpError("GET PO", p));
-      const link = P.resolveDelivery(gr, P.normalizePo(p.json), storeId);
+      const po = P.normalizePo(p.json);
+      const link = P.resolveDelivery(gr, po, storeId);
       if (!link.ok) {
         if (link.errors.length === 1 && link.errors[0] === "no_delivery_code") return { status: "not_linkable", gr };
         return fail(`${gr.code}: không nối được tới SO thuocsi — ${link.errors.map((c) => LINK_MSG[c] || c).join("; ")}`);
       }
-      // Khoá ghi phía POS (PM P3 / P1.6): SO phải có đúng một phiếu nhận (chưa huỷ) ở cửa hàng này, đọc đủ, và đó là phiếu này.
+      // Khoá ghi phía POS (PM P3 / P1.6): SO phải có đúng một phiếu nhận (chưa huỷ) ở cửa hàng này, đọc đủ, và đó là phiếu này —
+      // trừ phiếu phần còn lại (v0.4.1): PO có các phiếu khác đều đã xong và cộng sổ theo dòng PO khớp.
       const found = await searchGrsOfSo(env, storeId, link.soBase, signal);
-      const lock = P.soWriteLock(found, gr.id);
+      guard();
+      const rem = await remainderFor(env, gr, po, signal, guard);
+      const lock = P.soWriteLock(found, gr.id, rem);
       guard();
       // Mượn đầu đọc TRƯỚC khi mở Nextwaves (màn quét tự kết nối lúc mở). Không có QR Scan Log hỗ trợ → đi tiếp.
       const reader = await readerLend(gr.code, reuseLease(s0 && s0.reader));
@@ -435,7 +439,10 @@
         posName: gr.posName || "",
         deliveryCode: link.deliveryCode,
         soBase: link.soBase,
-        fingerprint: P.grFingerprintSource(gr),
+        // Phiếu phần còn lại: đơn Nextwaves ứng với CẢ PO (nhận một lần cho phần còn lại) → vân tay cấp PO.
+        fingerprint: rem && rem.ok ? rem.source : P.grFingerprintSource(gr),
+        remainder: rem && rem.ok ? { completed: rem.completed, excludeUids: rem.excludeUids } : null,
+        remainderNote: rem && !rem.ok && rem.reason !== "single_gr" ? rem.reason : null,
         writeLocks: lock ? [lock] : [],
       }).catch((e) => {
         readerGiveBack(reader);
@@ -449,6 +456,24 @@
       if (err && err.name === "AbortError") return fail("Hết giờ / mất kết nối khi đọc dữ liệu POS — thử lại.");
       return fail(String((err && err.message) || err));
     }
+  }
+
+  // v0.4.1 — phiếu phần còn lại: PO có ≥ 2 phiếu chưa huỷ → GET từng phiếu đã xong theo id (dạng response đã kiểm trên production;
+  // không dựa vào dòng tìm theo SO) rồi cộng sổ theo dòng PO (pos-model.remainderOf). null = PO một phiếu (luồng thường).
+  async function remainderFor(env, gr, po, signal, guard) {
+    const live = (po && Array.isArray(po.grs) ? po.grs : []).filter((g) => !/^CANCEL/i.test(g.status));
+    if (live.length < 2) return null;
+    const done = [];
+    for (const o of live) {
+      if (o.id === gr.id || o.status !== "COMPLETED") continue;
+      const r = await posGet(env, E.api.grDetail(env, o.id), signal);
+      guard();
+      if (!r.ok) return { ok: false, reason: "completed_read_failed", code: o.code };
+      const g = P.normalizeGr(r.json);
+      if (!g || g.id !== o.id) return { ok: false, reason: "completed_unreadable", code: o.code };
+      done.push(g);
+    }
+    return P.remainderOf(gr, po, done);
   }
 
   // ---------- vòng đánh giá ----------
@@ -584,13 +609,16 @@
       unwatch();
       const p = await posGet(env, E.api.poDetail(env, gr.posId, gr.poId));
       if (!p.ok) return showError("Không đọc được PO của phiếu nhận", httpError("GET PO", p), [{ label: "Thử lại", onClick: refresh }]);
-      const link = P.resolveDelivery(gr, P.normalizePo(p.json), storeId);
+      const po = P.normalizePo(p.json);
+      const link = P.resolveDelivery(gr, po, storeId);
       if (!link.ok) {
         // PO không có mã giao thuocsi: không phải phiếu từ thuocsi → không phải việc của extension.
         if (link.errors.length === 1 && link.errors[0] === "no_delivery_code") return panel.hide();
         return showError(`${gr.code}: không nối được tới SO thuocsi`, link.errors.map((c) => LINK_MSG[c] || c));
       }
       const codes = gr.items.reduce((n, it) => n + it.details.reduce((m, d) => m + d.qrCodes.length, 0), 0);
+      // v0.4.1: PO nhiều phiếu (bán gấp → POS tách phiếu) — cộng sổ theo dòng PO lúc dược sĩ bấm (không GET thêm ở đây).
+      const sibs = po ? po.grs.filter((g) => g.id !== gr.id && !/^CANCEL/i.test(g.status)) : [];
       return showGr(gr, {
         tone: codes > 0 ? "warn" : "info",
         title: `${gr.code} · ${link.deliveryCode}`,
@@ -598,7 +626,8 @@
           codes > 0
             ? `Phiếu đã có ${codes} mã quét. Kết quả Nextwaves phải chứa đúng các mã này, đúng lô, thì mới điền tiếp được.`
             : "Bấm “Nhận hàng bằng RFID” để mở màn quét Nextwaves cho phiếu này.",
-        ],
+          sibs.length ? `PO ${gr.poCode} còn ${sibs.length} phiếu khác (${sibs.map((g) => `${g.code} ${g.status === "COMPLETED" ? "đã xong" : "chưa xong"}`).join(", ")}): nếu đây là phiếu phần còn lại sau bán gấp, extension cộng sổ theo PO khi bấm.` : null,
+        ].filter(Boolean),
         buttons: [{ label: START_LABEL, onClick: () => startOnGrPage(env, storeId, gr) }],
       });
     }
@@ -812,10 +841,53 @@
   }
 
   // ---------- phiên ----------
+  const REMAINDER_NOTE = {
+    open_gr_touched: "phiếu này đã được nhận tay một phần",
+    other_gr_open: "PO còn phiếu khác chưa HOÀN THÀNH",
+    completed_read_failed: "không đọc được phiếu đã xong của PO",
+    completed_unreadable: "phiếu đã xong của PO không đúng dạng",
+    completed_unread: "chưa đọc đủ các phiếu đã xong của PO",
+    line_not_in_po: "có dòng không thuộc PO",
+    line_mismatch: "số lượng các phiếu không cộng đúng dòng PO",
+    po_received_mismatch: "lượng đã nhận trên PO không khớp các phiếu",
+    received_inconsistent: "lượng đã nhận của phiếu đã xong không nhất quán",
+    rate_missing: "thiếu hệ số đơn vị",
+    rate_conflict: "hệ số đơn vị lệch giữa các phiếu",
+    line_split: "một dòng PO nằm ở nhiều dòng phiếu",
+    po_line_unreadable: "dòng PO thiếu số lượng",
+  };
+
   function sessionLines(s) {
     const wh = s.warehouseName || s.warehouseCode ? ` · kho ${[s.warehouseName, s.warehouseCode ? `(${s.warehouseCode})` : ""].filter(Boolean).join(" ")}` : "";
-    return [`Phiếu ${s.grCode} · ${s.poPosCode} · mã giao ${s.deliveryCode}${s.posName ? ` · ${s.posName}` : ""}`, s.nwPoNumber ? `Nextwaves: ${s.nwPoNumber} (${s.nwRefId || s.soBase})${wh}` : `Nextwaves: tìm theo ${s.soBase}`];
+    const out = [`Phiếu ${s.grCode} · ${s.poPosCode} · mã giao ${s.deliveryCode}${s.posName ? ` · ${s.posName}` : ""}`, s.nwPoNumber ? `Nextwaves: ${s.nwPoNumber} (${s.nwRefId || s.soBase})${wh}` : `Nextwaves: tìm theo ${s.soBase}`];
+    // v0.4.1 — phiếu phần còn lại (bán gấp → POS tách phiếu).
+    if (s.remainder) out.push(`Phiếu phần còn lại của ${s.poPosCode} — đã nhận trước ở ${s.remainder.completed.map((g) => g.code).join(", ")}; món đã bán gấp không điền lại.`);
+    else if (s.remainderNote) out.push(`PO ${s.poPosCode} có nhiều phiếu nhận nhưng chưa nhận ra được phiếu phần còn lại: ${REMAINDER_NOTE[s.remainderNote] || s.remainderNote} — nhận tay.`);
+    return out;
   }
+
+  // v0.4.1 — phiếu phần còn lại: UID đã nằm trên phiếu POS đã xong của PO (món bán gấp; POS gắn UID Nextwaves lúc HOÀN THÀNH) không
+  // điền lại vào phiếu này. Không phải phiếu phần còn lại → nguyên kết quả nhận như v0.4.0.
+  function unitsForPlan(s) {
+    const units = (s && s.nwResult && s.nwResult.units) || [];
+    const ex = new Set((s && s.remainder && s.remainder.excludeUids) || []);
+    return ex.size ? units.filter((u) => !ex.has(u.uid)) : units;
+  }
+  // I6: tem món đã bán gấp mà Nextwaves vẫn nhận (hàng còn trên đầu đọc lúc nhận) → tồn Nextwaves dư.
+  function soldReadOf(s) {
+    const units = (s && s.nwResult && s.nwResult.units) || [];
+    const ex = new Set((s && s.remainder && s.remainder.excludeUids) || []);
+    return ex.size ? units.filter((u) => ex.has(u.uid)).map((u) => u.uid) : [];
+  }
+  function remainderNotes(s) {
+    const out = [];
+    const sold = soldReadOf(s);
+    if (sold.length) out.push(`⚠ Nextwaves đã nhận cả ${sold.length} tem món đã bán gấp (${sold.slice(0, 5).join(", ")}${sold.length > 5 ? "…" : ""}) — tồn Nextwaves dư ${sold.length}, báo vận hành điều chỉnh. Phiếu này không điền các tem đó.`);
+    const om = s && s.nwResult && s.nwResult.onMissing;
+    if (s && s.remainder && om === "close_short") out.push("⚠ Lượt nhận Nextwaves chọn “Đóng đơn dù còn thiếu” — Nextwaves đã báo Buymed giao thiếu; báo vận hành.");
+    return out;
+  }
+  const SPLIT_HINT = "Bấm HOÀN THÀNH bây giờ thì POS tách phần chưa đủ sang một phiếu mới.";
 
   // Mở lại / tìm lại trên Nextwaves: mượn lại đầu đọc (cùng leaseId) trước khi đưa tab Nextwaves lên.
   async function reopenNw(s) {
@@ -854,10 +926,22 @@
           buttons: [{ label: "Mở tab Nextwaves", onClick: () => reopenNw(s).catch(() => {}) }, cancelButton(env, s)],
         });
       case "no_nw_order":
+        if (s.noOrderReason === "nw_partial_received") {
+          return showGr(gr, {
+            tone: "warn",
+            title: `${gr.code}: Nextwaves đã nhận một phần đơn này trước đó — nhận tay`,
+            lines: sessionLines(s).concat(["Phiếu gửi Nextwaves chỉ nhận được MỘT lần; lần nhận thiếu trước đã dùng phiếu gửi đó. Nhận phiếu này trên POS như hiện nay và báo vận hành (phần còn lại chưa vào kho Nextwaves)."]),
+            buttons: [cancelButton(env, s)],
+          });
+        }
         return showGr(gr, {
           tone: "warn",
           title: `${gr.code}: Nextwaves chưa có đơn chờ nhận — nhận tay`,
-          lines: sessionLines(s).concat(["Nhận phiếu này trên POS như hiện nay. Hàng có tem RFID mà vẫn báo vậy: kiểm tài khoản Nextwaves có quyền kho của cửa hàng rồi bấm “Tìm lại trên Nextwaves”."]),
+          lines: sessionLines(s).concat([
+            s.remainder
+              ? "Phiếu phần còn lại: Nextwaves có thể đã nhận hết đơn này từ trước (lúc nhận phiếu gốc). Nhận phiếu này trên POS như hiện nay."
+              : "Nhận phiếu này trên POS như hiện nay. Hàng có tem RFID mà vẫn báo vậy: kiểm tài khoản Nextwaves có quyền kho của cửa hàng rồi bấm “Tìm lại trên Nextwaves”.",
+          ]),
           buttons: [{ label: "Tìm lại trên Nextwaves", onClick: () => reopenNw(s).catch(() => {}) }, cancelButton(env, s)],
         });
       case "received":
@@ -883,7 +967,8 @@
   }
 
   function renderApplied(env, gr, s) {
-    const uids = ((s.nwResult && s.nwResult.units) || []).map((u) => u.uid);
+    const uids = unitsForPlan(s).map((u) => u.uid);
+    const extra = remainderNotes(s);
     const codes = new Set(gr.items.flatMap((it) => it.details.flatMap((d) => d.qrCodes)));
     const missing = uids.filter((u) => !codes.has(u));
     // Khớp cuối (giữ được qua mọi lần vẽ lại): mã trên phiếu không thuộc lượt nhận Nextwaves = phiếu bị đổi sau khi điền (kế hoạch đã
@@ -894,7 +979,7 @@
       return showGr(gr, {
         tone: "warn",
         title: `${gr.code}: đã điền nhưng đọc lại chưa khớp hoàn toàn — kiểm từng lô trước khi HOÀN THÀNH`,
-        lines: sessionLines(s).concat([`Phiếu có ${foreign.length} mã không thuộc lượt nhận Nextwaves: ${foreign.slice(0, 10).join(", ")}${foreign.length > 10 ? "…" : ""}`, "Dược sĩ kiểm số lượng / mã từng lô; đúng thì bấm HOÀN THÀNH, sai thì báo dev."]),
+        lines: sessionLines(s).concat(extra, [`Phiếu có ${foreign.length} mã không thuộc lượt nhận Nextwaves: ${foreign.slice(0, 10).join(", ")}${foreign.length > 10 ? "…" : ""}`, "Dược sĩ kiểm số lượng / mã từng lô; đúng thì bấm HOÀN THÀNH, sai thì báo dev."]),
         buttons: [{ label: "Đọc lại", onClick: refresh }],
       });
     }
@@ -902,7 +987,7 @@
       return showGr(gr, {
         tone: "warn",
         title: `${gr.code}: phiếu thiếu ${missing.length}/${uids.length} UID đã điền`,
-        lines: sessionLines(s).concat([`Thiếu: ${missing.slice(0, 20).join(", ")}${missing.length > 20 ? "…" : ""}`, "Kiểm tra phiếu trước khi bấm HOÀN THÀNH."]),
+        lines: sessionLines(s).concat(extra, [`Thiếu: ${missing.slice(0, 20).join(", ")}${missing.length > 20 ? "…" : ""}`, "Kiểm tra phiếu trước khi bấm HOÀN THÀNH."]),
       });
     }
     const uidSet = new Set(uids);
@@ -915,13 +1000,13 @@
       return showGr(gr, {
         tone: "warn",
         title: `${gr.code}: đã điền ${uids.length} mã — còn ${short.length} sản phẩm CHƯA nhận đủ`,
-        lines: sessionLines(s).concat(short.slice(0, 20).map((x) => `• ${x.name}: ${x.got}/${x.want}`), ["Hàng này không có tem RFID (hoặc Nextwaves chưa giao): dược sĩ nhận tay phần còn thiếu, kiểm lại rồi mới bấm HOÀN THÀNH."]),
+        lines: sessionLines(s).concat(extra, short.slice(0, 20).map((x) => `• ${x.name}: ${x.got}/${x.want}`), ["Hàng này không có tem RFID (hoặc Nextwaves chưa giao): dược sĩ nhận tay phần còn thiếu, kiểm lại rồi mới bấm HOÀN THÀNH.", SPLIT_HINT]),
       });
     }
     return showGr(gr, {
-      tone: "ok",
+      tone: extra.length ? "warn" : "ok",
       title: `${gr.code}: đã điền ${uids.length} mã vào ${lots} lô — kiểm danh sách rồi bấm HOÀN THÀNH`,
-      lines: sessionLines(s).concat(["Kiểm số lượng từng lô trên phiếu, đúng thì bấm HOÀN THÀNH của POS. Extension không tự HOÀN THÀNH."]),
+      lines: sessionLines(s).concat(extra, ["Kiểm số lượng từng lô trên phiếu, đúng thì bấm HOÀN THÀNH của POS. Extension không tự HOÀN THÀNH."]),
     });
   }
 
@@ -968,7 +1053,7 @@
   }
 
   async function planAndOffer(env, gr, s) {
-    const units = (s.nwResult && s.nwResult.units) || [];
+    const units = unitsForPlan(s);
     showGr(gr, { tone: "busy", title: `Đang tra ${units.length} UID trên POS…`, lines: sessionLines(s) });
     // Tra QR MỌI UID (kể cả UID đã nằm trên phiếu — PM P1.2 / P2.2).
     const scope = `${s.key}|${(s.nwResult && s.nwResult.at) || ""}`;
@@ -1003,8 +1088,10 @@
     const stopped = s.state !== "received";
     const head = sessionLines(s).concat(
       stopped && s.applyError ? [`Lần điền trước dừng: ${APPLY_MSG[s.applyError.reason] || s.applyError.reason}${s.applyError.status ? ` (HTTP ${s.applyError.status})` : ""}`] : stopped ? ["Lần điền trước bị ngắt giữa chừng (tab đóng / tải lại)."] : [],
+      remainderNotes(s),
       [`Kế hoạch #${plan.hash}: điền ${plan.summary.toWrite} UID vào ${plan.steps.length} lô${plan.summary.alreadyOnGr ? ` (${plan.summary.alreadyOnGr} UID đã nằm đúng lô)` : ""}.`],
-      plan.warnings.map((w) => `• Sản phẩm ${w.productId}: sau khi điền mới ${w.received}/${w.quantity} — phần còn lại dược sĩ xử lý tay.`)
+      plan.warnings.map((w) => `• Sản phẩm ${w.productId}: sau khi điền mới ${w.received}/${w.quantity} — phần còn lại dược sĩ xử lý tay.`),
+      plan.warnings.length ? [SPLIT_HINT] : []
     );
     const blockers = await bg("session:writeBlockers", { key: s.key });
     if (blockers.length) {
@@ -1145,7 +1232,7 @@
       } catch (_) {
         fresh = null;
       }
-      const v = fresh ? PL.verifyFinal(plan, fresh, (s.nwResult && s.nwResult.units) || []) : { ok: false, diffs: [{ why: "read_failed", detailId: null }] };
+      const v = fresh ? PL.verifyFinal(plan, fresh, unitsForPlan(s)) : { ok: false, diffs: [{ why: "read_failed", detailId: null }] };
       if (!v.ok) {
         applying = false;
         logTo(s.key, { type: "final_verify_failed", diffs: v.diffs.slice(0, 10) });

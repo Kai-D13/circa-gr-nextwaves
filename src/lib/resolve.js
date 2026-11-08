@@ -24,6 +24,7 @@
     candidate_read_failed: "Không đọc được một đơn ứng viên — không chọn",
     candidate_inconsistent: "Dữ liệu đơn ứng viên không nhất quán",
     no_order: "Nextwaves chưa có đơn chờ nhận của SO này",
+    nw_partial_received: "Nextwaves đã nhận một phần đơn của SO này trước đó (phiếu gửi đã dùng) — không nhận tiếp được",
     no_match: "Có đơn Nextwaves của SO nhưng số lượng không khớp phiếu nhận",
     warehouse_inconsistent: "Các đơn Nextwaves cùng SO không cùng một kho (hoặc thiếu kho) — không tự chọn",
     ambiguous: "Có nhiều đơn Nextwaves cùng khớp phiếu nhận — không tự chọn",
@@ -89,6 +90,11 @@
     }
     out.verified = verified.length;
     if (verified.length === 0) return fail("no_order");
+    // v0.4.1 (thử staging 08/11): nhận thiếu một lần là phiếu gửi đã dùng — đơn PARTIALLY_RECEIVED, openShipmentCount 0, Nextwaves không
+    // sinh phiếu gửi mới. Mọi đơn cùng SO đều như vậy → báo đúng lý do (trước đây rơi vào "số lượng không khớp"). Có đơn khác còn phiếu
+    // gửi thì xét như v0.4.0 (đơn đã dùng không so được → khoá nw_many_orders).
+    const consumed = (v) => v.c.openShipmentCount === 0 && /^PARTIALLY_RECEIVED$/i.test(v.c.poStatus || v.order.poStatus || "");
+    if (verified.every(consumed)) return fail("nw_partial_received", { poNumber: verified.map((v) => v.c.poNumber).join(", ") });
     const whs = [...new Set(verified.map((v) => v.order.warehouseId || ""))];
     if (whs.length !== 1 || !whs[0]) return fail("warehouse_inconsistent", { detail: `kho: ${whs.map((w) => (w ? w.slice(0, 8) : "trống")).join(", ")}` });
     out.warehouseId = whs[0];

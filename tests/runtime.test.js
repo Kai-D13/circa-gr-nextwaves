@@ -613,8 +613,12 @@ test("Nhận thiếu 1 UID (keep_open): giữ ở Nextwaves, báo 11/12, không 
   try {
     srv.st.nwReceived = true;
     nw.post(scan(200));
-    await until(() => viewTitle(nw) === "Nextwaves mới nhận 11/12 UID");
+    // v0.4.1 (thử staging 08/11): phiếu gửi chỉ nhận MỘT lần → không còn bảo "quét tiếp rồi xác nhận lại".
+    await until(() => viewTitle(nw) === "Nextwaves đã nhận 11/12 UID — còn thiếu 1");
     await settle();
+    const text = nw.view.lines.join("\n");
+    assert.match(text, /chỉ nhận được MỘT lần/);
+    assert.doesNotMatch(text, /Quét tiếp/);
     assert.equal(b.session(KEY).state, "nw_ready");
     assert.equal(srv.st.puts.length, 0);
   } finally {

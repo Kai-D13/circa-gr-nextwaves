@@ -26,7 +26,8 @@
       status: String(it.status || ""),
       slug: String((it.counterparty && it.counterparty.tenantSlug) || ""),
       warehouseId: lower(it.warehouse && it.warehouse.id),
-      openShipmentCount: Number(it.openShipmentCount) || 0,
+      // v0.4.1: vắng / không phải số → null (KHÔNG mặc định 0: 0 nghĩa là phiếu gửi đã dùng hết — resolve dựa vào đó).
+      openShipmentCount: typeof it.openShipmentCount === "number" && Number.isFinite(it.openShipmentCount) ? it.openShipmentCount : null,
     }));
   }
 

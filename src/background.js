@@ -210,7 +210,9 @@ async function noOrder(msg, sender) {
   requireNwTab(s, sender, "session:noOrder");
   if (!isCurrent(s) || s.state !== "waiting_nw") return s;
   const r = msg.result || {};
-  const s2 = await updateSession(msg.key, { state: "no_nw_order", noOrderAt: Date.now() }, { type: "nw_no_order", total: Number.isFinite(r.total) ? r.total : null, read: Number.isFinite(r.read) ? r.read : null });
+  // v0.4.1: "nw_partial_received" = đơn của SO đã được nhận một phần trước đó (phiếu gửi đã dùng, Nextwaves không nhận tiếp được).
+  const reason = r.reason === "nw_partial_received" ? "nw_partial_received" : "no_order";
+  const s2 = await updateSession(msg.key, { state: "no_nw_order", noOrderAt: Date.now(), noOrderReason: reason }, { type: "nw_no_order", reason, total: Number.isFinite(r.total) ? r.total : null, read: Number.isFinite(r.read) ? r.read : null });
   // Không có đơn → màn quét Nextwaves không mở modal quét (không giữ cổng): trả đầu đọc ngay, tab vẫn mở cho dược sĩ đọc thông báo.
   laterReturnReader(s2, "no_order");
   return s2;
@@ -285,6 +287,18 @@ function readerFrom(msg) {
   };
 }
 
+// v0.4.1 — phiếu phần còn lại (pos-model.remainderOf đạt ở tab POS): phiếu đã xong của PO + mã trên các phiếu đó. Sai dạng → null
+// (phiên chạy như v0.4.0, khoá so_many_gr giữ nguyên).
+const REMAINDER_UIDS_MAX = 5000;
+function remainderFrom(msg) {
+  const r = msg && msg.remainder;
+  if (!r || typeof r !== "object" || !Array.isArray(r.completed) || !Array.isArray(r.excludeUids)) return null;
+  if (!r.completed.length || r.completed.length > 20 || r.excludeUids.length > REMAINDER_UIDS_MAX) return null;
+  if (!r.completed.every((g) => g && E.isUuid(g.id) && isStr(g.code) && g.code.length <= 20)) return null;
+  if (!r.excludeUids.every((u) => isStr(u) && u.length <= 64)) return null;
+  return { completed: r.completed.map((g) => ({ id: String(g.id).toLowerCase(), code: g.code })), excludeUids: [...new Set(r.excludeUids)] };
+}
+
 async function startSession(msg, sender) {
   const base = E.envById(msg.envId);
   if (!base) throw new Error("env");
@@ -304,13 +318,17 @@ async function startSession(msg, sender) {
     // Không mở thêm tab khi tải lại trang. Tab POS vừa mượn đầu đọc (leaseId mới) → giữ lượt mượn mới nhất để trả đúng.
     return reader && reader.leaseId ? updateSession(key, { reader }) : cur;
   }
+  const remainder = remainderFrom(msg);
+  const remainderNote = shortStr(msg.remainderNote, 40) || null;
   let s;
   if (cur && isCurrent(cur) && cur.state === "no_nw_order") {
     // Bấm lại phiếu "không có đơn": tìm lại trên Nextwaves (giữ phiên, giữ khoá).
-    // Review v0.4.0 P3-5: dữ liệu vừa đọc lại ở POS (khoá ghi, vân tay, tab) thắng; khoá chỉ thêm, không bao giờ bớt.
-    const locks = [...new Set([].concat(cur.writeLocks || [], Array.isArray(msg.writeLocks) ? msg.writeLocks.map(String) : []))];
-    s = Object.assign(cur, { state: "waiting_nw", updatedAt: Date.now(), reader: reader || cur.reader || null, writeLocks: locks, fingerprint: msg.fingerprint || cur.fingerprint || [], posTabId: sender && sender.tab ? sender.tab.id : cur.posTabId });
-    s.log = (s.log || []).concat([{ at: new Date().toISOString(), type: "nw_retry", writeLocks: locks }]).slice(-LOG_MAX);
+    // Review v0.4.0 P3-5: dữ liệu vừa đọc lại ở POS (khoá ghi, vân tay, tab) thắng; khoá chỉ thêm, không bao giờ bớt — trừ một
+    // trường hợp (v0.4.1): POS vừa chứng minh đây là phiếu phần còn lại (cộng sổ theo dòng PO đạt) → bỏ so_many_gr cũ.
+    const keep = (cur.writeLocks || []).filter((l) => !(remainder && l === "so_many_gr"));
+    const locks = [...new Set([].concat(keep, Array.isArray(msg.writeLocks) ? msg.writeLocks.map(String) : []))];
+    s = Object.assign(cur, { state: "waiting_nw", updatedAt: Date.now(), reader: reader || cur.reader || null, writeLocks: locks, fingerprint: msg.fingerprint || cur.fingerprint || [], remainder, remainderNote, posTabId: sender && sender.tab ? sender.tab.id : cur.posTabId });
+    s.log = (s.log || []).concat([{ at: new Date().toISOString(), type: "nw_retry", writeLocks: locks, remainder: remainder ? remainder.completed.map((g) => g.code) : null }]).slice(-LOG_MAX);
   } else {
     const replaced = cur && !isCurrent(cur) ? { type: "replaced_outdated", oldState: cur.state, oldCreatedBy: cur.createdBy || null } : null;
     s = {
@@ -331,6 +349,8 @@ async function startSession(msg, sender) {
       fingerprint: msg.fingerprint || [],
       writeLocks: Array.isArray(msg.writeLocks) ? msg.writeLocks.map(String) : [], // khoá ghi phía POS: đặt lúc tạo phiên, không đổi được
       nwWriteLocks: [], // khoá ghi phía Nextwaves: chỉ session:nwMatched đặt, một lần
+      remainder, // v0.4.1: phiếu phần còn lại {completed[{id, code}], excludeUids[]} | null
+      remainderNote, // v0.4.1: PO nhiều phiếu nhưng cộng sổ không đạt (lý do ngắn) — chỉ để hiển thị
       returnUrl,
       posTabId: sender && sender.tab ? sender.tab.id : null,
       nwTabId: null,
@@ -338,7 +358,7 @@ async function startSession(msg, sender) {
       state: "waiting_nw",
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      log: [replaced, { type: "start", deliveryCode: msg.deliveryCode, writeLocks: msg.writeLocks || [], reader: reader ? reader.state : null }].filter(Boolean).map((l) => Object.assign({ at: new Date().toISOString() }, l)),
+      log: [replaced, { type: "start", deliveryCode: msg.deliveryCode, writeLocks: msg.writeLocks || [], reader: reader ? reader.state : null, remainder: remainder ? { completed: remainder.completed.map((g) => g.code), excluded: remainder.excludeUids.length } : null, remainderNote }].filter(Boolean).map((l) => Object.assign({ at: new Date().toISOString() }, l)),
     };
   }
   all[key] = s;

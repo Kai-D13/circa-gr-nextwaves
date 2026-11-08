@@ -39,6 +39,9 @@
           unitRate: lineUnit ? Number(lineUnit.convert_rate) : null,
           quantity: Number(it.quantity),
           baseQuantity: Number(it.base_quantity),
+          // v0.4.1: id dòng PO (giữ nguyên qua phiếu phần còn lại) + lượng đã nhận của dòng (đơn vị dòng) — cộng sổ theo dòng PO.
+          refId: lower(it.ref_id),
+          received: Number(it.received_quantity) || 0,
           ratesByUnitName,
           details: (Array.isArray(it.details) ? it.details : []).map((dt) => ({
             id: lower(dt.id),
@@ -49,6 +52,9 @@
             qrCodes: [...new Set(Array.isArray(dt.thuocsi_qr_codes) ? dt.thuocsi_qr_codes.map(String) : [])],
             // Số mã thô (trước khi bỏ trùng): lớn hơn qrCodes.length nghĩa là mã đã bị nối hai lần.
             qrCodeCount: Array.isArray(dt.thuocsi_qr_codes) ? dt.thuocsi_qr_codes.length : 0,
+            // v0.4.1: id dòng lô PO + mã nội bộ (chỉ dùng để biết UID đã nằm trên phiếu đã xong; không vào kế hoạch / ảnh chụp).
+            refId: lower(dt.ref_id),
+            internalCodes: [...new Set(Array.isArray(dt.internal_qr_codes) ? dt.internal_qr_codes.map(String) : [])],
           })),
         };
       }),
@@ -66,6 +72,17 @@
       saleOrderNumber: String(d.sale_order_number || ""),
       deliveryCodes: Array.isArray(d.thuocsi_delivery_code) ? d.thuocsi_delivery_code.map(String).filter(Boolean) : [],
       grIds: (Array.isArray(d.goods_receipts) ? d.goods_receipts : []).map((g) => lower(g && g.id)).filter(Boolean),
+      // v0.4.1 (phiếu phần còn lại): dòng PO (lượng đặt / gốc / đã nhận theo đơn vị dòng, cộng qua mọi phiếu) + phiếu của PO kèm trạng thái.
+      status: String(d.status || ""),
+      items: (Array.isArray(d.items) ? d.items : []).map((it) => ({
+        id: lower(it && it.id),
+        productId: String(it && it.product_id),
+        quantity: Number(it && it.quantity),
+        baseQuantity: Number(it && it.base_quantity),
+        unit: String((it && it.unit) || ""),
+        received: Number(it && it.received_quantity) || 0,
+      })),
+      grs: (Array.isArray(d.goods_receipts) ? d.goods_receipts : []).map((g) => ({ id: lower(g && g.id), code: String((g && g.code) || ""), status: String((g && g.status) || "") })).filter((g) => g.id),
     };
   }
 
@@ -104,12 +121,86 @@
   // Khoá ghi phía POS (P3): danh sách GR của SO đọc đủ, GR đang mở có trong đó, và là GR chưa huỷ DUY NHẤT của PO của nó.
   // v0.3.1 (06/11, SO tách giao): mỗi lần giao (-P1 / -P2 / -F) có PO riêng → GR của PO khác cùng SO không khoá; đơn Nextwaves vẫn
   // phải khớp số lượng đúng phiếu này (resolve: đúng một đơn khớp, đơn khác lệch rõ). Dòng thiếu PO → không kết luận. null = không khoá.
-  function soWriteLock(check, grId) {
+  // v0.4.1 (phiếu phần còn lại): `rem` = remainderOf(...) đạt → không khoá, với điều kiện các phiếu khác cùng PO trong kết quả tìm theo SO
+  // đúng là các phiếu đã xong đã được cộng sổ (hai nguồn PO / tìm theo SO phải nói cùng một điều). Lệch → khoá như cũ.
+  function soWriteLock(check, grId, rem) {
     if (!check || !check.ok) return "so_gr_unknown";
     const live = check.list.filter((g) => !/^CANCEL/i.test(g.status));
     const me = live.find((g) => g.id === lower(grId));
     if (!me || live.some((g) => !g.poId)) return "so_gr_unknown";
-    return live.filter((g) => g.poId === me.poId).length === 1 ? null : "so_many_gr";
+    const same = live.filter((g) => g.poId === me.poId);
+    if (same.length === 1) return null;
+    if (rem && rem.ok && Array.isArray(rem.completed)) {
+      const others = same.filter((g) => g.id !== me.id);
+      const counted = new Set(rem.completed.map((g) => g.id));
+      if (others.length === counted.size && others.every((g) => counted.has(g.id) && g.status === "COMPLETED")) return null;
+    }
+    return "so_many_gr";
+  }
+
+  // v0.4.1 (case phiếu phần còn lại, operator 07–08/11; staging GR03877 → GR03954): HOÀN THÀNH khi chưa nhận đủ → POS sinh phiếu mới
+  // cùng PO, chỉ dòng chưa đủ, SL = SL dòng PO − đã nhận, cùng lô, `ref_id` dòng / lô PO giữ nguyên, không mang mã. Nhận ra phiếu phần
+  // còn lại bằng cộng sổ theo DÒNG PO (đơn vị gốc). Thiếu / lệch bất kỳ điều kiện nào → không ok → khoá như v0.4.0 (dừng an toàn).
+  //   gr: phiếu đang mở (normalizeGr); po: normalizePo; completed: normalizeGr của MỌI phiếu khác chưa huỷ của PO (GET theo id).
+  // → {ok:true, completed[{id, code}], excludeUids[], source[{productId, baseQuantity, ratesByUnitName}]} | {ok:false, reason, …}
+  //   excludeUids: mọi mã trên các phiếu đã xong. POS gắn UID Nextwaves (tem con) lúc HOÀN THÀNH cho đơn vị đã quét QR → phần giao với
+  //   UID của đơn Nextwaves là các đơn vị đã nhận trước (bán gấp). Mã khác (QR thuocsi dược sĩ quét) không trùng UID nào → vô hại.
+  //   source: vân tay CẤP PO (cả đơn Nextwaves ứng với cả PO, không chỉ phiếu đang mở).
+  function remainderOf(gr, po, completed) {
+    const no = (reason, extra) => Object.assign({ ok: false, reason }, extra || {});
+    if (!gr || !po || !Array.isArray(po.items) || !Array.isArray(po.grs)) return no("data");
+    const live = po.grs.filter((g) => !/^CANCEL/i.test(g.status));
+    if (live.length < 2) return no("single_gr");
+    if (!live.some((g) => g.id === gr.id)) return no("gr_not_in_po");
+    const others = live.filter((g) => g.id !== gr.id);
+    if (others.some((g) => g.status !== "COMPLETED")) return no("other_gr_open", { code: (others.find((g) => g.status !== "COMPLETED") || {}).code });
+    const done = (Array.isArray(completed) ? completed : []).filter(Boolean);
+    if (done.length !== others.length) return no("completed_unread");
+    for (const o of others) {
+      const g = done.find((x) => x.id === o.id);
+      if (!g || g.status !== "COMPLETED" || g.poId !== gr.poId) return no("completed_unread", { code: o.code });
+    }
+    // Phiếu đang mở phải còn nguyên như lúc POS sinh: chưa nhận gì, không mã. Đã nhận tay một phần → nhận tay tiếp.
+    for (const it of gr.items) {
+      if (it.received) return no("open_gr_touched");
+      for (const d of it.details) if (d.received || d.qrCodes.length || (d.internalCodes || []).length) return no("open_gr_touched");
+    }
+    const poById = new Map(po.items.map((p) => [p.id, p]));
+    for (const it of gr.items) if (!it.refId || !poById.has(it.refId)) return no("line_not_in_po", { productId: it.productId });
+    // Tỉ lệ đơn vị theo sản phẩm, gộp mọi phiếu của PO (sản phẩm chỉ có ở phiếu đã xong vẫn quy đổi được); cùng tên đơn vị phải cùng tỉ lệ.
+    const rates = new Map();
+    for (const g of [gr].concat(done)) {
+      for (const it of g.items) {
+        const cur = rates.get(it.productId) || {};
+        for (const [u, r] of Object.entries(it.ratesByUnitName || {})) {
+          if (cur[u] !== undefined && cur[u] !== r) return no("rate_conflict", { productId: it.productId, unit: u });
+          cur[u] = r;
+        }
+        rates.set(it.productId, cur);
+      }
+    }
+    for (const p of po.items) {
+      if (!p.id || !(p.baseQuantity > 0) || !(p.quantity > 0)) return no("po_line_unreadable", { productId: p.productId });
+      let doneBase = 0;
+      for (const g of done) {
+        for (const it of g.items) {
+          if (it.refId !== p.id) continue;
+          const got = it.details.reduce((n, d) => n + (Number(d.received) || 0), 0);
+          if (it.received !== got) return no("received_inconsistent", { code: g.code, productId: p.productId });
+          if (got && !(it.unitRate > 0)) return no("rate_missing", { code: g.code, productId: p.productId });
+          doneBase += got * (it.unitRate || 0);
+        }
+      }
+      const open = gr.items.filter((it) => it.refId === p.id);
+      if (open.length > 1) return no("line_split", { productId: p.productId });
+      const openBase = open.length ? open[0].baseQuantity : 0;
+      if (!(openBase >= 0) || openBase + doneBase !== p.baseQuantity) return no("line_mismatch", { productId: p.productId, po: p.baseQuantity, done: doneBase, open: openBase });
+      // Đối chiếu chéo với PO: received (đơn vị dòng PO) × base / quantity = phần đã nhận ở các phiếu đã xong (phiếu mở chưa nhận gì).
+      if (p.received * p.baseQuantity !== doneBase * p.quantity) return no("po_received_mismatch", { productId: p.productId });
+    }
+    const excludeUids = [...new Set(done.flatMap((g) => g.items.flatMap((it) => it.details.flatMap((d) => d.qrCodes.concat(d.internalCodes || [])))))];
+    const source = po.items.map((p) => ({ productId: p.productId, baseQuantity: p.baseQuantity, ratesByUnitName: rates.get(p.productId) || {} }));
+    return { ok: true, reason: null, completed: done.map((g) => ({ id: g.id, code: g.code })), excludeUids, source };
   }
 
   const isReceivable = (gr) => !!gr && RECEIVABLE.has(gr.status);
@@ -185,7 +276,7 @@
     return a;
   }
 
-  const lib = { normalizeGr, normalizePo, normalizeGrSearch, normalizeGrSearchPage, checkSoGrs, soWriteLock, isReceivable, resolveDelivery, grFingerprintSource, normalizeQrLookup, grPageAnchor, RECEIVABLE };
+  const lib = { normalizeGr, normalizePo, normalizeGrSearch, normalizeGrSearchPage, checkSoGrs, soWriteLock, remainderOf, isReceivable, resolveDelivery, grFingerprintSource, normalizeQrLookup, grPageAnchor, RECEIVABLE };
   root.__CGN__ = root.__CGN__ || {};
   root.__CGN__.pos = lib;
   if (typeof module !== "undefined" && module.exports) module.exports = lib;
