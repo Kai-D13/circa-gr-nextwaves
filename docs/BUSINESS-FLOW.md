@@ -56,13 +56,13 @@ Hiện hành: **v0.4.0** (07/11/2026). Tài liệu này là nguồn chuẩn củ
 | Nextwaves đã nhận nhưng phiên mất | "Nextwaves ĐÃ nhận — POS CHƯA điền" (đỏ) | Nhận tay phiếu đó |
 | Có sản phẩm Nextwaves không gắn tem (thiếu lượng) | Vàng: "còn K sản phẩm CHƯA nhận đủ" + tên | Nhận tay phần thiếu rồi HOÀN THÀNH |
 | Chưa thấy token Nextwaves | "Chưa thấy Nextwaves tải dữ liệu — F5" | F5, kiểm đăng nhập đúng địa chỉ |
-| **Bán gấp** (07/11): nhận một vài món, bấm HOÀN THÀNH → POS tự sinh **phiếu phần còn lại** cùng PO. POS **không hỏi xác nhận**; phiếu mới chỉ có phần chưa nhận, cùng lô (staging 07/11) | v0.4.0 chưa hỗ trợ: phiếu phần còn lại báo "số lượng không khớp" / "chưa có đơn chờ nhận" (dừng an toàn) | Món bán gấp: **quét QR** (không nhập số tay). Phần còn lại: hiện nhận tay; sau H2 bấm "Nhận hàng bằng RFID" trên phiếu mới. `docs/dev/CASE-PHIEU-PHAN-CON-LAI-20261107.md` |
+| **Bán gấp** (07/11): nhận một vài món, bấm HOÀN THÀNH → POS tự sinh **phiếu phần còn lại** cùng PO. POS **không hỏi xác nhận**; phiếu mới chỉ có phần chưa nhận, cùng lô (staging 07/11) | v0.4.0 chưa hỗ trợ: phiếu phần còn lại báo "số lượng không khớp" / "chưa có đơn chờ nhận" (dừng an toàn) | Món bán gấp: **bắt buộc quét QR** trên phiếu POS rồi mới HOÀN THÀNH (operator 08/11). **Không mở Nextwaves nhận riêng món bán gấp**: Nextwaves chỉ nhận một lần mỗi phiếu gửi, nhận thiếu là phần còn lại không nhận được nữa (staging 08/11). Phần còn lại: hiện nhận tay; từ v0.4.1 bấm "Nhận hàng bằng RFID" trên phiếu mới, Nextwaves nhận một lần (vd 21/22). `docs/dev/CASE-PHIEU-PHAN-CON-LAI-20261107.md` |
 
 ## 5. Chưa làm / làm sau (ghi nhận 07/11)
 
 | Hạng mục | Trạng thái | Khi nào |
 |---|---|---|
-| **Mượn / trả đầu đọc tự động với QR Scan Log** (`circa-reader/v1`, spec `docs/dev/SPEC-QSL-MUON-DAU-DOC-v1.md`) | **Hoãn** (operator 07/11). Phía extension này đã có mã (hỏi QR Scan Log; không trả lời trong 300 ms → bỏ qua, không ảnh hưởng luồng). Hiện hành: bước 3 + 8 làm tay | Khi đội QR Scan Log làm xong hợp đồng → kiểm lại với bản của họ |
+| **Đầu đọc bị QR Scan Log giữ** khi mở màn quét Nextwaves (mượn / trả `circa-reader/v1`, spec `docs/dev/SPEC-QSL-MUON-DAU-DOC-v1.md`) | Hoãn 07/11 → **operator 08/11: làm trong batch v0.4.1** (nút để dược sĩ biết + bấm lấy đầu đọc, kể cả modal mở thẳng từ trang PO Nextwaves). Phía extension đã có mã hỏi QR Scan Log; hiện hành bước 3 + 8 làm tay | v0.4.1 (phương án trong plan) |
 | Trường mã giao `-F` / `-P1` / `-P2` trên đơn Nextwaves | Chờ Nextwaves | Bản sau: tra đơn theo mã giao thay vì vân tay số lượng |
 | Tự HOÀN THÀNH | Bỏ từ v0.4.0 (dược sĩ bấm) | Không có kế hoạch |
 | **Phiếu phần còn lại** (bán gấp → POS tách phiếu, operator 07/11: thao tác thật, lặp lại) | Đã định nghĩa (H2, D1–D8) và tái hiện trên staging 07/11 (GR03877 → GR03954); chưa code | v0.4.1 (cùng các finding audit) |

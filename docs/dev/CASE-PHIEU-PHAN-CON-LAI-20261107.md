@@ -80,11 +80,11 @@ Không kẹt: quét tay vài món trên phiếu mà **không** bấm HOÀN THÀN
 | # | Mức | Vấn đề |
 |---|---|---|
 | I1 | P2 | Phiếu phần còn lại luôn nhận tay (C1–C4). Tần suất: mỗi lần bán gấp lúc hàng vừa về |
-| I2 | P3 | Lời báo sai lý do (§3) |
+| I2 | P3 | Lời báo sai lý do (§3). **Operator 08/11: để sau** (dược sĩ nhìn số lượng POS / Nextwaves / hàng thật, ít đọc lời báo) |
 | I3 | P2 | Nextwaves đã nhận trước khi mở phiếu phần còn lại → không tìm lại được đơn theo SO (N2). Chỉ cứu được nếu cùng máy còn phiên phiếu gốc có kết quả nhận (V2) |
-| I4 | P3 | Món bán gấp nhập số tay (V5): với lô đó, số tem Nextwaves nhiều hơn phần còn lại, không biết tem nào đã bán → phải chặn sản phẩm đó |
+| I4 | P3 | Món bán gấp nhập số tay (V5): với lô đó, số tem Nextwaves nhiều hơn phần còn lại, không biết tem nào đã bán → phải chặn sản phẩm đó. **Operator 08/11: xử lý bằng vận hành** — món bán gấp bắt buộc quét QR rồi mới HOÀN THÀNH; extension giữ dừng an toàn, không làm thêm |
 | I5 | P3 | P5 (chi tiết SL 0): **không do tách phiếu** (§8). Bất kỳ phiếu nào bị thêm lại lô bằng tay đều có dòng lô SL 0. Tem của lô đó → kế hoạch chặn `over` (`plan.js:187`), dừng an toàn. Không riêng phiếu phần còn lại; xử lý chung ở v0.4.1 hoặc giữ chặn |
-| I6 | ngoài phạm vi, cần kiểm | Bán gấp **trước** khi Nextwaves nhận tem đó → lệnh trừ tồn của QR Scan Log cho tem đó gặp tem chưa vào kho Nextwaves; sau đó Nextwaves nhận lại chính tem đã bán. Cần kiểm với dự án QR Scan Log |
+| I6 | ngoài phạm vi | Bán gấp **trước** khi Nextwaves nhận tem đó → lệnh trừ tồn của QR Scan Log cho tem đó gặp tem chưa vào kho Nextwaves. **Operator 08/11: chấp nhận** — món chưa nhập kho Nextwaves thì tồn Nextwaves vẫn khớp POS, không cần trừ. Điều kiện còn lại (§11): tem món đã bán **không** được đọc lúc nhận Nextwaves (07/11 Nextwaves nhận 22/22, có cả tem Arrahan) |
 | I7 | P3 | POS **không hỏi xác nhận** khi HOÀN THÀNH phiếu chưa nhận đủ (§8 S1): một lần bấm là tách phiếu. Sau khi extension điền thiếu (dòng Nextwaves không gắn tem, V6), lời báo của extension là chỗ duy nhất nhắc dược sĩ. Lời báo v0.4.1 phải nói rõ: "còn K sản phẩm chưa đủ — bấm HOÀN THÀNH bây giờ thì POS tách phần thiếu sang phiếu mới" |
 
 ## 6. Hướng xử lý (đề xuất, chưa code)
@@ -175,3 +175,41 @@ Muốn chạy E2E H2 thật:
 3. Trên phiếu: nhận 1 món bằng **quét QR** (bán gấp) → HOÀN THÀNH → bấm "Nhận hàng bằng RFID" trên phiếu phần còn lại với bản v0.4.1.
 
 Việc này để sau, khi v0.4.1 đã code.
+
+## 10. Thử nhận thiếu trên Nextwaves staging (08/11, 11:20 giờ VN)
+
+**Operator yêu cầu 08/11:** nhận Nextwaves chỉ 1 EPC → xác nhận nhận hàng, xem Nextwaves có sinh phiếu mới chứa phần chưa nhận không.
+
+**Đã làm:**
+- PO69611541 ↔ SOBD1594067-1056814, kho CIRCA FLORITA (staging), phiếu gửi IT-BUYMED-STAG-20261026031756-6410, 5 dòng / 12 tem.
+- Trên modal "Nhận hàng bằng cách quét": nhập tay 1 EPC Soffell, chọn **"Giữ đơn mở"** (`keep_open`), bấm "Xác nhận nhận hàng".
+- Không kết nối đầu đọc, không đụng POS.
+
+| # | Sự thật |
+|---|---|
+| N3 | **Nextwaves KHÔNG sinh phiếu gửi mới cho phần thiếu.** Một phiếu gửi chỉ nhận được **một lần**. `POST …/inter-tenant-shipments/<id>/receive-scan {onMissing:"keep_open", epcs:[1]}` → 200, `orderStatus: "open"`, nhận 1 / thiếu 11 (từng dòng có `missingEpcs` / `missingUnitUids`). Sau đó `receiving` có `shipments: []`, PO `PARTIALLY_RECEIVED`. Màn quét báo "Đơn này chưa có phiếu gửi nào cần nhận". Trang PO ghi "Chờ phần còn lại · Đã giữ đơn mở", "Sẽ còn phiếu gửi tiếp theo"; 11 tem thiếu hiện là **"Thất lạc"**. Nút "Nhận hàng bằng cách quét" của phiếu gửi biến mất |
+| N4 | Phần thiếu chỉ nhận được nếu **bên bán (Buymed) đẩy phiếu gửi mới**. Trang PO ghi: trước khi nhận phiếu cuối "không thể nhận, đóng hoặc hủy đơn thủ công" |
+| N5 | Tìm theo SO (`inter-tenant-orders/receiving?q=SOBD1594067`, đúng API extension dùng) **vẫn trả đơn**: `purchaseOrderStatus PARTIALLY_RECEIVED`, `openShipmentCount 0`. So với nhận đủ: `total 0` (T3 25/10) |
+| N6 | Hai lựa chọn khi thiếu: `keep_open` ("Giữ đơn mở": phần thiếu chờ phiếu gửi sau, không báo ai) / `close_short` ("Đóng đơn dù còn thiếu": đóng đơn, **nhà cung cấp được báo phần thiếu**) — chữ của Nextwaves; `close_short` chưa thử |
+| N7 | `unitUid` Nextwaves cùng dạng mã QR Circa: 13 chữ số + chữ + số (vd `1792984580371AA1`). Mã POS tự sinh (`1793929119118C11`) cũng dạng đó → **không phân biệt được bằng dạng mã** (§11, P4) |
+
+PO69611541 giờ đã nhận một phần, không còn dùng được cho E2E. Đơn staging chờ nhận còn lại cho E2E: PO-2026-000001 ↔ SOBD1594228 (+3 đơn 12/10).
+
+Mẫu (đã kiểm SHA-256 với trang, đã bỏ tên người): `samples/nw-stg-receiving-PO69611541-truoc-nhan-thieu-20261108.json`, `samples/nw-stg-receive-scan-keep-open-1of12-PO69611541-20261108.json`, `samples/nw-stg-receiving-PO69611541-sau-nhan-thieu-20261108.json`, `samples/nw-stg-receiving-search-q-SOBD1594067-sau-nhan-thieu-20261108.json`.
+
+**Hệ quả:**
+- Câu hỏi của operator "Nextwaves có sinh phiếu mới cho phần chưa nhận không?" → **Không**. Hướng 1 của operator là hướng duy nhất giữ được Nextwaves đủ hàng: POS tách phiếu, Nextwaves nhận **một lần** cho phần còn lại (vd 21/22) khi dược sĩ nhận phiếu mới.
+- **Luật vận hành mới (cần dặn dược sĩ):** món bán gấp chỉ quét QR trên phiếu POS. **Tuyệt đối không mở Nextwaves nhận riêng món đó.** Nhận thiếu một lần là phiếu gửi đóng, các món còn lại không nhận vào Nextwaves được nữa, tồn Nextwaves thiếu cả lô.
+- Extension (v0.4.1): lượt nhận Nextwaves cho phiếu phần còn lại được coi là **đủ** khi các tem thiếu đều là tem đã nằm trên phiếu POS đã xong của PO (món bán gấp đã quét QR). Đơn Nextwaves `PARTIALLY_RECEIVED` / `openShipmentCount 0` → báo rõ "Nextwaves đã nhận phiếu gửi này — không nhận tiếp được", nhận tay.
+
+## 11. Phản hồi operator 08/11 và phân tích
+
+| Mục | Phản hồi | Kết luận |
+|---|---|---|
+| P4 (mã POS tự sinh) | Mẫu GR84803 / Alpha choay: `thuocsi_qr_codes` = `1789404808860C1270` (mã QR thuocsi, duy nhất) + `1793929119118C11` (POS sinh). Hai mã nằm **cùng mảng** | **Không ảnh hưởng extension**, với điều kiện: chỉ so **giao** giữa UID của đơn Nextwaves và mã trên phiếu (không coi "mã lạ" là đơn vị), đếm đã nhận bằng `received_quantity` (không đếm mã). Không tách được bằng dạng mã (N7). Phiếu phần còn lại không mang mã sang (S4), mã POS chỉ thêm lúc COMPLETED → không đụng lượt điền |
+| P5 | Dược sĩ không quét QR, nhập tay đủ số lượng | Khớp §8 S10. I5 giữ P3, dừng an toàn |
+| I2 | Để sau | — |
+| I4 | Operator đảm bảo món bán gấp phải quét QR rồi mới HOÀN THÀNH | Extension không làm thêm |
+| I6 | Chấp nhận: món chưa nhập kho Nextwaves thì không cần trừ | Đúng khi tem món đã bán **không** bị đọc lúc nhận Nextwaves. Ca 07/11 Nextwaves nhận 22/22, kể cả tem Arrahan (món còn ở quầy lúc nhận) → Nextwaves có thể dư 1 nếu đơn bán đã trừ trước đó. v0.4.1 biết UID món bán gấp (phiếu đã xong) → **cảnh báo** khi biên nhận Nextwaves có tem đó |
+| Hướng 1 | POS tách phiếu → phiếu mới tham chiếu PO POS → SO → Nextwaves; nhận 21/22, "Xác nhận nhận hàng" như thường | **Chốt** (agent.md §3, 08/11). Còn hỏi operator: khi thiếu đúng món bán gấp thì chọn `keep_open` hay `close_short` (N6) |
+| Đầu đọc bị QR Scan Log giữ | Làm trong batch này: nút để dược sĩ biết + bấm lấy đầu đọc cho màn quét Nextwaves | Phân tích phương án ở plan v0.4.1 |

@@ -106,3 +106,13 @@ Nguồn: response mà chính trang POS staging tải (bắt trong trang qua Chro
 | `gr-stg-GR03877-tach-20261107.json` | STG | `GET /backend/v1/order/goods-receipt/<id>` | Phiếu gốc sau HOÀN THÀNH khi nhận 2/2 + 1/4 + 0/6 (nhập số, không QR): COMPLETED, PUT03495, đủ 3 dòng, không mã nào. `e869ee2a` |
 | `po-stg-PO00006745-sau-tach-20261107.json` | STG | `GET /backend/v1/pos/<posId>/po/<poId>` | PROCESSING; `goods_receipts` GR03877 COMPLETED + GR03954 WAITING_TO_RECEIVE; `items[].received_quantity` cộng qua mọi phiếu; `details[].id` = `ref_id` lô trên phiếu. `c8879a73` |
 | `activity-stg-GR03877-GR03954-PO00006745-20261107.json` | STG | `GET /backend/v1/activity-log/<loại>/<id>` | GR03877: RECEIVING_STARTED → 3 × GR_DETAIL_UPDATED → COMPLETED "Nhận 3/12 sản phẩm"; GR03954: CREATED "Từ phiếu mua hàng PO00006745" (cùng RPC `UpdateStatusGetGoodsReceipt`, không nhắc phiếu gốc); PO: WAIT_FOR_PROCESS → PROCESSING ở lần nhận đầu. `1e2ed834` |
+
+**Thử nhận thiếu trên Nextwaves staging (08/11 11:20, operator yêu cầu): PO69611541 ↔ SOBD1594067, nhận 1/12 EPC, `keep_open`.**
+Nguồn: response mà chính trang Nextwaves staging tải (bắt trong trang, chỉ body, không header). Trong trang đã bỏ mọi khoá tên / email / người làm (cả tên sản phẩm của trường `name`; còn `product.title` / `productTitle`). Bản chép đã kiểm SHA-256 với trang. Phân tích: `docs/dev/CASE-PHIEU-PHAN-CON-LAI-20261107.md` §10.
+
+| File | Môi trường | Nguồn API | Ghi chú |
+|---|---|---|---|
+| `nw-stg-receiving-PO69611541-truoc-nhan-thieu-20261108.json` | STG | `GET /api/v1/inter-tenant-orders/purchase-orders/<poId>/receiving` | Trước: 1 phiếu gửi `accepted`, 5 dòng / 12 tem (`epc` + `unitUid`), `receipts` rỗng. `e7567af7` |
+| `nw-stg-receive-scan-keep-open-1of12-PO69611541-20261108.json` | STG | `POST /api/v1/inter-tenant-shipments/<id>/receive-scan` | `{onMissing: keep_open, epcs: [1]}` → 200, `orderStatus open`, nhận 1 / thiếu 11, `missingEpcs` / `missingUnitUids` từng dòng. `bac50231` |
+| `nw-stg-receiving-PO69611541-sau-nhan-thieu-20261108.json` | STG | `GET …/purchase-orders/<poId>/receiving` | Sau: **`shipments` rỗng** (phiếu gửi đã dùng), PO `PARTIALLY_RECEIVED`, 1 biên nhận. `f1a13ae2` |
+| `nw-stg-receiving-search-q-SOBD1594067-sau-nhan-thieu-20261108.json` | STG | `GET /api/v1/inter-tenant-orders/receiving?q=SOBD1594067` | Vẫn trả đơn: `PARTIALLY_RECEIVED`, `openShipmentCount 0`. `631a43c1` |

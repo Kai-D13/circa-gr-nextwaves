@@ -79,6 +79,9 @@ Báo cáo tách ba mức bằng chứng: **đã kiểm từ source / gói**, **�
 | 07/11 | **Mượn / trả đầu đọc với QR Scan Log (`circa-reader/v1`) hoãn**, làm sau. Hiện hành: dược sĩ Ngắt RFID ở tab bán hàng trước khi nhận, Kết nối lại sau. Mã phía extension giữ nguyên (không có QR Scan Log trả lời thì bỏ qua) |
 | 07/11 | **Quy trình phát hành:** cài máy dev → QA / QC trên máy dev đạt → mới cài máy POS vận hành (`docs/BUSINESS-FLOW.md` §6) |
 | 07/11 | **Bán gấp → POS tách phiếu là thao tác thật** (dược sĩ nhận vài món, HOÀN THÀNH để bán ngay, quay lại nhận phần còn lại trên phiếu POS tự sinh). Extension phải **hỗ trợ** phiếu phần còn lại (H2), không chỉ cảnh báo. Operator cho phép tái hiện trên staging. `docs/dev/CASE-PHIEU-PHAN-CON-LAI-20261107.md` |
+| 08/11 | **Bán gấp — luật vận hành (operator):** món bán gấp **bắt buộc quét QR** trên phiếu POS rồi mới HOÀN THÀNH (operator tự đảm bảo với dược sĩ; I4 không cần extension xử lý thêm, giữ dừng an toàn). Lời báo sai lý do (I2) để sau. Trừ tồn QR Scan Log cho món bán gấp (I6): operator chấp nhận — món chưa vào kho Nextwaves thì không cần trừ |
+| 08/11 | **Hướng phiếu phần còn lại = hướng 1 của operator:** POS tách phiếu; phiếu mới nối PO POS → SO → đơn Nextwaves; nhận Nextwaves **một lần** cho phần còn lại (vd 21/22) rồi điền phiếu mới. Thử staging 08/11: Nextwaves **không** sinh phiếu gửi mới cho phần thiếu (`docs/dev/CASE-PHIEU-PHAN-CON-LAI-20261107.md` §10) |
+| 08/11 | **Đầu đọc bị QR Scan Log giữ: làm trong batch này** (trước đó hoãn 07/11). Mở màn quét Nextwaves (kể cả modal mở thẳng từ trang PO) khi tab POS đang giữ đầu đọc → có nút để dược sĩ biết và bấm lấy đầu đọc cho Nextwaves. Phương án chốt trong plan v0.4.1 |
 
 Hệ quả của "một gói":
 - `manifest.json` phải khai quyền cho host của **cả hai** môi trường.
