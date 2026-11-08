@@ -1,0 +1,400 @@
+{
+  "_note": "PRD 08/11 (chỉ đọc, Chrome máy dev): GET /v1/pos/<posId>/po/<poId> của PO01974970 (SO 38565378, mã giao SOBD38565378-P1) — case bán gấp GR84673 → GR84803, cả hai đã COMPLETED. Rút gọn: trạng thái, SO / mã giao, goods_receipts, dòng + lô (details) của PO; bỏ giá, người, địa chỉ. Femalto (2021326) có HAI dòng lô cùng lô 010826: f52af836 (SL 1, nhận 0 — dòng gốc) và 358e29ce (SL 0, nhận 1 — thêm lại tay trên GR84803). _trim_sha256 = sha256 JSON gọn đã kiểm với trang; _source_sha256 = body gốc.",
+  "_trim_sha256": "74445ce93b0121abddeaa3cd430b57fe5c2815b4cb7b703c634822b4f5667332",
+  "_source_sha256": "444470650565c21cadce4c34573c94ba181e907e4ded5fe7a5b818a28ba01e07",
+  "success": true,
+  "data": {
+    "id": "81a2abd0-e3b5-4619-8142-87ff7d97422f",
+    "code": "PO01974970",
+    "status": "WAITING_PAYMENT",
+    "pos_id": "c476efb2-415c-429a-978e-d389b4b06607",
+    "sale_order_number": "38565378",
+    "thuocsi_delivery_code": [
+      "SOBD38565378-P1"
+    ],
+    "source_type": "SO_THUOCSI",
+    "goods_receipts": [
+      {
+        "id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "code": "GR84673",
+        "status": "COMPLETED"
+      },
+      {
+        "id": "4655c4e0-92df-486d-a2a4-ce1e37d3d9b5",
+        "code": "GR84803",
+        "status": "COMPLETED"
+      }
+    ],
+    "items": [
+      {
+        "id": "4461e523-7fcc-43fd-a364-cf4ec6a812b8",
+        "product_id": 15072,
+        "unit": "hộp",
+        "quantity": 1,
+        "base_quantity": 3,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "12d5332e-c454-4b1b-97b5-c8c186b05ccc",
+            "po_item_id": "4461e523-7fcc-43fd-a364-cf4ec6a812b8",
+            "lot_id": "b447d5a9-1291-49f4-b45b-ad83bd1d46d1",
+            "lot_date": "4906-210129",
+            "quantity": 1,
+            "base_quantity": 3,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "c2dc42c2-3b40-471a-824b-1aa8733407c9",
+        "product_id": 2021326,
+        "unit": "hộp",
+        "quantity": 1,
+        "base_quantity": 30,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "358e29ce-06ea-4f9a-a82e-a09b207b755e",
+            "po_item_id": "c2dc42c2-3b40-471a-824b-1aa8733407c9",
+            "lot_id": "9bdf0422-4ca7-4301-93b5-ee9d5e084406",
+            "lot_date": "010826-120828",
+            "quantity": 0,
+            "base_quantity": 30,
+            "received_quantity": 1
+          },
+          {
+            "id": "f52af836-cd16-4b05-a41d-da70b32e3d9b",
+            "po_item_id": "c2dc42c2-3b40-471a-824b-1aa8733407c9",
+            "lot_id": "9bdf0422-4ca7-4301-93b5-ee9d5e084406",
+            "lot_date": "010826-120828",
+            "quantity": 1,
+            "base_quantity": 30,
+            "received_quantity": 0
+          }
+        ]
+      },
+      {
+        "id": "e19e539f-bc98-43cb-99a5-477749ef80e6",
+        "product_id": 78026,
+        "unit": "hộp",
+        "quantity": 1,
+        "base_quantity": 40,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "9c8188c6-78dc-4302-97e3-1e8c557cc48e",
+            "po_item_id": "e19e539f-bc98-43cb-99a5-477749ef80e6",
+            "lot_id": "4e00ec33-4d17-4630-af15-0601b49dfe33",
+            "lot_date": "26003-250829",
+            "quantity": 1,
+            "base_quantity": 40,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "a921e3fe-a8ca-4648-9d48-b454ccc2f1a6",
+        "product_id": 2015714,
+        "unit": "hộp",
+        "quantity": 1,
+        "base_quantity": 1,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "74e9f211-8830-4f5e-ae2e-dcb092a945aa",
+            "po_item_id": "a921e3fe-a8ca-4648-9d48-b454ccc2f1a6",
+            "lot_id": "2c3e0a3e-b434-4f46-b2e0-da7b3aecb52c",
+            "lot_date": "CC01-030329",
+            "quantity": 1,
+            "base_quantity": 1,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "4d4581e0-6d63-4a25-bcbf-cf9757a5df7d",
+        "product_id": 2016520,
+        "unit": "chai",
+        "quantity": 1,
+        "base_quantity": 1,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "42252bed-7610-4d38-bcbc-a68aaa9bb425",
+            "po_item_id": "4d4581e0-6d63-4a25-bcbf-cf9757a5df7d",
+            "lot_id": "845476cb-f2cf-4555-a66c-23b75d7b1732",
+            "lot_date": "436751-301128",
+            "quantity": 1,
+            "base_quantity": 1,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "87e0434c-a33c-436e-a362-df005bcb6d6e",
+        "product_id": 77749,
+        "unit": "tuýp",
+        "quantity": 1,
+        "base_quantity": 1,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "9b8145fc-15e3-4388-9b54-3c6f5c29d041",
+            "po_item_id": "87e0434c-a33c-436e-a362-df005bcb6d6e",
+            "lot_id": "313c3db4-1e40-4ebc-b903-fde613e879ba",
+            "lot_date": "BEL11A-101228",
+            "quantity": 1,
+            "base_quantity": 1,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "b2c8da9c-470c-499f-81e5-ea33bbfb79fd",
+        "product_id": 1446,
+        "unit": "hộp",
+        "quantity": 1,
+        "base_quantity": 20,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "30632080-1142-4413-afbe-4c14610bfd96",
+            "po_item_id": "b2c8da9c-470c-499f-81e5-ea33bbfb79fd",
+            "lot_id": "2b85bc17-3b02-4783-87ac-f18eee45d542",
+            "lot_date": "2572201-140128",
+            "quantity": 1,
+            "base_quantity": 20,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "e3cfb49d-8da2-40e0-9ce8-8c04153ef1c7",
+        "product_id": 1635,
+        "unit": "hộp",
+        "quantity": 1,
+        "base_quantity": 1,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "ca0f8d49-b23d-44e5-a367-89f85737ef61",
+            "po_item_id": "e3cfb49d-8da2-40e0-9ce8-8c04153ef1c7",
+            "lot_id": "3729a391-682a-43b4-a5b2-6ffa70135d9e",
+            "lot_date": "250826-170629",
+            "quantity": 1,
+            "base_quantity": 1,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "58687429-6df1-4893-8f63-a36284d2be32",
+        "product_id": 2006697,
+        "unit": "vỉ",
+        "quantity": 1,
+        "base_quantity": 1,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "0e8bc4ec-e91f-44b9-8be7-152f8b6d9a76",
+            "po_item_id": "58687429-6df1-4893-8f63-a36284d2be32",
+            "lot_id": "f29a0c62-ac62-4c96-862b-0cfb759dfc69",
+            "lot_date": "B53915977-210928",
+            "quantity": 1,
+            "base_quantity": 1,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "39ba67ac-4226-46a7-b85b-39633ec55d71",
+        "product_id": 1908,
+        "unit": "chai",
+        "quantity": 3,
+        "base_quantity": 3,
+        "received_quantity": 3,
+        "details": [
+          {
+            "id": "650b73e3-2552-4ad0-8bc9-6ba2ffe40046",
+            "po_item_id": "39ba67ac-4226-46a7-b85b-39633ec55d71",
+            "lot_id": "a8b82382-fadc-45db-a952-0255a8134cc8",
+            "lot_date": "3826-300629",
+            "quantity": 3,
+            "base_quantity": 3,
+            "received_quantity": 3
+          }
+        ]
+      },
+      {
+        "id": "18e4ecbc-f890-4ee1-91ef-f16824da0432",
+        "product_id": 11544,
+        "unit": "chai",
+        "quantity": 1,
+        "base_quantity": 1,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "dc07f7aa-561f-4321-9e45-d93e94f842a2",
+            "po_item_id": "18e4ecbc-f890-4ee1-91ef-f16824da0432",
+            "lot_id": "1339bcc0-5c0a-468c-b38d-7f51eb2f124b",
+            "lot_date": "16082026D-150829",
+            "quantity": 1,
+            "base_quantity": 1,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "c0d23fe7-47cf-45a6-90d4-14ed1aa79477",
+        "product_id": 2001870,
+        "unit": "hộp",
+        "quantity": 3,
+        "base_quantity": 360,
+        "received_quantity": 3,
+        "details": [
+          {
+            "id": "2d53a008-a7f9-464c-ad37-6f73eb15972a",
+            "po_item_id": "c0d23fe7-47cf-45a6-90d4-14ed1aa79477",
+            "lot_id": "245ee460-faba-4eec-b912-dadb864f8870",
+            "lot_date": "260050-090129",
+            "quantity": 1,
+            "base_quantity": 120,
+            "received_quantity": 1
+          },
+          {
+            "id": "a32ef98d-c088-4256-950c-aa71f6f6d45e",
+            "po_item_id": "c0d23fe7-47cf-45a6-90d4-14ed1aa79477",
+            "lot_id": "cac6b479-ee94-4fff-b004-32f248e99701",
+            "lot_date": "260052-090129",
+            "quantity": 1,
+            "base_quantity": 120,
+            "received_quantity": 1
+          },
+          {
+            "id": "870d45d7-7580-4ab9-8fda-d28a6385f009",
+            "po_item_id": "c0d23fe7-47cf-45a6-90d4-14ed1aa79477",
+            "lot_id": "41acea9f-73d8-46eb-b467-4147c524b6aa",
+            "lot_date": "260428-090429",
+            "quantity": 1,
+            "base_quantity": 120,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "68e9a86a-4c60-4a3d-8337-780d89e759ca",
+        "product_id": 1371,
+        "unit": "hộp",
+        "quantity": 1,
+        "base_quantity": 30,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "7418538e-8330-44b4-92c2-8aef9ba97ceb",
+            "po_item_id": "68e9a86a-4c60-4a3d-8337-780d89e759ca",
+            "lot_id": "26ac274e-f279-4e55-b898-26c4ccb3e911",
+            "lot_date": "GVH0597-150928",
+            "quantity": 1,
+            "base_quantity": 30,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "8e9844d6-69cb-4b74-94d1-12b97d67b3ff",
+        "product_id": 2110,
+        "unit": "hộp",
+        "quantity": 1,
+        "base_quantity": 10,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "4e3411b4-a17f-4005-a275-3a8758c5438c",
+            "po_item_id": "8e9844d6-69cb-4b74-94d1-12b97d67b3ff",
+            "lot_id": "e18b4f95-76f3-4996-b014-15dcdd0739f6",
+            "lot_date": "LC6S-040628",
+            "quantity": 1,
+            "base_quantity": 10,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "828390d3-0a47-49d2-badb-28e4bb244537",
+        "product_id": 111885,
+        "unit": "hộp",
+        "quantity": 1,
+        "base_quantity": 30,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "c91340f4-eba1-423a-a9d1-f7e104aad597",
+            "po_item_id": "828390d3-0a47-49d2-badb-28e4bb244537",
+            "lot_id": "30d82766-2e31-444d-bc5c-a2db61c869d4",
+            "lot_date": "GVH0937-080428",
+            "quantity": 1,
+            "base_quantity": 30,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "ee1a4ba5-402f-4385-accb-aeaa39d1bd27",
+        "product_id": 258149,
+        "unit": "hộp",
+        "quantity": 1,
+        "base_quantity": 10,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "262adb26-e1ca-410f-ab2f-e44d46a46cd8",
+            "po_item_id": "ee1a4ba5-402f-4385-accb-aeaa39d1bd27",
+            "lot_id": "cacc7d94-5307-416a-8ed3-f3466cd25995",
+            "lot_date": "30426G01-050729",
+            "quantity": 1,
+            "base_quantity": 10,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "c48414fa-96f4-4b6c-8c05-6994b77422ff",
+        "product_id": 2740,
+        "unit": "chai",
+        "quantity": 1,
+        "base_quantity": 1,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "055b15fb-ef5c-4961-b91e-1c87a7f23f2a",
+            "po_item_id": "c48414fa-96f4-4b6c-8c05-6994b77422ff",
+            "lot_id": "fcd57d13-72b9-4e04-9874-2499d50c9c28",
+            "lot_date": "26047-140929",
+            "quantity": 1,
+            "base_quantity": 1,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "cbbd01d0-3d82-4655-837e-2a6e01ac62fd",
+        "product_id": 98494,
+        "unit": "hộp",
+        "quantity": 1,
+        "base_quantity": 200,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "ce9b6dfa-252d-458a-a7aa-0a12b013cc93",
+            "po_item_id": "cbbd01d0-3d82-4655-837e-2a6e01ac62fd",
+            "lot_id": "7b2665ff-4168-4cb6-81e9-60078f70dfa9",
+            "lot_date": "272601-270131",
+            "quantity": 1,
+            "base_quantity": 200,
+            "received_quantity": 1
+          }
+        ]
+      }
+    ]
+  }
+}

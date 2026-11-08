@@ -1,0 +1,43 @@
+{
+  "_note": "STG 08/11 ~12:00 (VN), chụp chỉ đọc trên Chrome máy dev: modal \"Nhận hàng bằng cách quét\" mở từ trang PO Nextwaves PO11623096 (SOBD1593781-1056703, phiếu gửi IT-BUYMED-STAG-20261012083025-6398, 10 tem). KHÔNG xác nhận nhận hàng, đóng bằng Hủy. Đây là dấu hiệu cấu trúc (không phải outerHTML đầy đủ) để dựng DOM giả cho test / Edge. Không có tên người.",
+  "page": "/vi/purchases/<poId> (trang PO) — modal mở bằng nút \"Nhận hàng bằng cách quét\" của phiếu gửi; trang /vi/purchases/receive?po=<SO> dùng cùng hộp thoại",
+  "containerChain": [
+    "div#NwcPortalsContainer",
+    "div[data-portal-id]",
+    "div",
+    "div[data-nwc-layer][data-nwc-overlay]",
+    "div",
+    "div[role=dialog]"
+  ],
+  "dialog": {
+    "role": "dialog",
+    "aria-modal": "true",
+    "aria-labelledby": "<id động, ví dụ _r_3a_>",
+    "class": "Nwc-Modal-Dialog",
+    "heading": "h2#<id aria-labelledby>: Nhận hàng bằng cách quét"
+  },
+  "stableIds": {
+    "scanInput": "input#scan-receive-qr",
+    "scanLabel": "label#scan-receive-qrLabel: Quét hoặc nhập EPC hay mã QR nhãn",
+    "scanHelp": "div#scan-receive-qrHelpText: Nhấn Enter sau mỗi mã. Mã thẻ RFID nhập ở đây cũng được tính"
+  },
+  "texts": {
+    "intro": "Quét tem của phiếu gửi IT-BUYMED-STAG-20261012083025-6398. Hàng được nhận vào CIRCA FLORITA. Phiếu gửi này sẽ được chấp nhận trước, rồi mới nhận hàng.",
+    "introPattern": "Quét tem của phiếu gửi (IT-[A-Z0-9-]+)\\. Hàng được nhận vào (.+?)\\.",
+    "progress": "10 còn lại cần quét · Đã nhận 0 / 10",
+    "liveStatus": "Đã nhận 0, còn lại 10, ngoài phiếu 0",
+    "missingQuestion": "Còn thiếu 10. Xử lý đơn mua hàng thế nào?",
+    "footerNoMatch": "Chưa khớp mã nào. Xác nhận lúc này sẽ ghi mọi sản phẩm là còn thiếu."
+  },
+  "buttons": ["Kết nối đầu đọc", "Thêm", "Xem thẻ (mỗi dòng)", "Hủy", "Xác nhận nhận hàng"],
+  "readerButtonStates": "Kết nối đầu đọc → (đang kết nối) → Bắt đầu quét / Dừng (theo regex READER_* của nw-content v0.4.0)",
+  "radios": [
+    { "value": "keep_open", "label": "Giữ đơn mở", "checkedOnOpen": true },
+    { "value": "close_short", "label": "Đóng đơn dù còn thiếu", "checkedOnOpen": false }
+  ],
+  "radiosNote": "Hai radio có ngay khi mở (lúc còn thiếu toàn bộ); name là id động (_r_37_ / …).",
+  "readerFacts": {
+    "devMachineStgSerialPermission": "navigator.serial.getPorts() trên circa-stg.nextwaves.app = 0 cổng đã cấp quyền (máy dev 08/11)",
+    "connectWithoutPermission": "Bấm \"Kết nối đầu đọc\" 2 lần: nút giữ nguyên, không có thông báo lỗi trong hộp thoại / toast, console trống — Nextwaves không báo gì khi không kết nối được"
+  }
+}

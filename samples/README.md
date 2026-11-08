@@ -116,3 +116,10 @@ Nguồn: response mà chính trang Nextwaves staging tải (bắt trong trang, c
 | `nw-stg-receive-scan-keep-open-1of12-PO69611541-20261108.json` | STG | `POST /api/v1/inter-tenant-shipments/<id>/receive-scan` | `{onMissing: keep_open, epcs: [1]}` → 200, `orderStatus open`, nhận 1 / thiếu 11, `missingEpcs` / `missingUnitUids` từng dòng. `bac50231` |
 | `nw-stg-receiving-PO69611541-sau-nhan-thieu-20261108.json` | STG | `GET …/purchase-orders/<poId>/receiving` | Sau: **`shipments` rỗng** (phiếu gửi đã dùng), PO `PARTIALLY_RECEIVED`, 1 biên nhận. `f1a13ae2` |
 | `nw-stg-receiving-search-q-SOBD1594067-sau-nhan-thieu-20261108.json` | STG | `GET /api/v1/inter-tenant-orders/receiving?q=SOBD1594067` | Vẫn trả đơn: `PARTIALLY_RECEIVED`, `openShipmentCount 0`. `631a43c1` |
+
+**Bổ sung cho v0.4.1 (08/11, chỉ đọc qua Chrome máy dev).**
+
+| File | Môi trường | Nguồn | Ghi chú |
+|---|---|---|---|
+| `po-prod-PO01974970-tach-20261108.json` | PRD | `GET /v1/pos/<posId>/po/<poId>` | PO của case GR84673 → GR84803 (cả hai COMPLETED): 18 dòng, `received_quantity` theo đơn vị dòng; Femalto có hai dòng lô cùng lô (gốc SL 1 nhận 0 + thêm lại tay SL 0 nhận 1). Kiểm SHA-256 với trang. `52abe099` |
+| `nw-stg-receive-modal-markers-20261108.json` | STG | DOM modal "Nhận hàng bằng cách quét" (PO11623096, **không xác nhận**) | Dấu hiệu cấu trúc: `[role=dialog]` trong `#NwcPortalsContainer`, `input#scan-receive-qr`, câu "Quét tem của phiếu gửi IT-…", radio `keep_open` (chọn sẵn) / `close_short`, nút "Kết nối đầu đọc". Máy dev: Nextwaves staging chưa cấp quyền cổng serial; kết nối hỏng không có thông báo. `37439ca5` |
