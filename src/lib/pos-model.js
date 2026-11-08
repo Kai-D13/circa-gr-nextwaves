@@ -276,7 +276,29 @@
     return a;
   }
 
-  const lib = { normalizeGr, normalizePo, normalizeGrSearch, normalizeGrSearchPage, checkSoGrs, soWriteLock, remainderOf, isReceivable, resolveDelivery, grFingerprintSource, normalizeQrLookup, grPageAnchor, RECEIVABLE };
+  // ---- QR Scan Log (extension khác): CHỈ ĐỌC + một cú bấm "Ngắt kết nối" khi dược sĩ bấm "Lấy đầu đọc cho Nextwaves" (v0.4.1) ----
+  // Hợp đồng tạm (docs/dev/REQUEST-QSL-v0.4.1-DAU-DOC.md §3, QR Scan Log 0.9.6): host #circa-rfid-demo-root (shadow root `open`, ẩn bằng
+  // style.display = "none" ngoài /ban-hang/<UUID>), panel #circa-rfid-demo-panel mang data-connection / data-state, nút Ngắt
+  // button[data-action="disconnect"]; Web Lock "circa-qr-scan-log:rfid-reader" nhả sau khi đóng cổng. Đọc DOM được truyền vào.
+  // → {present, displayed, connection, state, holding, busy, button} (button = nút Ngắt đang bật, hoặc null).
+  const QSL_HOST_ID = "circa-rfid-demo-root";
+  const QSL_LOCK = "circa-qr-scan-log:rfid-reader";
+  const QSL_HOLDING = new Set(["connected", "waiting_clear", "paused"]);
+  function qslView(doc) {
+    const host = doc && typeof doc.getElementById === "function" ? doc.getElementById(QSL_HOST_ID) : null;
+    if (!host) return { present: false, displayed: false, connection: "", state: "", holding: false, busy: false, button: null };
+    const displayed = !(host.style && host.style.display === "none");
+    const root = host.shadowRoot || null;
+    const q = (sel) => (root && typeof root.querySelector === "function" ? root.querySelector(sel) : null);
+    const panel = q("#circa-rfid-demo-panel");
+    const attr = (n) => (panel && typeof panel.getAttribute === "function" ? String(panel.getAttribute(n) || "") : "");
+    const connection = attr("data-connection");
+    const state = attr("data-state");
+    const btn = q('button[data-action="disconnect"]');
+    return { present: true, displayed, connection, state, holding: displayed && QSL_HOLDING.has(connection), busy: state === "processing", button: btn && !btn.disabled ? btn : null };
+  }
+
+  const lib = { normalizeGr, normalizePo, normalizeGrSearch, normalizeGrSearchPage, checkSoGrs, soWriteLock, remainderOf, isReceivable, resolveDelivery, grFingerprintSource, normalizeQrLookup, grPageAnchor, qslView, QSL_LOCK, RECEIVABLE };
   root.__CGN__ = root.__CGN__ || {};
   root.__CGN__.pos = lib;
   if (typeof module !== "undefined" && module.exports) module.exports = lib;

@@ -32,7 +32,7 @@
 importScripts("lib/env.js", "lib/keys.js");
 const E = self.__CGN__.env;
 const K = self.__CGN__.keys;
-const T = Object.assign({ leaseMs: 90 * 1000, retryCooldownMs: 60 * 1000, readerTtlMs: 15 * 60 * 1000, readerRelayMs: 7000, nwCloseDelayMs: 500, readerReturnTries: 5, readerReturnGapMs: 2000 }, self.__CGN__.tuning || {});
+const T = Object.assign({ leaseMs: 90 * 1000, retryCooldownMs: 60 * 1000, readerTtlMs: 15 * 60 * 1000, readerRelayMs: 7000, nwCloseDelayMs: 500, readerReturnTries: 5, readerReturnGapMs: 2000, qslStatusMs: 1200, qslReleaseWaitMs: 7500 }, self.__CGN__.tuning || {});
 // Lượt mượn đầu đọc còn hiệu lực (chưa trả / chưa bị QR Scan Log coi là lạ) → dùng lại leaseId để gia hạn; ngược lại lượt mới.
 const LEASE_DONE = new Set(["returned", "return_failed", "unknown_lease"]);
 const newLeaseId = () => "gr" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
@@ -735,7 +735,79 @@ async function onTabRemoved(tabId) {
 if (chrome.tabs && chrome.tabs.onRemoved) chrome.tabs.onRemoved.addListener((tabId) => serial(() => onTabRemoved(tabId)));
 
 // Lệnh chạy NGOÀI hàng đợi serial (chờ tab khác trả lời, không giữ hàng đợi).
-const OUTSIDE = { "reader:lend": readerLendFromNw };
+// ---------- v0.4.1: đầu đọc bị QR Scan Log giữ (bấm hộ Ngắt — operator 08/11) ----------
+// Tab Nextwaves (màn quét của phiên, hoặc modal nhận hàng mở thẳng từ trang PO — có thể không có phiên) hỏi trạng thái QR Scan Log ở các
+// tab POS của môi trường, và CHỈ khi dược sĩ bấm "Lấy đầu đọc cho Nextwaves" mới nhờ đúng MỘT tab đang giữ đầu đọc bấm "Ngắt kết nối".
+// Chỉ nhận từ trang Nextwaves đúng tenant đang chọn. Không gửi gì cho QR Scan Log ngoài cú bấm đó (pos-content làm, sau khi tự kiểm).
+async function nwEnvOfSender(sender, what) {
+  const env = E.envFromConfig(await getConfig());
+  if (!env) throw new Error(`${what}: chưa chọn môi trường`);
+  requireOrigin(sender, env.nwUiOrigin, what);
+  return env;
+}
+
+async function qslStatusAll(env) {
+  let tabs = [];
+  try {
+    tabs = (await chrome.tabs.query({ url: env.posOrigin + "/*" })) || [];
+  } catch (_) {
+    tabs = [];
+  }
+  const out = [];
+  for (const t of tabs) {
+    if (!Number.isInteger(t.id)) continue;
+    const r = await sendToTab(t.id, { type: "cgn:qsl-status" }, T.qslStatusMs);
+    if (r && r.ok && r.present) out.push({ tabId: t.id, displayed: !!r.displayed, connection: shortStr(r.connection, 20), state: shortStr(r.state, 20), holding: !!r.holding, busy: !!r.busy, canRelease: !!r.canRelease });
+  }
+  return out;
+}
+
+async function readerQslStatus(msg, sender) {
+  const env = await nwEnvOfSender(sender, "reader:qslStatus");
+  const all = await qslStatusAll(env);
+  const holders = all.filter((x) => x.holding);
+  return { present: all.length, holders: holders.length, busy: holders.some((x) => x.busy), canRelease: holders.length === 1 && holders[0].canRelease };
+}
+
+async function readerTakeFromQsl(msg, sender) {
+  const env = await nwEnvOfSender(sender, "reader:takeFromQsl");
+  // Phiên (nếu tab có phiên): chỉ để ghi nhật ký + nhắc "Kết nối RFID lại" trên khung POS sau lượt.
+  let key = null;
+  if (msg && typeof msg.key === "string") {
+    const s = (await getSessions())[msg.key];
+    if (s && isCurrent(s) && envOf(s).nwUiOrigin.toLowerCase() === env.nwUiOrigin.toLowerCase()) key = s.key;
+  }
+  const done = async (r) => {
+    if (key) await serial(() => updateSession(key, r.ok ? { readerTakenAt: Date.now() } : null, { type: "reader_qsl_release", ok: !!r.ok, reason: r.reason || null })).catch(() => {});
+    return r;
+  };
+  const holders = (await qslStatusAll(env)).filter((x) => x.holding);
+  if (holders.length !== 1) return done({ ok: false, reason: holders.length ? "many_holders" : "no_holder", holders: holders.length });
+  if (holders[0].busy) return done({ ok: false, reason: "busy" });
+  const r = await sendToTab(holders[0].tabId, { type: "cgn:qsl-release" }, T.qslReleaseWaitMs);
+  return done(r ? { ok: !!r.ok, reason: r.ok ? null : shortStr(r.reason, 30) || "error", released: !!r.released } : { ok: false, reason: "no_answer" });
+}
+
+// "Mở tab bán hàng": tab đang giữ đầu đọc (đúng một) → tab có khung QR Scan Log đang hiện → tab /ban-hang bất kỳ.
+async function readerFocusSale(msg, sender) {
+  const env = await nwEnvOfSender(sender, "reader:focusSale");
+  const all = await qslStatusAll(env);
+  const holders = all.filter((x) => x.holding);
+  let tabId = holders.length === 1 ? holders[0].tabId : (all.find((x) => x.displayed) || {}).tabId;
+  if (!Number.isInteger(tabId)) {
+    try {
+      const t = ((await chrome.tabs.query({ url: env.posOrigin + "/ban-hang/*" })) || [])[0];
+      tabId = t ? t.id : null;
+    } catch (_) {
+      tabId = null;
+    }
+  }
+  if (!Number.isInteger(tabId)) return { ok: false, reason: "no_sale_tab" };
+  await openOrFocus(tabId, null);
+  return { ok: true };
+}
+
+const OUTSIDE = { "reader:lend": readerLendFromNw, "reader:qslStatus": readerQslStatus, "reader:takeFromQsl": readerTakeFromQsl, "reader:focusSale": readerFocusSale };
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   const type = msg && msg.type;

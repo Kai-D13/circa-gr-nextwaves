@@ -478,8 +478,11 @@ test("07/11 chưa tích hợp QR Scan Log: hết 3 lần bấm (cổng bị tab 
     assert.equal(clicks, 0, "tab ẩn → không bấm");
     nw.dom.hidden = false;
     await until(() => clicks === 3, 3000);
-    await until(() => nw.view && nw.view.lines.some((l) => /^Đầu đọc: đang bận ở tab khác — sang tab bán hàng bấm Ngắt RFID rồi quay lại tab này/.test(l)));
+    // v0.4.1: chữ "Ngắt kết nối" (đúng nhãn nút QR Scan Log); không thấy QR Scan Log giữ → vẫn hướng dẫn Ngắt rồi quay lại + nút mở tab bán hàng.
+    await until(() => nw.view && nw.view.lines.some((l) => /^Đầu đọc: .*Ngắt kết nối( ở đó)? rồi quay lại tab này/.test(l)));
     assert.ok(!(nw.view.buttons || []).some((x) => x.label === "Mượn lại đầu đọc"), "không có QR Scan Log → không có nút mượn");
+    assert.ok((nw.view.buttons || []).some((x) => x.label === "Mở tab bán hàng"));
+    assert.ok(!(nw.view.buttons || []).some((x) => x.label === "Lấy đầu đọc cho Nextwaves"), "không thấy QR Scan Log giữ → không có nút bấm hộ Ngắt");
     await settle(300);
     assert.equal(clicks, 3, "không rời tab → không bấm thêm");
     nw.dom.hidden = true; // dược sĩ sang tab bán hàng bấm Ngắt

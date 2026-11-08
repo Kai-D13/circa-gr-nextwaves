@@ -23,7 +23,7 @@
   const N = C.nw;
   const R = C.resolve;
   const M = C.match;
-  const T = Object.assign({ pollMs: 700, collectTries: 6, collectDelayMs: 1500, httpTimeoutMs: 30000, authWaitMs: 20000, readerPollMs: 1000, readerFirstClickMs: 1500, readerGapMs: 10000, readerMaxClicks: 3, readerRenewMs: 10 * 60 * 1000, readerRetryMs: 15000, readerRetryMax: 8 }, C.tuning || {});
+  const T = Object.assign({ pollMs: 700, collectTries: 6, collectDelayMs: 1500, httpTimeoutMs: 30000, authWaitMs: 20000, readerPollMs: 1000, readerFirstClickMs: 1500, readerGapMs: 10000, readerMaxClicks: 3, readerRenewMs: 10 * 60 * 1000, readerRetryMs: 15000, readerRetryMax: 8, readerFastMs: 6000, readerFastGapMs: 1500, qslAskMs: 5000 }, C.tuning || {});
   const HOOK = "cgn/nw-hook";
   const ME = "cgn/nw-content";
   // Khung không được che nút nhận hàng của màn quét.
@@ -62,9 +62,11 @@
   let sessionsSig = ""; // chữ ký gọn của mọi phiên (bỏ log) — chỉ đánh giá lại khi đổi
   let authWaitTimer = null;
   let curSession = null; // phiên của trang (để vẽ dòng đầu đọc)
-  const rd = { state: "none", since: 0, clicks: [], lastClick: 0, gaveUp: false, el: null, away: false }; // đầu đọc của màn quét (el = đúng nút đầu đọc; away = dược sĩ đã rời tab)
+  const rd = { state: "none", since: 0, clicks: [], lastClick: 0, gaveUp: false, el: null, away: false, fastUntil: 0 }; // đầu đọc của màn quét (el = đúng nút đầu đọc; away = dược sĩ đã rời tab)
   const lend = { key: null, last: 0, tries: 0 }; // gia hạn / mượn lại đầu đọc của phiên đang mở (QR Scan Log)
   let lastChoice = null; // lựa chọn khi thiếu trên modal nhận hàng đã vẽ gần nhất (v0.4.1)
+  // v0.4.1 — đầu đọc cho modal nhận hàng (kể cả không phiên): modal mở / phiếu gửi, trạng thái QR Scan Log, đang lấy / đã lấy đầu đọc.
+  const rh = { open: false, shipment: null, status: null, asking: false, lastAsk: 0, taking: false, taken: false, msg: null, reminder: false };
 
   async function bg(type, extra) {
     const r = await chrome.runtime.sendMessage(Object.assign({ type }, extra || {}));
@@ -144,7 +146,8 @@
       ctx = null;
       curSession = null;
       pendingScan = null;
-      return panel.hide();
+      // v0.4.1: trang khác màn quét (vd. trang PO Nextwaves) — chỉ còn khung đầu đọc khi đang mở modal nhận hàng (readerTick vẽ).
+      return rh.open ? renderHelper() : panel.hide();
     }
     const s = await bg("session:findByNw", { envId: env.id, tenant: env.nwTenant, po: page.po });
     curSession = s;
@@ -450,6 +453,32 @@
     return stop ? { btn: null, state: "reading", tracked: false } : { btn: null, state: "none", tracked: false };
   }
 
+  // v0.4.1 — modal "Nhận hàng bằng cách quét" (trang PO Nextwaves hoặc màn quét /receive): dấu hiệu cấu trúc ổn định (DOM chụp 08/11,
+  // samples/nw-stg-receive-modal-markers-20261108.json): ô quét #scan-receive-qr nằm trong [role=dialog]; câu "Quét tem của phiếu gửi
+  // IT-…". Không dựa vào chữ nút đầu đọc (đổi theo trạng thái) hay radio (chỉ có khi còn thiếu).
+  function receiveModal() {
+    // Chỉ trên Nextwaves của tenant đang chọn (content script chạy trên mọi *.nextwaves.app).
+    const env = E.envFromConfig(config);
+    if (!env || String(location.origin || "").toLowerCase() !== env.nwUiOrigin.toLowerCase()) return { open: false, shipment: null };
+    const doc = typeof document !== "undefined" ? document : null;
+    const input = doc && typeof doc.getElementById === "function" ? doc.getElementById("scan-receive-qr") : null;
+    const dlg = input && typeof input.closest === "function" ? input.closest('[role="dialog"]') : null;
+    if (!dlg) return { open: false, shipment: null };
+    const m = /Quét tem của phiếu gửi (IT-[A-Z0-9-]+)/i.exec(String(dlg.textContent || ""));
+    return { open: true, shipment: m ? m[1].toUpperCase() : null };
+  }
+
+  const RH_REASON = {
+    busy: "tab bán hàng đang gửi tem vào giỏ — đợi gửi xong rồi bấm lại",
+    no_holder: "không thấy tab bán hàng nào đang giữ đầu đọc",
+    many_holders: "có nhiều tab bán hàng đang mở — bấm “Mở tab bán hàng” rồi Ngắt kết nối ở đó",
+    lock_timeout: "đã bấm Ngắt nhưng tab bán hàng chưa nhả đầu đọc — đợi vài giây rồi bấm lại",
+    not_holding: "tab bán hàng không còn giữ đầu đọc",
+    no_button: "không bấm được nút Ngắt của QR Scan Log — mở tab bán hàng để Ngắt tay",
+    click_failed: "không bấm được nút Ngắt của QR Scan Log — mở tab bán hàng để Ngắt tay",
+    no_answer: "tab bán hàng không trả lời — mở tab bán hàng để Ngắt tay",
+  };
+
   function readerLine() {
     const s = curSession;
     const sup = s && s.reader ? s.reader : null;
@@ -460,24 +489,159 @@
       case "busy":
         return "Đầu đọc: đang kết nối…";
       case "connected":
-        return "Đầu đọc: đã kết nối." + lent;
-      case "disconnected":
-        if (rd.gaveUp) return sup && sup.supported ? "Đầu đọc: chưa kết nối được — bấm “Mượn lại đầu đọc”, hoặc bấm “Kết nối đầu đọc” của Nextwaves." : "Đầu đọc: đang bận ở tab khác — sang tab bán hàng bấm Ngắt RFID rồi quay lại tab này, extension tự kết nối lại.";
-        return "Đầu đọc: chưa kết nối — extension đang tự kết nối…";
+        return "Đầu đọc: đã kết nối." + lent + (rh.taken ? " Đã lấy từ tab bán hàng — xong việc, sang tab bán hàng bấm “Kết nối RFID” để bán tiếp." : "");
+      case "disconnected": {
+        if (rh.taking) return "Đầu đọc: đang lấy từ tab bán hàng…";
+        if (!rd.gaveUp) return "Đầu đọc: chưa kết nối — extension đang tự kết nối…";
+        if (sup && sup.supported) return "Đầu đọc: chưa kết nối được — bấm “Mượn lại đầu đọc”, hoặc bấm “Kết nối đầu đọc” của Nextwaves.";
+        const why = rh.msg ? ` (${rh.msg})` : "";
+        const st = rh.status;
+        if (st && st.holders === 1) {
+          return st.busy
+            ? `Đầu đọc: tab bán hàng (QR Scan Log) đang giữ và đang gửi tem vào giỏ — đợi xong rồi bấm “Lấy đầu đọc cho Nextwaves”.${why}`
+            : `Đầu đọc: tab bán hàng (QR Scan Log) đang giữ — bấm “Lấy đầu đọc cho Nextwaves”.${why}`;
+        }
+        if (st && st.holders > 1) return `Đầu đọc: nhiều tab bán hàng đang mở — bấm “Mở tab bán hàng”, Ngắt kết nối ở đó rồi quay lại tab này (extension tự kết nối).${why}`;
+        // Không thấy QR Scan Log giữ (hoặc QR Scan Log đổi giao diện — extension không nhận ra): vẫn giữ hướng dẫn cũ + khả năng khác.
+        if (st && st.holders === 0) return `Đầu đọc: chưa kết nối được. Nếu tab bán hàng đang dùng RFID: bấm “Mở tab bán hàng”, Ngắt kết nối ở đó rồi quay lại tab này (extension tự kết nối). Nếu không: kiểm cáp đầu đọc, hoặc bấm “Kết nối đầu đọc” của Nextwaves (lần đầu chọn cổng).${why}`;
+        return `Đầu đọc: đang bận ở tab khác — sang tab bán hàng bấm Ngắt kết nối rồi quay lại tab này, extension tự kết nối lại.${why}`;
+      }
       default:
         return "";
     }
   }
 
+  // Nút đầu đọc trên khung (có phiên: renderReady; không phiên: renderHelper). Chỉ khi đã tự bấm hết lượt mà vẫn chưa kết nối.
+  function readerButtons() {
+    const out = [];
+    if (rd.state !== "disconnected" || !rd.gaveUp || rh.taking) return out;
+    const sup = curSession && curSession.reader && curSession.reader.supported;
+    if (sup) return out;
+    if (rh.status && rh.status.holders === 1 && !rh.status.busy) out.push({ label: "Lấy đầu đọc cho Nextwaves", onClick: () => takeFromQsl() });
+    out.push({ label: "Mở tab bán hàng", secondary: true, onClick: () => bg("reader:focusSale").catch(() => {}) });
+    return out;
+  }
+
+  // Khung khi KHÔNG có phiên mà đang mở modal nhận hàng (vd. trang PO Nextwaves): chỉ lo đầu đọc. Có phiên → renderReady lo.
+  function renderHelper() {
+    if (ctx) return renderReady();
+    if (!rh.open) {
+      if (rh.reminder) {
+        return panel.show({
+          tone: "info",
+          title: "Đầu đọc: nhận hàng xong",
+          lines: ["Extension đã lấy đầu đọc từ tab bán hàng cho lượt nhận này. Sang tab bán hàng bấm “Kết nối RFID” (chọn cổng) để bán tiếp."],
+          buttons: [
+            { label: "Mở tab bán hàng", onClick: () => bg("reader:focusSale").catch(() => {}) },
+            {
+              label: "Đóng",
+              secondary: true,
+              onClick: () => {
+                rh.reminder = false;
+                panel.hide();
+              },
+            },
+          ],
+        });
+      }
+      return panel.hide();
+    }
+    const line = readerLine();
+    // Đầu đọc đã kết nối / đang quét và không có gì để báo → không che màn quét.
+    if (!line || ((rd.state === "connected" || rd.state === "reading") && !rh.taken)) return panel.hide();
+    const warn = rd.state === "disconnected" && rd.gaveUp;
+    panel.show({ tone: warn ? "warn" : "info", title: "Đầu đọc cho màn nhận hàng", lines: [line].concat(rh.shipment ? [`Phiếu gửi ${rh.shipment}.`] : []), buttons: readerButtons() });
+  }
+  const rerender = () => (ctx ? renderReady() : renderHelper());
+
+  // Hỏi trạng thái QR Scan Log ở các tab POS (chỉ đọc) khi đã tự bấm hết lượt mà vẫn chưa kết nối — tối đa mỗi qslAskMs một lần.
+  function askQsl(now) {
+    if (rh.asking || now - rh.lastAsk < T.qslAskMs) return;
+    rh.asking = true;
+    rh.lastAsk = now;
+    bg("reader:qslStatus")
+      .then((st) => {
+        rh.status = st || null;
+      })
+      .catch(() => {
+        rh.status = null;
+      })
+      .finally(() => {
+        rh.asking = false;
+        rerender();
+      });
+  }
+
+  // Dược sĩ bấm "Lấy đầu đọc cho Nextwaves": background nhờ tab bán hàng đang giữ bấm "Ngắt kết nối" (QR Scan Log) và chờ cổng trống,
+  // rồi tab này bấm "Kết nối đầu đọc" NGAY (còn trong hiệu lực cú bấm của dược sĩ — lần đầu Chrome có thể hỏi chọn cổng).
+  async function takeFromQsl() {
+    if (rh.taking) return;
+    rh.taking = true;
+    rh.msg = null;
+    rerender();
+    let r = null;
+    try {
+      r = await bg("reader:takeFromQsl", { key: ctx ? ctx.key : null });
+    } catch (e) {
+      r = { ok: false, reason: "no_answer" };
+    }
+    rh.taking = false;
+    if (r && r.ok) {
+      rh.taken = true;
+      rd.clicks = [];
+      rd.gaveUp = false;
+      rd.lastClick = 0;
+      rd.since = 0;
+      rd.fastUntil = Date.now() + T.readerFastMs;
+      connectNow();
+    } else {
+      rh.msg = RH_REASON[(r && r.reason) || "no_answer"] || String((r && r.reason) || "lỗi");
+      rh.lastAsk = 0; // hỏi lại trạng thái ngay lượt sau
+    }
+    rerender();
+  }
+
+  // Bấm "Kết nối đầu đọc" của Nextwaves một lần (đường dùng lại cổng đã cấp quyền).
+  function connectNow() {
+    const r = readerButton();
+    if (r.state !== "disconnected" || !r.btn || r.btn.disabled) return;
+    const now = Date.now();
+    rd.clicks.push(now);
+    rd.lastClick = now;
+    try {
+      r.btn.click();
+    } catch (_) {
+      /* bỏ qua */
+    }
+    if (ctx) logTo(ctx.key, { type: "reader_connect_click", n: rd.clicks.length, after: rh.taken ? "qsl_release" : null });
+  }
+
   function readerTick() {
+    const now = Date.now();
+    // v0.4.1: modal nhận hàng mở / đóng (cả khi không có phiên).
+    const modal = receiveModal();
+    if (modal.open !== rh.open || modal.shipment !== rh.shipment) {
+      const closed = rh.open && !modal.open;
+      rh.open = modal.open;
+      rh.shipment = modal.shipment;
+      if (closed) {
+        // Đóng modal: lượt bấm / lượt hỏi của modal cũ hết hiệu lực; đã lấy đầu đọc từ tab bán hàng → nhắc kết nối lại ở đó.
+        Object.assign(rd, { clicks: [], gaveUp: false, lastClick: 0, since: now, fastUntil: 0 });
+        if (rh.taken) rh.reminder = true;
+        Object.assign(rh, { status: null, msg: null, taken: false, lastAsk: 0 });
+      } else if (modal.open) rh.reminder = false;
+      rerender();
+    }
     // v0.4.1: phiếu phần còn lại — dược sĩ đổi lựa chọn khi thiếu (Giữ đơn mở / Đóng đơn) → vẽ lại dòng hướng dẫn / cảnh báo.
     const choice = missingChoice();
     if (choice !== lastChoice) {
       lastChoice = choice;
       if (ctx && ctx.remainder) renderReady();
     }
+    lendTick(now);
+    // Audit v0.4.0 P3-10: chỉ quét nút đầu đọc khi có màn quét của phiên hoặc modal nhận hàng — không quét mọi trang Nextwaves mỗi giây.
+    if (!ctx && !rh.open) return;
     const r = readerButton();
-    const now = Date.now();
     if (r.state !== rd.state) {
       rd.state = r.state;
       rd.since = now;
@@ -485,12 +649,12 @@
       if (r.tracked && (r.state === "connected" || r.state === "reading")) {
         rd.clicks = [];
         rd.gaveUp = false;
+        rh.msg = null;
       }
-      if (ctx) renderReady();
+      rerender();
     }
-    lendTick(now);
     const hidden = typeof document !== "undefined" && document.visibilityState === "hidden";
-    // 07/11 (chưa tích hợp QR Scan Log): hết lượt bấm vì cổng bị tab bán hàng giữ → dược sĩ sang tab bán hàng Ngắt RFID rồi QUAY LẠI
+    // 07/11 (chưa tích hợp QR Scan Log): hết lượt bấm vì cổng bị tab bán hàng giữ → dược sĩ sang tab bán hàng Ngắt rồi QUAY LẠI
     // tab này → mở một lượt bấm mới (vẫn tối đa readerMaxClicks lần, cách readerGapMs). Không quay lại thì không bấm thêm.
     if (hidden) rd.away = true;
     else if (rd.away) {
@@ -499,28 +663,26 @@
         rd.clicks = [];
         rd.gaveUp = false;
         rd.since = now;
-        if (ctx) renderReady();
+        rerender();
       }
     }
-    if (!ctx || r.state !== "disconnected" || !r.btn || hidden) return;
-    // Cho màn quét tự kết nối trước (autoConnect của Nextwaves), rồi mới bấm; tối đa readerMaxClicks lần cho MỘT lượt mất kết nối,
-    // cách readerGapMs. Hết lượt: chờ dược sĩ ("Mượn lại đầu đọc" / Ngắt RFID ở tab bán hàng) — không bấm lặp mãi.
-    if (now - rd.since < T.readerFirstClickMs || now - rd.lastClick < T.readerGapMs || r.btn.disabled) return;
-    if (rd.clicks.length >= T.readerMaxClicks) {
-      if (!rd.gaveUp) {
-        rd.gaveUp = true;
-        renderReady();
-      }
+    if (r.state !== "disconnected" || !r.btn || hidden) return;
+    if (rd.gaveUp) {
+      if (!(curSession && curSession.reader && curSession.reader.supported)) askQsl(now);
       return;
     }
-    rd.clicks.push(now);
-    rd.lastClick = now;
-    try {
-      r.btn.click();
-    } catch (_) {
-      /* bỏ qua */
+    // Cho màn quét tự kết nối trước (autoConnect của Nextwaves), rồi mới bấm; tối đa readerMaxClicks lần cho MỘT lượt mất kết nối,
+    // cách readerGapMs (ngay sau khi lấy đầu đọc từ tab bán hàng: cách readerFastGapMs). Hết lượt: hỏi QR Scan Log, chờ dược sĩ bấm.
+    const fast = now < (rd.fastUntil || 0);
+    if ((!fast && now - rd.since < T.readerFirstClickMs) || now - rd.lastClick < (fast ? T.readerFastGapMs : T.readerGapMs) || r.btn.disabled) return;
+    if (rd.clicks.length >= T.readerMaxClicks) {
+      rd.gaveUp = true;
+      rh.lastAsk = 0;
+      if (!(curSession && curSession.reader && curSession.reader.supported)) askQsl(now);
+      rerender();
+      return;
     }
-    logTo(ctx.key, { type: "reader_connect_click", n: rd.clicks.length });
+    connectNow();
   }
 
   // Lượt mượn đầu đọc có hạn (TTL ở QR Scan Log): gia hạn mỗi readerRenewMs khi phiên còn ở màn quét; QR Scan Log bận / không trả lời
@@ -588,6 +750,7 @@
       { label: "Về POS", secondary: true, onClick: () => bg("session:focusPos", { key }) },
     ];
     if (rd.state === "disconnected" && rd.gaveUp && curSession && curSession.reader && curSession.reader.supported) buttons.unshift({ label: "Mượn lại đầu đọc", onClick: () => lendAgain() });
+    buttons.unshift(...readerButtons()); // v0.4.1: "Lấy đầu đọc cho Nextwaves" / "Mở tab bán hàng" (QR Scan Log chưa có circa-reader/v1)
     panel.show({
       tone: note ? note.tone : choiceWarn ? "warn" : "info",
       title: note ? note.title : "Sẵn sàng nhận hàng",

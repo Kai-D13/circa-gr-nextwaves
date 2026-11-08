@@ -26,7 +26,7 @@
   const PL = C.plan;
   const A = C.apply;
   const L = C.grList;
-  const T = Object.assign({ pollMs: 3000, qrConcurrency: 4, reloadDelayMs: 800, httpTimeoutMs: 30000, leaseRenewMs: 15000, qrTtlMs: 10 * 60 * 1000, listSessionsDebounceMs: 300, autoAnchorWaitMs: 8000, readerPingMs: 300, readerLendMs: 5500, readerTtlMs: 15 * 60 * 1000 }, C.tuning || {});
+  const T = Object.assign({ pollMs: 3000, qrConcurrency: 4, reloadDelayMs: 800, httpTimeoutMs: 30000, leaseRenewMs: 15000, qrTtlMs: 10 * 60 * 1000, listSessionsDebounceMs: 300, autoAnchorWaitMs: 8000, readerPingMs: 300, readerLendMs: 5500, readerTtlMs: 15 * 60 * 1000, qslPollMs: 200, qslReleaseMs: 5000 }, C.tuning || {});
   const HOOK = "cgn/pos-hook";
   const ME = "cgn/pos-content";
   // Khung nổi: trang /chi-tiet-so và báo lỗi giao diện khi trang phiếu không có chỗ gắn khung. Không che nút thao tác của phiếu
@@ -217,6 +217,49 @@
       if (msg.cmd === "return") return (await readerAsk({ type: "return", leaseId: msg.leaseId }, T.readerLendMs)) || { ok: false, reason: "no_answer" };
       if (msg.cmd === "lend") return (await readerAsk({ type: "lend", leaseId: msg.leaseId, ttlMs: msg.ttlMs || T.readerTtlMs, label: String(msg.label || "").slice(0, 40) }, T.readerLendMs)) || { ok: false, reason: "no_answer" };
       return { ok: false, reason: "bad_request" };
+    })().then(reply, () => reply({ ok: false, reason: "error" }));
+    return true;
+  });
+
+  // v0.4.1 — đầu đọc bị QR Scan Log giữ (operator 08/11: bấm hộ "Ngắt kết nối" của QR Scan Log, CHỈ khi dược sĩ bấm "Lấy đầu đọc cho
+  // Nextwaves" trên tab Nextwaves). Background hỏi trạng thái (chỉ đọc) rồi nhờ đúng MỘT tab bấm. QR Scan Log đang gửi tem vào giỏ
+  // (data-state = processing) → không bấm (Ngắt của QR Scan Log 0.9.6 huỷ lượt đang gửi). Bấm xong chờ QR Scan Log nhả Web Lock (cổng
+  // đã đóng) rồi mới trả lời — tab Nextwaves kết nối ngay sau đó.
+  async function qslLockFree() {
+    const nav = typeof navigator !== "undefined" ? navigator : null;
+    try {
+      if (nav && nav.locks && typeof nav.locks.query === "function") {
+        const q = await nav.locks.query();
+        return !((q && q.held) || []).some((l) => l && l.name === P.QSL_LOCK);
+      }
+    } catch (_) {
+      /* không đọc được khoá → dựa vào trạng thái khung QR Scan Log */
+    }
+    return !P.qslView(document).holding;
+  }
+  chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+    if (!msg || (msg.type !== "cgn:qsl-status" && msg.type !== "cgn:qsl-release") || !sender || sender.id !== chrome.runtime.id || sender.tab) return undefined;
+    if (msg.type === "cgn:qsl-status") {
+      const v = P.qslView(document);
+      reply({ ok: true, present: v.present, displayed: v.displayed, connection: v.connection, state: v.state, holding: v.holding, busy: v.busy, canRelease: !!v.button });
+      return undefined;
+    }
+    (async () => {
+      const v = P.qslView(document);
+      if (!v.holding) return { ok: false, reason: "not_holding" };
+      if (v.busy) return { ok: false, reason: "busy" };
+      if (!v.button) return { ok: false, reason: "no_button" };
+      try {
+        v.button.click();
+      } catch (_) {
+        return { ok: false, reason: "click_failed" };
+      }
+      const t0 = Date.now();
+      for (;;) {
+        await new Promise((r) => setTimeout(r, T.qslPollMs));
+        if (await qslLockFree()) return { ok: true, released: true, ms: Date.now() - t0 };
+        if (Date.now() - t0 >= T.qslReleaseMs) return { ok: false, reason: "lock_timeout" };
+      }
     })().then(reply, () => reply({ ok: false, reason: "error" }));
     return true;
   });
