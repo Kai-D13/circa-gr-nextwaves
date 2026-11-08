@@ -1,0 +1,30 @@
+{
+  "_note": "STG 08/11 sau lượt nhận thiếu: GET inter-tenant-orders/receiving?q=SOBD1594067 (đúng API extension tìm đơn) VẪN trả đơn, purchaseOrderStatus PARTIALLY_RECEIVED, openShipmentCount 0. (Nhận đủ thì total 0 — T3 25/10.)",
+  "_trim_sha256": "1c51535c5be824d7d7492a9c34bb22bf285aa9e109f3884554173d2633e40bf5",
+  "method": "GET",
+  "path": "/api/v1/inter-tenant-orders/receiving",
+  "status": 200,
+  "request": null,
+  "response": {
+    "items": [
+      {
+        "id": "6c3d3dac-6d41-46a8-a4b3-78e2f89e55d5",
+        "purchaseOrderId": "8abcf006-3126-4d2d-b80d-5a591a0276c2",
+        "purchaseOrderNumber": "PO69611541",
+        "purchaseOrderStatus": "PARTIALLY_RECEIVED",
+        "counterparty": {
+          "tenantSlug": "buymed-stag"
+        },
+        "origin": "seller",
+        "status": "shipped",
+        "warehouse": {
+          "id": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57"
+        },
+        "openShipmentCount": 0,
+        "updatedAt": "2026-11-08T04:20:46.287Z"
+      }
+    ],
+    "total": 1
+  },
+  "query": "q=SOBD1594067"
+}

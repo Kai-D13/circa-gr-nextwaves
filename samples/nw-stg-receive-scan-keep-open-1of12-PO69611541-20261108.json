@@ -1,0 +1,128 @@
+{
+  "_note": "STG 08/11 11:20: 'Xác nhận nhận hàng' chỉ với 1 EPC (Soffell) + chọn 'Giữ đơn mở'. POST inter-tenant-shipments/<id>/receive-scan {onMissing: keep_open, epcs: [1]} → 200, orderStatus open, nhận 1 / thiếu 11, từng dòng có missingEpcs / missingUnitUids.",
+  "_trim_sha256": "0236640517c31bfce6a26b7d7efaaf2dc040a478023f0bc3886f682f134612a6",
+  "method": "POST",
+  "path": "/api/v1/inter-tenant-shipments/5c26a2c6-f503-4fc4-9b05-6314442d3c94/receive-scan",
+  "status": 200,
+  "request": {
+    "onMissing": "keep_open",
+    "epcs": [
+      "53494D0030136C6ECFF8C05D"
+    ]
+  },
+  "response": {
+    "id": "b2328ab6-476a-4fc4-9414-839908e8b342",
+    "shipmentId": "5c26a2c6-f503-4fc4-9b05-6314442d3c94",
+    "shipmentDocumentId": "a577d578-a8fe-416f-95a4-c0b9467ce3f9",
+    "shipmentNumber": "IT-BUYMED-STAG-20261026031756-6410",
+    "onMissing": "keep_open",
+    "orderStatus": "open",
+    "expectedQuantity": 12,
+    "receivedQuantity": 1,
+    "missingQuantity": 11,
+    "unexpectedEpcs": [],
+    "unexpectedUnitUids": [],
+    "truncated": false,
+    "lines": [
+      {
+        "lineId": "a454d1f8-8c58-4c84-8173-29c06fa1e838",
+        "orderLineId": null,
+        "purchaseOrderItemId": "bf7f6528-296b-49e8-acc1-94480e1542db",
+        "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+        "productTitle": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+        "unit": "vỉ",
+        "expected": 3,
+        "received": 0,
+        "missing": 3,
+        "missingEpcs": [
+          "53494D005D4E3146CF388BC8",
+          "53494D00E73FC66C77A6ABB4",
+          "53494D00D3A1AA7D3D620CC7"
+        ],
+        "missingUnitUids": [
+          "1792981686070AA1",
+          "1792981690457AA1",
+          "1792981694422AA1"
+        ]
+      },
+      {
+        "lineId": "644df474-e728-42a0-bddc-d2db9e894a79",
+        "orderLineId": null,
+        "purchaseOrderItemId": "bf7f6528-296b-49e8-acc1-94480e1542db",
+        "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+        "productTitle": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+        "unit": "vỉ",
+        "expected": 3,
+        "received": 0,
+        "missing": 3,
+        "missingEpcs": [
+          "53494D0005BD0FCF0FA08F3B",
+          "53494D00BAC087FAD6ADF38A",
+          "53494D005DB0D715520DD419"
+        ],
+        "missingUnitUids": [
+          "1792984376076AA1",
+          "1792984380827AA1",
+          "1792984383924AA1"
+        ]
+      },
+      {
+        "lineId": "6ee25606-38ca-4a4d-9782-427dda148a23",
+        "orderLineId": null,
+        "purchaseOrderItemId": "8fdffd2e-8738-47b1-804c-8e42d46cd45b",
+        "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+        "productTitle": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+        "unit": "túi",
+        "expected": 2,
+        "received": 0,
+        "missing": 2,
+        "missingEpcs": [
+          "53494D00ECAC89036A3BA35B",
+          "53494D00318D60A152ED2180"
+        ],
+        "missingUnitUids": [
+          "1792983192809AA1",
+          "1792983196218AA1"
+        ]
+      },
+      {
+        "lineId": "ede0534a-f6f4-4128-8fac-26e7b5c51014",
+        "orderLineId": null,
+        "purchaseOrderItemId": "8fdffd2e-8738-47b1-804c-8e42d46cd45b",
+        "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+        "productTitle": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+        "unit": "túi",
+        "expected": 2,
+        "received": 0,
+        "missing": 2,
+        "missingEpcs": [
+          "53494D00EF7835FA6EBC9BAB",
+          "53494D00C8D17C19CFA2F03D"
+        ],
+        "missingUnitUids": [
+          "1792983225399AA1",
+          "1792984646521AA1"
+        ]
+      },
+      {
+        "lineId": "3ca9ffbc-ad0d-4fbc-8c80-8cf83f4706f2",
+        "orderLineId": null,
+        "purchaseOrderItemId": "9193e45a-a591-4b05-a76f-601eb84dd61a",
+        "productId": "3b250a6b-d64b-46fb-b389-b02f6f1c6368",
+        "productTitle": "Kem xua muỗi Soffell hương cam",
+        "unit": "chai",
+        "expected": 2,
+        "received": 1,
+        "missing": 1,
+        "missingEpcs": [
+          "53494D0003EF56290F98FBF5"
+        ],
+        "missingUnitUids": [
+          "1792984590844AA1"
+        ]
+      }
+    ],
+    "receivedAt": "2026-11-08T04:20:46.330Z",
+    "createdAt": "2026-11-08T04:20:46.287Z"
+  }
+}

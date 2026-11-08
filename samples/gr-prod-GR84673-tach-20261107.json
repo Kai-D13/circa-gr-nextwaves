@@ -1,0 +1,834 @@
+{
+  "_note": "Production Florita 07/11/2026: GR84673 (PO01974970, SO 38565378) HOÀN THÀNH lúc 04:27:28Z khi mới nhận 1/18 dòng (bán gấp) -> POS tự sinh GR84803. Rút gọn từ Copy response của operator: bỏ tên người, địa chỉ / điện thoại, giá, ảnh, danh sách lô sản phẩm.",
+  "_source_sha256": "e0f2b6973c0ca7d81a3bfb90ab3cff3e07aad84fe94d8a0bff383169b17dc5a0",
+  "success": true,
+  "data": {
+    "id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+    "code": "GR84673",
+    "status": "COMPLETED",
+    "purchase_order_id": "81a2abd0-e3b5-4619-8142-87ff7d97422f",
+    "purchase_order_code": "PO01974970",
+    "put_id": "b6797624-ddac-487f-914c-4b03a649ac08",
+    "put_code": "PUT107596",
+    "created_by": "00000000-0000-0000-0000-000000000001",
+    "updated_by": "bb51242b-a5f8-4ee6-92a2-b020ce7ace13",
+    "created_at": "2026-11-06T05:21:32.590942Z",
+    "updated_at": "2026-11-07T04:27:28.279924Z",
+    "is_done_auto": false,
+    "client_id": 1,
+    "pos_info": {
+      "id": "c476efb2-415c-429a-978e-d389b4b06607",
+      "name": "CIRCA FLORITA"
+    },
+    "items": [
+      {
+        "id": "bd40c2d7-2acf-4e39-ab6c-d69308d01c14",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 1371,
+        "product_name": "Alpha choay sanofi (h/30v)",
+        "sku": "CIRCA.DMTS-SAN-ALP-001",
+        "unit": "hộp",
+        "unit_id": "755e62ad-788b-4d5d-aa18-16c472e3dd17",
+        "quantity": 1,
+        "base_quantity": 30,
+        "received_quantity": 0,
+        "ref_id": "68e9a86a-4c60-4a3d-8337-780d89e759ca",
+        "qr_unit_id": "",
+        "qr_unit_name": "",
+        "qr_unit_convert_rate": 0,
+        "retail_units": [
+          {
+            "id": "8f58f0c8-2006-46ab-bb83-2613db948873",
+            "unit": "vỉ",
+            "convert_rate": 15
+          },
+          {
+            "id": "755e62ad-788b-4d5d-aa18-16c472e3dd17",
+            "unit": "hộp",
+            "convert_rate": 30
+          },
+          {
+            "id": "16bee51e-6d53-48b7-b0e5-8b3d9827d37d",
+            "unit": "viên",
+            "convert_rate": 1
+          }
+        ],
+        "details": [
+          {
+            "id": "4ae6e555-4fd2-4643-a3ac-f5f51d6f83f9",
+            "goods_receipt_item_id": "bd40c2d7-2acf-4e39-ab6c-d69308d01c14",
+            "lot_id": "26ac274e-f279-4e55-b898-26c4ccb3e911",
+            "lot_date": "GVH0597-150928",
+            "expired_date": "2028-09-14T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "7418538e-8330-44b4-92c2-8aef9ba97ceb",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "87e3616b-0bcd-4d0e-b888-6d7869fd69a2",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 1446,
+        "product_name": "Dorithricin hyphens (h/20v)",
+        "sku": "CIRCA.DMTS-HYP-DOR-001",
+        "unit": "hộp",
+        "unit_id": "31b50f7c-31bb-4fd2-b6ac-e24f2ac0c303",
+        "quantity": 1,
+        "base_quantity": 20,
+        "received_quantity": 0,
+        "ref_id": "b2c8da9c-470c-499f-81e5-ea33bbfb79fd",
+        "qr_unit_id": "31b50f7c-31bb-4fd2-b6ac-e24f2ac0c303",
+        "qr_unit_name": "hộp",
+        "qr_unit_convert_rate": 20,
+        "retail_units": [
+          {
+            "id": "534a2eb0-f1fe-4b09-aae8-4e1bb4fe83ad",
+            "unit": "vỉ",
+            "convert_rate": 10
+          },
+          {
+            "id": "b9f24a80-e715-4b80-b4a5-483cbcfbb961",
+            "unit": "viên",
+            "convert_rate": 1
+          },
+          {
+            "id": "31b50f7c-31bb-4fd2-b6ac-e24f2ac0c303",
+            "unit": "hộp",
+            "convert_rate": 20
+          }
+        ],
+        "details": [
+          {
+            "id": "c2cfc49a-bdb5-4809-88f2-7bcc50de250a",
+            "goods_receipt_item_id": "87e3616b-0bcd-4d0e-b888-6d7869fd69a2",
+            "lot_id": "2b85bc17-3b02-4783-87ac-f18eee45d542",
+            "lot_date": "2572201-140128",
+            "expired_date": "2028-01-13T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "30632080-1142-4413-afbe-4c14610bfd96",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "251bb70f-ad5a-48c8-a553-66563c654bae",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 1635,
+        "product_name": "Decumar gel cvi pharma (t/20gr)",
+        "sku": "CIRCA.DAI-DEC-001",
+        "unit": "hộp",
+        "unit_id": "0697d59a-62e8-49f6-8165-d4558db70668",
+        "quantity": 1,
+        "base_quantity": 1,
+        "received_quantity": 0,
+        "ref_id": "e3cfb49d-8da2-40e0-9ce8-8c04153ef1c7",
+        "qr_unit_id": "0697d59a-62e8-49f6-8165-d4558db70668",
+        "qr_unit_name": "hộp",
+        "qr_unit_convert_rate": 1,
+        "retail_units": [
+          {
+            "id": "0697d59a-62e8-49f6-8165-d4558db70668",
+            "unit": "hộp",
+            "convert_rate": 1
+          },
+          {
+            "id": "effa6901-b5f7-40ae-ac70-a8f43f59fa27",
+            "unit": "tuýp",
+            "convert_rate": 1
+          }
+        ],
+        "details": [
+          {
+            "id": "5916141e-36a8-47a8-95d1-64c2cc5b649a",
+            "goods_receipt_item_id": "251bb70f-ad5a-48c8-a553-66563c654bae",
+            "lot_id": "3729a391-682a-43b4-a5b2-6ffa70135d9e",
+            "lot_date": "250826-170629",
+            "expired_date": "2029-06-16T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "ca0f8d49-b23d-44e5-a367-89f85737ef61",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "ac361b1f-baeb-4f31-b659-60f8c1e5bee0",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 1908,
+        "product_name": "Bột khử mùi trapha traphaco (c/30gr)",
+        "sku": "CIRCA.TRA-BOT-001",
+        "unit": "chai",
+        "unit_id": "a30a6dd2-e79e-4e04-9b06-94cb311b8af3",
+        "quantity": 3,
+        "base_quantity": 3,
+        "received_quantity": 0,
+        "ref_id": "39ba67ac-4226-46a7-b85b-39633ec55d71",
+        "qr_unit_id": "",
+        "qr_unit_name": "",
+        "qr_unit_convert_rate": 0,
+        "retail_units": [
+          {
+            "id": "a30a6dd2-e79e-4e04-9b06-94cb311b8af3",
+            "unit": "chai",
+            "convert_rate": 1
+          },
+          {
+            "id": "fda839c9-8387-4995-ba6e-c1c42fb7f6a0",
+            "unit": "hộp",
+            "convert_rate": 1
+          }
+        ],
+        "details": [
+          {
+            "id": "8dd981e6-fb90-48d0-9c84-fe27c2e07095",
+            "goods_receipt_item_id": "ac361b1f-baeb-4f31-b659-60f8c1e5bee0",
+            "lot_id": "a8b82382-fadc-45db-a952-0255a8134cc8",
+            "lot_date": "3826-300629",
+            "expired_date": "2029-06-29T17:00:00Z",
+            "quantity": 3,
+            "received_quantity": 0,
+            "ref_id": "650b73e3-2552-4ad0-8bc9-6ba2ffe40046",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "57703cdd-8547-4c09-bdc1-5e9eb611f06d",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 2110,
+        "product_name": "Zinnat 500mg Sandoz (h/10v)",
+        "sku": "CIRCA.DMTS-GSK-ZIN-001",
+        "unit": "hộp",
+        "unit_id": "4da6c13e-3f2a-456b-9952-67031951b3ad",
+        "quantity": 1,
+        "base_quantity": 10,
+        "received_quantity": 0,
+        "ref_id": "8e9844d6-69cb-4b74-94d1-12b97d67b3ff",
+        "qr_unit_id": "4da6c13e-3f2a-456b-9952-67031951b3ad",
+        "qr_unit_name": "hộp",
+        "qr_unit_convert_rate": 10,
+        "retail_units": [
+          {
+            "id": "4da6c13e-3f2a-456b-9952-67031951b3ad",
+            "unit": "hộp",
+            "convert_rate": 10
+          },
+          {
+            "id": "7248b09e-b33d-488b-bfb2-e6706fdf2e9b",
+            "unit": "vỉ",
+            "convert_rate": 10
+          },
+          {
+            "id": "59ce9790-9cc7-4db3-ab5a-5f7c834b43fe",
+            "unit": "viên",
+            "convert_rate": 1
+          }
+        ],
+        "details": [
+          {
+            "id": "24f30bfd-ff61-4ace-b10f-0d590621e186",
+            "goods_receipt_item_id": "57703cdd-8547-4c09-bdc1-5e9eb611f06d",
+            "lot_id": "e18b4f95-76f3-4996-b014-15dcdd0739f6",
+            "lot_date": "LC6S-040628",
+            "expired_date": "2028-06-03T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "4e3411b4-a17f-4005-a275-3a8758c5438c",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "4205fbfb-dcea-43df-947b-6f789793b20c",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 2740,
+        "product_name": "Thuốc ho người lớn opc (c/90ml)",
+        "sku": "CIRCA.DMTS-OPC-THU-003",
+        "unit": "chai",
+        "unit_id": "e6af9c9e-ce82-44e4-8925-5abc73090729",
+        "quantity": 1,
+        "base_quantity": 1,
+        "received_quantity": 0,
+        "ref_id": "c48414fa-96f4-4b6c-8c05-6994b77422ff",
+        "qr_unit_id": "",
+        "qr_unit_name": "",
+        "qr_unit_convert_rate": 0,
+        "retail_units": [
+          {
+            "id": "e6af9c9e-ce82-44e4-8925-5abc73090729",
+            "unit": "chai",
+            "convert_rate": 1
+          },
+          {
+            "id": "6735359c-5c60-48d2-befb-9734e4c9ec62",
+            "unit": "hộp",
+            "convert_rate": 1
+          }
+        ],
+        "details": [
+          {
+            "id": "1095cc52-d89a-425f-82d7-9d08093670d5",
+            "goods_receipt_item_id": "4205fbfb-dcea-43df-947b-6f789793b20c",
+            "lot_id": "fcd57d13-72b9-4e04-9874-2499d50c9c28",
+            "lot_date": "26047-140929",
+            "expired_date": "2029-09-13T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "055b15fb-ef5c-4961-b91e-1c87a7f23f2a",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "5cbe655b-5f70-4394-94c3-be16bd001855",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 11544,
+        "product_name": "Sữa tắm dầu hạnh nhân johnson's ph 5.5 nourishing body wash (c/750ml)",
+        "sku": "CIRCA.NOU-JOH-008",
+        "unit": "chai",
+        "unit_id": "15bc0216-3a86-44d7-afc8-fc4a86a646ac",
+        "quantity": 1,
+        "base_quantity": 1,
+        "received_quantity": 0,
+        "ref_id": "18e4ecbc-f890-4ee1-91ef-f16824da0432",
+        "qr_unit_id": "15bc0216-3a86-44d7-afc8-fc4a86a646ac",
+        "qr_unit_name": "chai",
+        "qr_unit_convert_rate": 1,
+        "retail_units": [
+          {
+            "id": "15bc0216-3a86-44d7-afc8-fc4a86a646ac",
+            "unit": "chai",
+            "convert_rate": 1
+          }
+        ],
+        "details": [
+          {
+            "id": "64a2c49f-65c0-49aa-965b-5f1933cd84c4",
+            "goods_receipt_item_id": "5cbe655b-5f70-4394-94c3-be16bd001855",
+            "lot_id": "1339bcc0-5c0a-468c-b38d-7f51eb2f124b",
+            "lot_date": "16082026D-150829",
+            "expired_date": "2029-08-14T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "dc07f7aa-561f-4321-9e45-d93e94f842a2",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "bea8d063-4853-40c6-b7f7-96aa9f391fe7",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 15072,
+        "product_name": "Salonpas Pain Relief Patch Hisamitsu (h/3m)",
+        "sku": "CIRCA.NBH-HJU-003",
+        "unit": "hộp",
+        "unit_id": "f2389310-4511-4659-86fc-daea52189559",
+        "quantity": 1,
+        "base_quantity": 3,
+        "received_quantity": 0,
+        "ref_id": "4461e523-7fcc-43fd-a364-cf4ec6a812b8",
+        "qr_unit_id": "f2389310-4511-4659-86fc-daea52189559",
+        "qr_unit_name": "hộp",
+        "qr_unit_convert_rate": 3,
+        "retail_units": [
+          {
+            "id": "f2389310-4511-4659-86fc-daea52189559",
+            "unit": "hộp",
+            "convert_rate": 3
+          },
+          {
+            "id": "3f14a992-f2d6-4a42-b903-d4aa4df3145b",
+            "unit": "miếng",
+            "convert_rate": 1
+          }
+        ],
+        "details": [
+          {
+            "id": "730e4f7e-543a-4d33-bff1-3431ddb61ba4",
+            "goods_receipt_item_id": "bea8d063-4853-40c6-b7f7-96aa9f391fe7",
+            "lot_id": "b447d5a9-1291-49f4-b45b-ad83bd1d46d1",
+            "lot_date": "4906-210129",
+            "expired_date": "2029-01-20T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "12d5332e-c454-4b1b-97b5-c8c186b05ccc",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "dc7bdbcc-b742-4642-af5b-33ddee585e41",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 77749,
+        "product_name": "Gel Tẩy Da Chết Hương Táo Arrahan (T/180ml)",
+        "sku": "CIRCA.WAKDBCV8",
+        "unit": "tuýp",
+        "unit_id": "aab43034-f214-4a28-a776-6dcf1615f974",
+        "quantity": 1,
+        "base_quantity": 1,
+        "received_quantity": 1,
+        "ref_id": "87e0434c-a33c-436e-a362-df005bcb6d6e",
+        "qr_unit_id": "aab43034-f214-4a28-a776-6dcf1615f974",
+        "qr_unit_name": "tuýp",
+        "qr_unit_convert_rate": 1,
+        "retail_units": [
+          {
+            "id": "aab43034-f214-4a28-a776-6dcf1615f974",
+            "unit": "tuýp",
+            "convert_rate": 1
+          },
+          {
+            "id": "6a2c5de4-d55a-4194-a5c0-7ffc33e0d3d1",
+            "unit": "hộp",
+            "convert_rate": 1
+          }
+        ],
+        "details": [
+          {
+            "id": "2a5a0dea-652d-468a-87ba-86f9ed872825",
+            "goods_receipt_item_id": "dc7bdbcc-b742-4642-af5b-33ddee585e41",
+            "lot_id": "313c3db4-1e40-4ebc-b903-fde613e879ba",
+            "lot_date": "BEL11A-101228",
+            "expired_date": "2028-12-09T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 1,
+            "ref_id": "9b8145fc-15e3-4388-9b54-3c6f5c29d041",
+            "thuocsi_qr_codes": [
+              "1783950641470B34",
+              "1793929018293B31"
+            ],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "b1e6d092-69e5-4c77-b772-bb34d3d9286d",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 78026,
+        "product_name": "Vitamin ad opc (h/40v)",
+        "sku": "CIRCA.AX9961PG",
+        "unit": "hộp",
+        "unit_id": "1fa38fb6-03f4-4699-bd66-69ed357a0a2d",
+        "quantity": 1,
+        "base_quantity": 40,
+        "received_quantity": 0,
+        "ref_id": "e19e539f-bc98-43cb-99a5-477749ef80e6",
+        "qr_unit_id": "1fa38fb6-03f4-4699-bd66-69ed357a0a2d",
+        "qr_unit_name": "hộp",
+        "qr_unit_convert_rate": 40,
+        "retail_units": [
+          {
+            "id": "1fa38fb6-03f4-4699-bd66-69ed357a0a2d",
+            "unit": "hộp",
+            "convert_rate": 40
+          },
+          {
+            "id": "b86de298-3d48-4746-8980-8f0cca970991",
+            "unit": "viên",
+            "convert_rate": 1
+          },
+          {
+            "id": "ecacc1b6-b3d3-4051-959a-aaa63e74d7b9",
+            "unit": "vỉ",
+            "convert_rate": 10
+          }
+        ],
+        "details": [
+          {
+            "id": "1933a049-291d-4732-9a05-dc0d6c6e2e3b",
+            "goods_receipt_item_id": "b1e6d092-69e5-4c77-b772-bb34d3d9286d",
+            "lot_id": "4e00ec33-4d17-4630-af15-0601b49dfe33",
+            "lot_date": "26003-250829",
+            "expired_date": "2029-08-24T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "9c8188c6-78dc-4302-97e3-1e8c557cc48e",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "97ba47cf-4628-43e9-9b77-d71b5d270313",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 98494,
+        "product_name": "Tăm bông cho trẻ sơ sinh KeiKo newborn (h/200 que)",
+        "sku": "CIRCA.FR22AXHR",
+        "unit": "hộp",
+        "unit_id": "bc90645a-730c-4403-a856-f997d55d1c3d",
+        "quantity": 1,
+        "base_quantity": 200,
+        "received_quantity": 0,
+        "ref_id": "cbbd01d0-3d82-4655-837e-2a6e01ac62fd",
+        "qr_unit_id": "bc90645a-730c-4403-a856-f997d55d1c3d",
+        "qr_unit_name": "hộp",
+        "qr_unit_convert_rate": 200,
+        "retail_units": [
+          {
+            "id": "7089cd03-c6da-41b0-9e94-9ca38def0604",
+            "unit": "que",
+            "convert_rate": 1
+          },
+          {
+            "id": "bc90645a-730c-4403-a856-f997d55d1c3d",
+            "unit": "hộp",
+            "convert_rate": 200
+          }
+        ],
+        "details": [
+          {
+            "id": "edf8952b-63ab-4287-83be-201b4db410ea",
+            "goods_receipt_item_id": "97ba47cf-4628-43e9-9b77-d71b5d270313",
+            "lot_id": "7b2665ff-4168-4cb6-81e9-60078f70dfa9",
+            "lot_date": "272601-270131",
+            "expired_date": "2031-01-26T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "ce9b6dfa-252d-458a-a7aa-0a12b013cc93",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "6fe62a9e-a041-41c6-a784-0f7f5961fbc9",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 111885,
+        "product_name": "Acemuc acetylcystein 200mg sanofi (hộp/30viên nang)",
+        "sku": "CIRCA.DGJFW961",
+        "unit": "hộp",
+        "unit_id": "058666aa-2ce1-4952-a22f-e8a3fcece56d",
+        "quantity": 1,
+        "base_quantity": 30,
+        "received_quantity": 0,
+        "ref_id": "828390d3-0a47-49d2-badb-28e4bb244537",
+        "qr_unit_id": "058666aa-2ce1-4952-a22f-e8a3fcece56d",
+        "qr_unit_name": "hộp",
+        "qr_unit_convert_rate": 30,
+        "retail_units": [
+          {
+            "id": "734b181e-8291-477a-9fa9-679b56120056",
+            "unit": "viên",
+            "convert_rate": 1
+          },
+          {
+            "id": "058666aa-2ce1-4952-a22f-e8a3fcece56d",
+            "unit": "hộp",
+            "convert_rate": 30
+          },
+          {
+            "id": "e683e7c2-d1c0-477e-9fc5-8b03aa6932e6",
+            "unit": "vỉ",
+            "convert_rate": 10
+          }
+        ],
+        "details": [
+          {
+            "id": "9d355d62-a9b9-4403-9994-adc523f95df0",
+            "goods_receipt_item_id": "6fe62a9e-a041-41c6-a784-0f7f5961fbc9",
+            "lot_id": "30d82766-2e31-444d-bc5c-a2db61c869d4",
+            "lot_date": "GVH0937-080428",
+            "expired_date": "2028-04-07T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "c91340f4-eba1-423a-a9d1-f7e104aad597",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "e34a7e39-01dd-47b2-a433-54acae74c33a",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 258149,
+        "product_name": "Zensalbu nebules salbutamol 2.5mg/2.5ml cpc1 (H/10o/2.5ml)",
+        "sku": "CIRCA.42G61PGE",
+        "unit": "hộp",
+        "unit_id": "42ed6f60-0766-4905-a7c0-a7ebb8af5b74",
+        "quantity": 1,
+        "base_quantity": 10,
+        "received_quantity": 0,
+        "ref_id": "ee1a4ba5-402f-4385-accb-aeaa39d1bd27",
+        "qr_unit_id": "",
+        "qr_unit_name": "",
+        "qr_unit_convert_rate": 0,
+        "retail_units": [
+          {
+            "id": "4b0197a7-4e28-4d75-a6d3-68886ed31fe8",
+            "unit": "ống",
+            "convert_rate": 1
+          },
+          {
+            "id": "42ed6f60-0766-4905-a7c0-a7ebb8af5b74",
+            "unit": "hộp",
+            "convert_rate": 10
+          }
+        ],
+        "details": [
+          {
+            "id": "f6da657d-cc36-46bc-bef1-93d60ab1299f",
+            "goods_receipt_item_id": "e34a7e39-01dd-47b2-a433-54acae74c33a",
+            "lot_id": "cacc7d94-5307-416a-8ed3-f3466cd25995",
+            "lot_date": "30426G01-050729",
+            "expired_date": "2029-07-04T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "262adb26-e1ca-410f-ab2f-e44d46a46cd8",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "b9ecc650-76d2-42e4-8f7d-d8b424a84305",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 2001870,
+        "product_name": "Ameflu Day Time OPV (H/120v)",
+        "sku": "CIRCA.KPRUHR2A",
+        "unit": "hộp",
+        "unit_id": "cf57fc82-50de-48d5-81c1-a63f41669b2e",
+        "quantity": 3,
+        "base_quantity": 360,
+        "received_quantity": 0,
+        "ref_id": "c0d23fe7-47cf-45a6-90d4-14ed1aa79477",
+        "qr_unit_id": "",
+        "qr_unit_name": "",
+        "qr_unit_convert_rate": 0,
+        "retail_units": [
+          {
+            "id": "572909f4-d7e8-489d-98af-f6c9ec713f0f",
+            "unit": "viên",
+            "convert_rate": 1
+          },
+          {
+            "id": "cf57fc82-50de-48d5-81c1-a63f41669b2e",
+            "unit": "hộp",
+            "convert_rate": 120
+          },
+          {
+            "id": "6899b22d-fc03-4665-afc5-b53381db2b54",
+            "unit": "vỉ",
+            "convert_rate": 12
+          },
+          {
+            "id": "1e6f1b92-687a-412e-a8c4-9417cdf832b6",
+            "unit": "túi",
+            "convert_rate": 60
+          }
+        ],
+        "details": [
+          {
+            "id": "fd6ed557-3e79-44e0-a36a-16d5bf30e8ee",
+            "goods_receipt_item_id": "b9ecc650-76d2-42e4-8f7d-d8b424a84305",
+            "lot_id": "41acea9f-73d8-46eb-b467-4147c524b6aa",
+            "lot_date": "260428-090429",
+            "expired_date": "2029-04-08T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "870d45d7-7580-4ab9-8fda-d28a6385f009",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          },
+          {
+            "id": "9960fccd-854b-420d-87d7-466e2440959c",
+            "goods_receipt_item_id": "b9ecc650-76d2-42e4-8f7d-d8b424a84305",
+            "lot_id": "245ee460-faba-4eec-b912-dadb864f8870",
+            "lot_date": "260050-090129",
+            "expired_date": "2029-01-08T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "2d53a008-a7f9-464c-ad37-6f73eb15972a",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          },
+          {
+            "id": "cbe277d8-c83a-4e8e-a0f2-8f727867fae2",
+            "goods_receipt_item_id": "b9ecc650-76d2-42e4-8f7d-d8b424a84305",
+            "lot_id": "cac6b479-ee94-4fff-b004-32f248e99701",
+            "lot_date": "260052-090129",
+            "expired_date": "2029-01-08T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "a32ef98d-c088-4256-950c-aa71f6f6d45e",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "f7673419-1ef8-446f-bc55-defbf5d6ff09",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 2006697,
+        "product_name": "Son Dưỡng Ẩm Môi Chuyên Sâu 24h Nivea Original Caring Lip Balm (Vỉ/4.8gr)",
+        "sku": "CIRCA.6RGLFW96",
+        "unit": "vỉ",
+        "unit_id": "c9af0b3e-793a-48be-bd74-d8236bdfc70a",
+        "quantity": 1,
+        "base_quantity": 1,
+        "received_quantity": 0,
+        "ref_id": "58687429-6df1-4893-8f63-a36284d2be32",
+        "qr_unit_id": "c9af0b3e-793a-48be-bd74-d8236bdfc70a",
+        "qr_unit_name": "vỉ",
+        "qr_unit_convert_rate": 1,
+        "retail_units": [
+          {
+            "id": "b09b446e-c92e-4c63-a4d5-650bf8cb1e40",
+            "unit": "thỏi",
+            "convert_rate": 1
+          },
+          {
+            "id": "c9af0b3e-793a-48be-bd74-d8236bdfc70a",
+            "unit": "vỉ",
+            "convert_rate": 1
+          }
+        ],
+        "details": [
+          {
+            "id": "acde9b6d-e994-4def-960b-db89c2d4f251",
+            "goods_receipt_item_id": "f7673419-1ef8-446f-bc55-defbf5d6ff09",
+            "lot_id": "f29a0c62-ac62-4c96-862b-0cfb759dfc69",
+            "lot_date": "B53915977-210928",
+            "expired_date": "2028-09-20T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "0e8bc4ec-e91f-44b9-8be7-152f8b6d9a76",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "2c36ec9d-a149-4609-97d5-53d3ed7d85ba",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 2015714,
+        "product_name": "Serum dưỡng ẩm cải thiện lão hóa da Hada Labo Pro-Aging Retinol B3 (C/30ml)",
+        "sku": "CIRCA.4G2ER2AX",
+        "unit": "hộp",
+        "unit_id": "5703a19a-48f9-44c5-9c4c-07a4b9103018",
+        "quantity": 1,
+        "base_quantity": 1,
+        "received_quantity": 0,
+        "ref_id": "a921e3fe-a8ca-4648-9d48-b454ccc2f1a6",
+        "qr_unit_id": "5703a19a-48f9-44c5-9c4c-07a4b9103018",
+        "qr_unit_name": "hộp",
+        "qr_unit_convert_rate": 1,
+        "retail_units": [
+          {
+            "id": "5703a19a-48f9-44c5-9c4c-07a4b9103018",
+            "unit": "hộp",
+            "convert_rate": 1
+          },
+          {
+            "id": "7ffea70c-8eec-495c-bce7-beba2421de47",
+            "unit": "chai",
+            "convert_rate": 1
+          }
+        ],
+        "details": [
+          {
+            "id": "1446b608-3efb-4d08-acaf-51a0637f5438",
+            "goods_receipt_item_id": "2c36ec9d-a149-4609-97d5-53d3ed7d85ba",
+            "lot_id": "2c3e0a3e-b434-4f46-b2e0-da7b3aecb52c",
+            "lot_date": "CC01-030329",
+            "expired_date": "2029-03-02T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "74e9f211-8830-4f5e-ae2e-dcb092a945aa",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "39bdec3c-d4fb-4d7b-a239-ca230cebef66",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 2016520,
+        "product_name": "Sữa Rửa Mặt Cho Da Dầu Nhạy Cảm Cetaphil Oily Skin Cleanser (C/118ml)",
+        "sku": "CIRCA.FTQUHR2A",
+        "unit": "chai",
+        "unit_id": "fbea6f3b-7984-49c9-af17-f897cd31c14f",
+        "quantity": 1,
+        "base_quantity": 1,
+        "received_quantity": 0,
+        "ref_id": "4d4581e0-6d63-4a25-bcbf-cf9757a5df7d",
+        "qr_unit_id": "fbea6f3b-7984-49c9-af17-f897cd31c14f",
+        "qr_unit_name": "chai",
+        "qr_unit_convert_rate": 1,
+        "retail_units": [
+          {
+            "id": "fbea6f3b-7984-49c9-af17-f897cd31c14f",
+            "unit": "chai",
+            "convert_rate": 1
+          }
+        ],
+        "details": [
+          {
+            "id": "2cc38e26-d3e3-4824-b2fd-3b7ce8d08814",
+            "goods_receipt_item_id": "39bdec3c-d4fb-4d7b-a239-ca230cebef66",
+            "lot_id": "845476cb-f2cf-4555-a66c-23b75d7b1732",
+            "lot_date": "436751-301128",
+            "expired_date": "2028-11-29T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "42252bed-7610-4d38-bcbc-a68aaa9bb425",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "a0162fc5-add7-474e-9445-5c6b7d8fb963",
+        "goods_receipt_id": "aa2701bb-440f-46eb-a04a-d82e697c4eec",
+        "product_id": 2021326,
+        "product_name": "Bổ sung sắt Femalto Drops Novopharm (H/30o/0.5ml)",
+        "sku": "CIRCA.FJX2GEQ1",
+        "unit": "hộp",
+        "unit_id": "06862ef6-847f-4546-88d4-e69f8c56bb8f",
+        "quantity": 1,
+        "base_quantity": 30,
+        "received_quantity": 0,
+        "ref_id": "c2dc42c2-3b40-471a-824b-1aa8733407c9",
+        "qr_unit_id": "06862ef6-847f-4546-88d4-e69f8c56bb8f",
+        "qr_unit_name": "hộp",
+        "qr_unit_convert_rate": 30,
+        "retail_units": [
+          {
+            "id": "4d31d213-8266-4e27-a6d8-1d0d40a8e25f",
+            "unit": "ống",
+            "convert_rate": 1
+          },
+          {
+            "id": "06862ef6-847f-4546-88d4-e69f8c56bb8f",
+            "unit": "hộp",
+            "convert_rate": 30
+          }
+        ],
+        "details": [
+          {
+            "id": "01f3546e-ae67-49ec-a0bf-d22fcaeb3290",
+            "goods_receipt_item_id": "a0162fc5-add7-474e-9445-5c6b7d8fb963",
+            "lot_id": "9bdf0422-4ca7-4301-93b5-ee9d5e084406",
+            "lot_date": "010826-120828",
+            "expired_date": "2028-08-11T17:00:00Z",
+            "quantity": 1,
+            "received_quantity": 0,
+            "ref_id": "f52af836-cd16-4b05-a41d-da70b32e3d9b",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      }
+    ]
+  }
+}

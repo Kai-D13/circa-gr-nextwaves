@@ -88,3 +88,31 @@ Chỉ lấy body, kèm url / status / giờ. Tên nhân viên → `<nhân viên>
 | `pos-stg-gr-status-COMPLETED-GR03887-20261028.json` | STG | `PUT …/goods-receipt/<id>/status/COMPLETED` | HOÀN THÀNH (trang POS gửi lúc 21:54:25): không body, 200, response rỗng. `4fdb8cdf` |
 | `pos-stg-gr-GR03887-completed-20261028.json` | STG | `GET …/goods-receipt/<id>` | 21:54:26: COMPLETED. **Mỗi lô thêm đúng một mã = mã QR của lô** (3 lô chung với GR03880 có cùng mã). `29b095ba` |
 | `ext-stg-storage-GR03887-20261028.json` | STG | `chrome.storage.local` (operator export 21:56) | Một phiên GR03887 (tạo 21:32:57 bởi 0.2.4, `done`, #EF0E020C, 5 apply_done, gr_completed, ui_anchor_missing) + cấp phép gõ nhầm `STG:GR3887`. Có `expected` + `nwResult.units`. Không có token. `bea04fff` |
+
+**Case phiếu phần còn lại (07/11, production Florita): GR84673 → GR84803, cùng PO01974970 / SO 38565378 ↔ Nextwaves PO-2026-000001.**
+Nguồn: operator "Copy response" `GET /v1/order/goods-receipt/<id>` (Downloads `response_GR84673.json`, `response_GR84803.json`). Rút gọn còn trường extension đọc: bỏ tên người / người hoàn tất, địa chỉ / điện thoại cửa hàng, giá, ảnh, danh sách lô của sản phẩm; `_source_sha256` = sha256 file gốc. Phân tích: `docs/dev/CASE-PHIEU-PHAN-CON-LAI-20261107.md`.
+
+| File | Môi trường | Nguồn API | Ghi chú |
+|---|---|---|---|
+| `gr-prod-GR84673-tach-20261107.json` | PRD | `GET /v1/order/goods-receipt/<id>` | COMPLETED 04:27:28Z khi mới nhận 1/18 dòng (Arrahan, bán gấp); 17 dòng nhận 0 vẫn nằm trên phiếu. `01dd8ade` |
+| `gr-prod-GR84803-phan-con-lai-20261107.json` | PRD | `GET /v1/order/goods-receipt/<id>` | Phiếu POS tự sinh 04:27:28Z (17 dòng còn lại), trạng thái **cuối** COMPLETED 05:02:16Z nhận tay; Femalto chi tiết SL 0 / nhận 1 / không mã. Chưa có trạng thái lúc vừa sinh. `67e72d78` |
+
+**Tái hiện staging case phiếu phần còn lại (07/11 17:52–17:53, cửa hàng 2222): GR03877 → GR03954, PO00006745 (nhập tay, không SO).**
+Nguồn: response mà chính trang POS staging tải (bắt trong trang qua Chrome máy dev, chỉ đọc body, không đọc header). Rút gọn như hai mẫu production ở trên; nhật ký hoạt động chỉ giữ action / giờ / chữ / metadata, bỏ người làm, IP, trình duyệt. Bản chép đã kiểm SHA-256 với trang. Phân tích: `docs/dev/CASE-PHIEU-PHAN-CON-LAI-20261107.md` §8.
+
+| File | Môi trường | Nguồn API | Ghi chú |
+|---|---|---|---|
+| `gr-stg-GR03954-phan-con-lai-moi-sinh-20261107.json` | STG | `GET /backend/v1/order/goods-receipt/<id>` | **Phiếu POS tự sinh, lúc vừa sinh, chưa ai chạm**: WAITING_TO_RECEIVE, 2 dòng (5451 SL 3 = 4 − 1, 1110 SL 6), mỗi dòng 1 lô = lô cũ, SL lô = phần còn lại, không mã; `item.ref_id` + `ref_id` lô giữ nguyên. `4a2f7568` |
+| `gr-stg-GR03877-tach-20261107.json` | STG | `GET /backend/v1/order/goods-receipt/<id>` | Phiếu gốc sau HOÀN THÀNH khi nhận 2/2 + 1/4 + 0/6 (nhập số, không QR): COMPLETED, PUT03495, đủ 3 dòng, không mã nào. `e869ee2a` |
+| `po-stg-PO00006745-sau-tach-20261107.json` | STG | `GET /backend/v1/pos/<posId>/po/<poId>` | PROCESSING; `goods_receipts` GR03877 COMPLETED + GR03954 WAITING_TO_RECEIVE; `items[].received_quantity` cộng qua mọi phiếu; `details[].id` = `ref_id` lô trên phiếu. `c8879a73` |
+| `activity-stg-GR03877-GR03954-PO00006745-20261107.json` | STG | `GET /backend/v1/activity-log/<loại>/<id>` | GR03877: RECEIVING_STARTED → 3 × GR_DETAIL_UPDATED → COMPLETED "Nhận 3/12 sản phẩm"; GR03954: CREATED "Từ phiếu mua hàng PO00006745" (cùng RPC `UpdateStatusGetGoodsReceipt`, không nhắc phiếu gốc); PO: WAIT_FOR_PROCESS → PROCESSING ở lần nhận đầu. `1e2ed834` |
+
+**Thử nhận thiếu trên Nextwaves staging (08/11 11:20, operator yêu cầu): PO69611541 ↔ SOBD1594067, nhận 1/12 EPC, `keep_open`.**
+Nguồn: response mà chính trang Nextwaves staging tải (bắt trong trang, chỉ body, không header). Trong trang đã bỏ mọi khoá tên / email / người làm (cả tên sản phẩm của trường `name`; còn `product.title` / `productTitle`). Bản chép đã kiểm SHA-256 với trang. Phân tích: `docs/dev/CASE-PHIEU-PHAN-CON-LAI-20261107.md` §10.
+
+| File | Môi trường | Nguồn API | Ghi chú |
+|---|---|---|---|
+| `nw-stg-receiving-PO69611541-truoc-nhan-thieu-20261108.json` | STG | `GET /api/v1/inter-tenant-orders/purchase-orders/<poId>/receiving` | Trước: 1 phiếu gửi `accepted`, 5 dòng / 12 tem (`epc` + `unitUid`), `receipts` rỗng. `e7567af7` |
+| `nw-stg-receive-scan-keep-open-1of12-PO69611541-20261108.json` | STG | `POST /api/v1/inter-tenant-shipments/<id>/receive-scan` | `{onMissing: keep_open, epcs: [1]}` → 200, `orderStatus open`, nhận 1 / thiếu 11, `missingEpcs` / `missingUnitUids` từng dòng. `bac50231` |
+| `nw-stg-receiving-PO69611541-sau-nhan-thieu-20261108.json` | STG | `GET …/purchase-orders/<poId>/receiving` | Sau: **`shipments` rỗng** (phiếu gửi đã dùng), PO `PARTIALLY_RECEIVED`, 1 biên nhận. `f1a13ae2` |
+| `nw-stg-receiving-search-q-SOBD1594067-sau-nhan-thieu-20261108.json` | STG | `GET /api/v1/inter-tenant-orders/receiving?q=SOBD1594067` | Vẫn trả đơn: `PARTIALLY_RECEIVED`, `openShipmentCount 0`. `631a43c1` |

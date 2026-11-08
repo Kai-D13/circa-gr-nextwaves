@@ -1,0 +1,182 @@
+{
+  "_note": "STG 07/11 tái hiện: GR03877 sau HOÀN THÀNH khi mới nhận 2/2 Soffell + 1/4 Vinmotop + 0/6 Pymefucan (nhập số, không QR). GET /backend/v1/order/goods-receipt/<id> sau khi trang tự tải lại. Rút gọn như mẫu production.",
+  "_source_sha256": "c5913259b2fa992de44266b9ee8f66d3d7cf5d2633b1b3cc0c8c34f64e1cf3fe",
+  "success": true,
+  "data": {
+    "id": "cea7a4d0-58ad-468a-9644-8d2d09446def",
+    "code": "GR03877",
+    "status": "COMPLETED",
+    "purchase_order_id": "b191075a-f48a-44f0-accc-f940bfef1c82",
+    "purchase_order_code": "PO00006745",
+    "put_id": "e86d91b7-15a0-4174-a8a6-70e0d494669b",
+    "put_code": "PUT03495",
+    "created_by": "5d564d82-f2dc-42c9-80e1-7688084ade4a",
+    "updated_by": "57ab884b-dd67-429b-8a87-12a16bff5af0",
+    "created_at": "2026-10-23T17:47:57.742576Z",
+    "updated_at": "2026-11-07T10:53:04.363386Z",
+    "is_done_auto": false,
+    "client_id": 1,
+    "pos_info": {
+      "id": "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d",
+      "name": "2222"
+    },
+    "items": [
+      {
+        "id": "0b44d1fc-b73c-4868-9620-d9be5bcee49d",
+        "goods_receipt_id": "cea7a4d0-58ad-468a-9644-8d2d09446def",
+        "product_id": 1110,
+        "product_name": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+        "sku": "CXH7DN9F1YA.BRI-BRI-001",
+        "unit": "vỉ",
+        "unit_id": "7a19bd9f-79a9-4761-97c7-fcacbd74d17c",
+        "quantity": 6,
+        "base_quantity": 12,
+        "received_quantity": 0,
+        "ref_id": "0c3a0216-5928-4965-85aa-d4cce39011e6",
+        "qr_unit_id": "",
+        "qr_unit_name": "",
+        "qr_unit_convert_rate": 0,
+        "retail_units": [
+          {
+            "id": "f2e2ce0b-a99b-4ef1-9d96-299a60cc91c9",
+            "unit": "viên",
+            "convert_rate": 1
+          },
+          {
+            "id": "5f884e73-e88d-489c-9b8b-0afdbc384a33",
+            "unit": "hộp",
+            "convert_rate": 6
+          },
+          {
+            "id": "2ddd4803-5381-4150-97db-e76014992b83",
+            "unit": "lốc",
+            "convert_rate": 12
+          },
+          {
+            "id": "7a19bd9f-79a9-4761-97c7-fcacbd74d17c",
+            "unit": "vỉ",
+            "convert_rate": 2
+          }
+        ],
+        "details": [
+          {
+            "id": "a7371c46-50b6-4bb1-8ba5-d1639aee9777",
+            "goods_receipt_item_id": "0b44d1fc-b73c-4868-9620-d9be5bcee49d",
+            "lot_id": "664447f3-7920-43d0-91ce-d97ebe5176ba",
+            "lot_date": "261009DHAUS-121228",
+            "expired_date": "2028-12-11T17:00:00Z",
+            "quantity": 6,
+            "received_quantity": 0,
+            "ref_id": "64f3708f-1752-407c-931b-d8c05356d7a3",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "7de2bfbf-8825-4c73-bba0-49b942a46bb9",
+        "goods_receipt_id": "cea7a4d0-58ad-468a-9644-8d2d09446def",
+        "product_id": 5451,
+        "product_name": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+        "sku": "CXH7DN9F1YA.THI-FE-001",
+        "unit": "túi",
+        "unit_id": "c08ec905-d451-461d-93fd-3b611440f038",
+        "quantity": 4,
+        "base_quantity": 40,
+        "received_quantity": 1,
+        "ref_id": "8868129f-4eab-4903-969c-f2011f111113",
+        "qr_unit_id": "",
+        "qr_unit_name": "",
+        "qr_unit_convert_rate": 0,
+        "retail_units": [
+          {
+            "id": "2f4fd26f-79dc-49d4-968b-64bfe0aa5624",
+            "unit": "hộp",
+            "convert_rate": 20
+          },
+          {
+            "id": "c08ec905-d451-461d-93fd-3b611440f038",
+            "unit": "túi",
+            "convert_rate": 10
+          },
+          {
+            "id": "0cc50815-1db3-4216-ad93-a8d7cf8812cd",
+            "unit": "lốc",
+            "convert_rate": 80
+          },
+          {
+            "id": "4974713b-6767-4009-bafc-6501d3c9ba32",
+            "unit": "viên",
+            "convert_rate": 1
+          },
+          {
+            "id": "4b194369-8e3c-4170-be91-2907432a5b06",
+            "unit": "vỉ",
+            "convert_rate": 5
+          }
+        ],
+        "details": [
+          {
+            "id": "e6aa3645-b8e3-4ec2-a90c-f2b2cd8fc89f",
+            "goods_receipt_item_id": "7de2bfbf-8825-4c73-bba0-49b942a46bb9",
+            "lot_id": "5c28052e-95ab-4bce-b644-31714bc8e859",
+            "lot_date": "261009KSDHAU-121228",
+            "expired_date": "2028-12-11T17:00:00Z",
+            "quantity": 4,
+            "received_quantity": 1,
+            "ref_id": "045e1abe-d0ac-428b-a4e9-530dc2a65d01",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "1b4a944a-bed3-48ae-9595-c0a244589e77",
+        "goods_receipt_id": "cea7a4d0-58ad-468a-9644-8d2d09446def",
+        "product_id": 2431732,
+        "product_name": "Kem xua muỗi Soffell hương cam",
+        "sku": "CXH7DN9F1YA.7YPBW961",
+        "unit": "chai",
+        "unit_id": "7ec37599-c9ea-4dd7-b5db-f9ec921bc51a",
+        "quantity": 2,
+        "base_quantity": 2,
+        "received_quantity": 2,
+        "ref_id": "18570331-7e09-4016-a9cb-8c43735952e6",
+        "qr_unit_id": "",
+        "qr_unit_name": "",
+        "qr_unit_convert_rate": 0,
+        "retail_units": [
+          {
+            "id": "cec95cdd-1bb6-4a82-b750-2f2f30bc6799",
+            "unit": "lốc",
+            "convert_rate": 4
+          },
+          {
+            "id": "7e76992a-43d1-46db-855b-2fff8f72b03c",
+            "unit": "thùng",
+            "convert_rate": 16
+          },
+          {
+            "id": "7ec37599-c9ea-4dd7-b5db-f9ec921bc51a",
+            "unit": "chai",
+            "convert_rate": 1
+          }
+        ],
+        "details": [
+          {
+            "id": "7baea706-fb1a-4acf-9114-1b1fb0c63115",
+            "goods_receipt_item_id": "1b4a944a-bed3-48ae-9595-c0a244589e77",
+            "lot_id": "5918b8e6-794e-430c-8a17-dba2087e334a",
+            "lot_date": "A98-060627",
+            "expired_date": "2027-06-05T17:00:00Z",
+            "quantity": 2,
+            "received_quantity": 2,
+            "ref_id": "f160b0f1-6e9f-4425-882d-3300c6bf3225",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      }
+    ]
+  }
+}

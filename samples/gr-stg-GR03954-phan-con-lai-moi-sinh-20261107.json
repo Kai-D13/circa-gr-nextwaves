@@ -1,0 +1,135 @@
+{
+  "_note": "STG 07/11 tái hiện case phiếu phần còn lại. GET /backend/v1/order/goods-receipt/<id> lúc 17:53 (VN), ngay sau khi GR03877 HOÀN THÀNH một phần: phiếu POS tự sinh, CHƯA ai chạm. Rút gọn như mẫu GR84673/GR84803 (bỏ tên người, giá, ảnh, danh sách lô của sản phẩm). _source_sha256 = sha256 body gốc (tính trong trang).",
+  "_source_sha256": "388b38dc08329ebe87b523b2383c936542fa62fab37c97afdd2002982a9ba2bf",
+  "success": true,
+  "data": {
+    "id": "ac0c25c0-926a-473e-9aba-0c4a50deb773",
+    "code": "GR03954",
+    "status": "WAITING_TO_RECEIVE",
+    "purchase_order_id": "b191075a-f48a-44f0-accc-f940bfef1c82",
+    "purchase_order_code": "PO00006745",
+    "put_id": "",
+    "put_code": "",
+    "created_by": "57ab884b-dd67-429b-8a87-12a16bff5af0",
+    "updated_by": "57ab884b-dd67-429b-8a87-12a16bff5af0",
+    "created_at": "2026-11-07T10:53:04.059498Z",
+    "updated_at": "2026-11-07T10:53:04.053346Z",
+    "is_done_auto": false,
+    "client_id": 1,
+    "pos_info": {
+      "id": "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d",
+      "name": "2222"
+    },
+    "items": [
+      {
+        "id": "a756aecd-fb19-48b9-9b5e-450a8f4f81ed",
+        "goods_receipt_id": "ac0c25c0-926a-473e-9aba-0c4a50deb773",
+        "product_id": 1110,
+        "product_name": "Pymefucan fluconazole 150mg pymepharco (h/20v) ID 1110",
+        "sku": "CXH7DN9F1YA.BRI-BRI-001",
+        "unit": "vỉ",
+        "unit_id": "7a19bd9f-79a9-4761-97c7-fcacbd74d17c",
+        "quantity": 6,
+        "base_quantity": 12,
+        "received_quantity": 0,
+        "ref_id": "0c3a0216-5928-4965-85aa-d4cce39011e6",
+        "qr_unit_id": "",
+        "qr_unit_name": "",
+        "qr_unit_convert_rate": 0,
+        "retail_units": [
+          {
+            "id": "f2e2ce0b-a99b-4ef1-9d96-299a60cc91c9",
+            "unit": "viên",
+            "convert_rate": 1
+          },
+          {
+            "id": "5f884e73-e88d-489c-9b8b-0afdbc384a33",
+            "unit": "hộp",
+            "convert_rate": 6
+          },
+          {
+            "id": "2ddd4803-5381-4150-97db-e76014992b83",
+            "unit": "lốc",
+            "convert_rate": 12
+          },
+          {
+            "id": "7a19bd9f-79a9-4761-97c7-fcacbd74d17c",
+            "unit": "vỉ",
+            "convert_rate": 2
+          }
+        ],
+        "details": [
+          {
+            "id": "4e2613cf-a6c7-442c-9a71-792f2e54e970",
+            "goods_receipt_item_id": "a756aecd-fb19-48b9-9b5e-450a8f4f81ed",
+            "lot_id": "664447f3-7920-43d0-91ce-d97ebe5176ba",
+            "lot_date": "261009DHAUS-121228",
+            "expired_date": "2028-12-11T17:00:00Z",
+            "quantity": 6,
+            "received_quantity": 0,
+            "ref_id": "64f3708f-1752-407c-931b-d8c05356d7a3",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      },
+      {
+        "id": "75b9ce09-66ec-47d1-b439-c26b7ecc281b",
+        "goods_receipt_id": "ac0c25c0-926a-473e-9aba-0c4a50deb773",
+        "product_id": 5451,
+        "product_name": "Vinmotop nimodipin 30mg vinphaco (h/30v) ID 5451",
+        "sku": "CXH7DN9F1YA.THI-FE-001",
+        "unit": "túi",
+        "unit_id": "c08ec905-d451-461d-93fd-3b611440f038",
+        "quantity": 3,
+        "base_quantity": 30,
+        "received_quantity": 0,
+        "ref_id": "8868129f-4eab-4903-969c-f2011f111113",
+        "qr_unit_id": "",
+        "qr_unit_name": "",
+        "qr_unit_convert_rate": 0,
+        "retail_units": [
+          {
+            "id": "2f4fd26f-79dc-49d4-968b-64bfe0aa5624",
+            "unit": "hộp",
+            "convert_rate": 20
+          },
+          {
+            "id": "c08ec905-d451-461d-93fd-3b611440f038",
+            "unit": "túi",
+            "convert_rate": 10
+          },
+          {
+            "id": "0cc50815-1db3-4216-ad93-a8d7cf8812cd",
+            "unit": "lốc",
+            "convert_rate": 80
+          },
+          {
+            "id": "4974713b-6767-4009-bafc-6501d3c9ba32",
+            "unit": "viên",
+            "convert_rate": 1
+          },
+          {
+            "id": "4b194369-8e3c-4170-be91-2907432a5b06",
+            "unit": "vỉ",
+            "convert_rate": 5
+          }
+        ],
+        "details": [
+          {
+            "id": "66997bc3-2bd4-472b-a150-af06533f50d3",
+            "goods_receipt_item_id": "75b9ce09-66ec-47d1-b439-c26b7ecc281b",
+            "lot_id": "5c28052e-95ab-4bce-b644-31714bc8e859",
+            "lot_date": "261009KSDHAU-121228",
+            "expired_date": "2028-12-11T17:00:00Z",
+            "quantity": 3,
+            "received_quantity": 0,
+            "ref_id": "045e1abe-d0ac-428b-a4e9-530dc2a65d01",
+            "thuocsi_qr_codes": [],
+            "internal_qr_codes": []
+          }
+        ]
+      }
+    ]
+  }
+}

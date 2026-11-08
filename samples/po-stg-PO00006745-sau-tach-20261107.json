@@ -1,0 +1,89 @@
+{
+  "_note": "STG 07/11: GET /backend/v1/pos/<posId>/po/<poId> sau khi tách. Chỉ giữ trạng thái, SO / mã giao, goods_receipts, dòng + lô (details) của PO. PO nhập tay (IMPORT_STOCK), không SO. _trim_sha256 = sha256 JSON gọn đã kiểm với trang.",
+  "_trim_sha256": "cb05c58b6da3af56957b8eaedefadbf10772589ffc968cae160a610f994d7447",
+  "success": true,
+  "data": {
+    "id": "b191075a-f48a-44f0-accc-f940bfef1c82",
+    "code": "PO00006745",
+    "status": "PROCESSING",
+    "pos_id": "64a8663b-0c9e-49c6-9626-0a4c7c4bd53d",
+    "sale_order_number": "",
+    "thuocsi_delivery_code": [],
+    "source_type": "IMPORT_STOCK",
+    "fulfillment_method": "IMPORT_STOCK",
+    "origin_po_id": "",
+    "list_child_po": [],
+    "status_updated_at": "2026-11-07T10:52:39.187353Z",
+    "goods_receipts": [
+      {
+        "id": "cea7a4d0-58ad-468a-9644-8d2d09446def",
+        "code": "GR03877",
+        "status": "COMPLETED"
+      },
+      {
+        "id": "ac0c25c0-926a-473e-9aba-0c4a50deb773",
+        "code": "GR03954",
+        "status": "WAITING_TO_RECEIVE"
+      }
+    ],
+    "items": [
+      {
+        "id": "18570331-7e09-4016-a9cb-8c43735952e6",
+        "product_id": 2431732,
+        "unit": "chai",
+        "quantity": 2,
+        "base_quantity": 2,
+        "received_quantity": 2,
+        "details": [
+          {
+            "id": "f160b0f1-6e9f-4425-882d-3300c6bf3225",
+            "po_item_id": "18570331-7e09-4016-a9cb-8c43735952e6",
+            "lot_id": "5918b8e6-794e-430c-8a17-dba2087e334a",
+            "lot_date": "A98-060627",
+            "quantity": 2,
+            "base_quantity": 2,
+            "received_quantity": 2
+          }
+        ]
+      },
+      {
+        "id": "8868129f-4eab-4903-969c-f2011f111113",
+        "product_id": 5451,
+        "unit": "túi",
+        "quantity": 4,
+        "base_quantity": 40,
+        "received_quantity": 1,
+        "details": [
+          {
+            "id": "045e1abe-d0ac-428b-a4e9-530dc2a65d01",
+            "po_item_id": "8868129f-4eab-4903-969c-f2011f111113",
+            "lot_id": "5c28052e-95ab-4bce-b644-31714bc8e859",
+            "lot_date": "261009KSDHAU-121228",
+            "quantity": 4,
+            "base_quantity": 40,
+            "received_quantity": 1
+          }
+        ]
+      },
+      {
+        "id": "0c3a0216-5928-4965-85aa-d4cce39011e6",
+        "product_id": 1110,
+        "unit": "vỉ",
+        "quantity": 6,
+        "base_quantity": 12,
+        "received_quantity": 0,
+        "details": [
+          {
+            "id": "64f3708f-1752-407c-931b-d8c05356d7a3",
+            "po_item_id": "0c3a0216-5928-4965-85aa-d4cce39011e6",
+            "lot_id": "664447f3-7920-43d0-91ce-d97ebe5176ba",
+            "lot_date": "261009DHAUS-121228",
+            "quantity": 6,
+            "base_quantity": 12,
+            "received_quantity": 0
+          }
+        ]
+      }
+    ]
+  }
+}
