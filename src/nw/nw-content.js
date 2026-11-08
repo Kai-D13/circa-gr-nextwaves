@@ -19,6 +19,7 @@
 
   const C = globalThis.__CGN__;
   const E = C.env;
+  const K = C.keys;
   const N = C.nw;
   const R = C.resolve;
   const T = Object.assign({ pollMs: 700, collectTries: 6, collectDelayMs: 1500, httpTimeoutMs: 30000, authWaitMs: 20000, readerPollMs: 1000, readerFirstClickMs: 1500, readerGapMs: 10000, readerMaxClicks: 3, readerRenewMs: 10 * 60 * 1000, readerRetryMs: 15000, readerRetryMax: 8 }, C.tuning || {});
@@ -718,9 +719,20 @@
   });
 
   // A1: chỉ đánh giá lại khi danh sách phiên đổi THẬT (khoá / trạng thái / đơn / tab) — log, lease, posTabId… không đánh thức tab này.
+  // Audit v0.4.0 P3-11: chỉ xét phiên CỦA TRANG (đúng SO / số PO / id PO của ?po=, hoặc phiên đang vẽ) — phiên của phiếu khác đổi
+  // (đầu đọc, tab) không làm tab này đọc lại PO Nextwaves.
   function compactSig(all) {
+    const env = E.envFromConfig(config);
+    const page = env ? E.classifyNwPage(location.href, env) : null;
+    const po = page ? String(page.po || "").trim() : "";
+    const base = po ? K.soBase(po) : null;
+    const mine = (s) =>
+      (curSession && s.key === curSession.key) ||
+      (base && s.soBase === base) ||
+      (po && ((s.nwPoId && s.nwPoId === po.toLowerCase()) || (s.nwPoNumber && s.nwPoNumber.toUpperCase() === po.toUpperCase())));
     return JSON.stringify(
       Object.values(all || {})
+        .filter(mine)
         .map((s) => [s.key, s.state, s.createdAt, s.nwPoId || null, s.nwTabId || null, !!s.scanOk, (s.reader && s.reader.state) || null])
         .sort()
     );
