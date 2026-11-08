@@ -164,6 +164,7 @@ NEW = [
     ("src/nw/nw-content.js", '    const whWrong = locks.includes("warehouse_mismatch");', "    const whWrong = false;", "review P3-14 kho lệch không đỏ"),
     ("src/nw/nw-content.js", "        closeShort = true;", "        closeShort = false;", "review P3-14 chọn Đóng đơn không đỏ"),
     ("src/nw/nw-content.js", "        return onReceiveScan(p, true);\n      }\n      return rh.open || rh.reminder ? renderHelper() : panel.hide();", "        return onReceiveScan(p, true);\n      }\n      return panel.hide();", "review P3-15 màn quét không phiên ẩn khung đầu đọc"),
+    ("src/nw/nw-content.js", "(review v0.4.1 P3-15).\n      return rh.open || rh.reminder ? renderHelper() : panel.hide();", "(review v0.4.1 P3-15).\n      return rh.open ? renderHelper() : panel.hide();", "review P3-15 trang khác màn quét mất lời nhắc Kết nối RFID"),
     ("src/pos/pos-content.js", "s.retryNotBefore || null, s.readerTakenAt || null]);", "s.retryNotBefore || null]);", "review POS không vẽ lại khi vừa lấy đầu đọc"),
 ]
 bad = [(m[3], src(m[0]).count(m[1])) for m in REANCHOR + NEW if src(m[0]).count(m[1]) != 1 or any(src(m[0]).count(x) != 1 for x, _ in (m[4] if len(m) > 4 else []))]

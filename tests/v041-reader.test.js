@@ -369,10 +369,40 @@ test("review v0.4.1 P3-15: màn quét /receive KHÔNG có phiên mà modal nhậ
     assert.equal(nw.view.title, "Đầu đọc cho màn nhận hàng");
     // Trang đánh giá lại (đổi cấu hình → refresh) khi modal còn mở: khung đầu đọc phải còn (trước: panel.hide()).
     const n = nw.views.length;
+    const h = nw.hides;
     await b.setConfig({ mode: "STG", url: "", nwTenant: "" });
     await until(() => nw.views.length > n, 2000);
     await settle(60);
     assert.ok(btn(nw, "Lấy đầu đọc cho Nextwaves"), "khung đầu đọc còn sau khi trang đánh giá lại");
+    // Khung cuối chưa đủ: lượt hỏi QR Scan Log kế tiếp vẽ lại ngay, nên ẩn rồi hiện lại vẫn ra cùng khung — đếm lần ẩn.
+    assert.equal(nw.hides, h, "khung đầu đọc không bị ẩn lúc trang đánh giá lại");
+  } finally {
+    b.close();
+  }
+});
+
+test("review v0.4.1 P3-15: lời nhắc “Kết nối RFID” sau lượt (trang PO Nextwaves, KHÔNG phiên) còn nguyên khi trang đánh giá lại", async () => {
+  const b = createBrowser(server, { tuning });
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const pos = b.openTab(SALE(1));
+    const q = fakeQsl(pos);
+    const nw = b.openTab(NW_PO);
+    nwModal(nw, SHIP);
+    const connect = nwConnect(nw, () => !q.lock);
+    await until(() => btn(nw, "Lấy đầu đọc cho Nextwaves"), 3000);
+    btn(nw, "Lấy đầu đọc cho Nextwaves").onClick();
+    await until(() => connect.textContent === "Bắt đầu quét", 3000);
+    await until(() => nw.view && nw.view.lines.some((l) => /Đã lấy từ tab bán hàng/.test(l)), 3000);
+    closeModal(nw);
+    await until(() => nw.view && nw.view.title === "Đầu đọc: nhận hàng xong", 3000);
+    const n = nw.views.length;
+    const h = nw.hides;
+    await b.setConfig({ mode: "STG", url: "", nwTenant: "" });
+    await until(() => nw.views.length > n, 2000);
+    await settle(60);
+    assert.equal(nw.view && nw.view.title, "Đầu đọc: nhận hàng xong", "lời nhắc còn sau khi trang đánh giá lại");
+    assert.equal(nw.hides, h, "lời nhắc không bị ẩn lúc trang đánh giá lại");
   } finally {
     b.close();
   }

@@ -324,7 +324,10 @@ function createBrowser(server, opts = {}) {
             t.floatViews.push(v);
           },
           hide: () => {
-            if (!c.dead && t.viewKind === "float") t.view = null;
+            if (c.dead || t.viewKind !== "float") return;
+            // Review v0.4.1 P3-15: đếm lần khung ĐANG HIỆN bị ẩn — khung bị vẽ lại ngay sau đó (lượt hỏi kế tiếp) vẫn bắt được.
+            if (t.view) t.hides += 1;
+            t.view = null;
           },
         }),
         createInlinePanel: (brand, o) => {
@@ -424,7 +427,7 @@ function createBrowser(server, opts = {}) {
   }
 
   function openTab(url) {
-    const t = { id: nextTabId++, url, closed: false, ctx: null, view: null, viewKind: null, views: [], loads: 0, reloads: 0, focusCount: 0, ss: new Map(), post: () => {}, grListCtrl: null, grListActive: false, grListModel: null, grListModels: [], grListNotice: null, grListNotices: [], anchor: true, floatViews: [], inlineViews: [], dom: { buttons: [], hidden: false, byId: {}, query: {}, locks: null } };
+    const t = { id: nextTabId++, url, closed: false, ctx: null, view: null, viewKind: null, views: [], hides: 0, loads: 0, reloads: 0, focusCount: 0, ss: new Map(), post: () => {}, grListCtrl: null, grListActive: false, grListModel: null, grListModels: [], grListNotice: null, grListNotices: [], anchor: true, floatViews: [], inlineViews: [], dom: { buttons: [], hidden: false, byId: {}, query: {}, locks: null } };
     // Trang phiếu có / mất chỗ gắn khung (#all-receipt của đúng phiếu). Có lại khi khung đang chờ → onFound như trình duyệt thật.
     t.setAnchor = (on) => {
       t.anchor = !!on;
