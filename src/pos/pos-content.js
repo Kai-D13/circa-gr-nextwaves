@@ -1021,6 +1021,16 @@
     }
   }
 
+  // Khớp cuối lệch (đã lưu trong phiên — audit v0.4.0 P3-4).
+  function verifyFailedView(gr, diffs, lead) {
+    return {
+      tone: "warn",
+      title: `${gr.code}: đã điền nhưng đọc lại chưa khớp hoàn toàn — kiểm từng lô trước khi HOÀN THÀNH`,
+      lines: (lead || []).concat([`Lệch: ${(diffs || []).slice(0, 6).map((d) => d.why + (d.detailId ? " " + String(d.detailId).slice(0, 8) : "")).join(", ")}.`, "Dược sĩ kiểm số lượng / mã từng lô trên phiếu; đúng thì bấm HOÀN THÀNH, sai thì báo dev."]),
+      buttons: [{ label: "Tải lại phiếu", onClick: () => location.reload() }],
+    };
+  }
+
   function renderApplied(env, gr, s) {
     const uids = unitsForPlan(s).map((u) => u.uid);
     const extra = remainderNotes(s);
@@ -1045,6 +1055,10 @@
         lines: sessionLines(s).concat(extra, [`Thiếu: ${missing.slice(0, 20).join(", ")}${missing.length > 20 ? "…" : ""}`, "Kiểm tra phiếu trước khi bấm HOÀN THÀNH."]),
       });
     }
+    // Audit v0.4.0 P3-4: khớp cuối đã lệch lúc ghi (lưu trong phiên) → giữ cảnh báo qua F5 thay vì khung xanh. Mã lạ / thiếu UID ở trên
+    // cụ thể hơn nên xét trước.
+    const fv = s.applyResult && s.applyResult.verify;
+    if (fv && fv.ok === false) return showGr(gr, verifyFailedView(gr, fv.diffs, sessionLines(s).concat(extra)));
     const uidSet = new Set(uids);
     const lots = gr.items.reduce((n, it) => n + it.details.filter((d) => d.qrCodes.some((c) => uidSet.has(c))).length, 0);
     // Review v0.4.0 P2-2: dòng Nextwaves không gắn tem (không có UID) vẫn nằm trên phiếu với lượng thiếu → nói rõ, không để khung "xanh".
@@ -1265,21 +1279,10 @@
     // v0.4.0 (A9): PUT trả 5xx / 0 có thể đã lưu muộn → "chưa rõ" (chờ cooldown, đọc lại rồi lập kế hoạch mới), không chạy lại ngay.
     if (!res.ok && res.reason === "put_failed" && (!res.status || res.status >= 500)) res = Object.assign({}, res, { reason: "put_uncertain" });
     const uncertain = !res.ok && ["unknown", "verify_read_failed", "verify_failed", "put_uncertain"].includes(res.reason);
-    let finished = false;
-    try {
-      finished = await bg("session:finishApply", {
-        key: s.key,
-        token: tabToken,
-        ok: res.ok,
-        uncertain,
-        result: res.ok ? { at: Date.now(), hash: plan.hash, steps: n, uids: plan.summary.toWrite + plan.summary.alreadyOnGr, notFull: plan.warnings.length } : null,
-        error: res.ok ? null : { reason: res.reason, status: res.status || null, detailId: res.step ? res.step.detailId : null, hash: plan.hash },
-      });
-    } catch (_) {
-      finished = false;
-    }
-    if (res.ok && finished) {
-      // Khớp cuối (plan C3): đọc lại CẢ phiếu — mọi lô đúng kế hoạch, đúng tập UID Nextwaves, không mã lạ. Lệch → báo, không tải lại.
+    // Khớp cuối (plan C3): đọc lại CẢ phiếu — mọi lô đúng kế hoạch, đúng tập UID Nextwaves, không mã lạ. Audit v0.4.0 P3-4: làm TRƯỚC khi
+    // kết thúc lượt ghi để kết quả lưu vào phiên (applyResult.verify) — tải lại trang (F5) vẫn thấy cảnh báo, không thành khung xanh.
+    let v = null;
+    if (res.ok) {
       let fresh = null;
       try {
         const r = await posGet(env, E.api.grDetail(env, gr.id));
@@ -1287,17 +1290,25 @@
       } catch (_) {
         fresh = null;
       }
-      const v = fresh ? PL.verifyFinal(plan, fresh, unitsForPlan(s)) : { ok: false, diffs: [{ why: "read_failed", detailId: null }] };
-      if (!v.ok) {
-        applying = false;
-        logTo(s.key, { type: "final_verify_failed", diffs: v.diffs.slice(0, 10) });
-        return showGr(gr, {
-          tone: "warn",
-          title: `${gr.code}: đã điền nhưng đọc lại chưa khớp hoàn toàn — kiểm từng lô trước khi HOÀN THÀNH`,
-          lines: [`Lệch: ${v.diffs.slice(0, 6).map((d) => d.why + (d.detailId ? " " + String(d.detailId).slice(0, 8) : "")).join(", ")}.`, "Dược sĩ kiểm số lượng / mã từng lô trên phiếu; đúng thì bấm HOÀN THÀNH, sai thì báo dev."],
-          buttons: [{ label: "Tải lại phiếu", onClick: () => location.reload() }],
-        });
-      }
+      v = fresh ? PL.verifyFinal(plan, fresh, unitsForPlan(s)) : { ok: false, diffs: [{ why: "read_failed", detailId: null }] };
+    }
+    let finished = false;
+    try {
+      finished = await bg("session:finishApply", {
+        key: s.key,
+        token: tabToken,
+        ok: res.ok,
+        uncertain,
+        result: res.ok ? { at: Date.now(), hash: plan.hash, steps: n, uids: plan.summary.toWrite + plan.summary.alreadyOnGr, notFull: plan.warnings.length, verify: v ? { ok: v.ok, diffs: v.diffs.slice(0, 10) } : null } : null,
+        error: res.ok ? null : { reason: res.reason, status: res.status || null, detailId: res.step ? res.step.detailId : null, hash: plan.hash },
+      });
+    } catch (_) {
+      finished = false;
+    }
+    if (res.ok && finished && v && !v.ok) {
+      applying = false;
+      logTo(s.key, { type: "final_verify_failed", diffs: v.diffs.slice(0, 10) });
+      return showGr(gr, verifyFailedView(gr, v.diffs));
     }
     applying = false;
     if (res.ok && finished) {

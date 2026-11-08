@@ -781,6 +781,28 @@ test("khớp cuối (plan C3): đọc lại CẢ phiếu sau khi điền thấy 
   }
 });
 
+test("audit v0.4.0 P3-4: khớp cuối lệch số lượng (không mã lạ, không thiếu UID) → lưu vào phiên; F5 vẫn khung vàng 'Lệch: received', không chuyển xanh", async () => {
+  const ctx = await setup({ server: { tamperFinal: (gr) => (gr.items[0].details[0].received_quantity = Number(gr.items[0].details[0].received_quantity) + 1) } });
+  const { b, pos } = ctx;
+  try {
+    await receive(ctx);
+    await sessionState(b, "applied", 8000);
+    await until(() => pos.view && /chưa khớp hoàn toàn/.test(pos.view.title || ""));
+    const ar = session(b).applyResult;
+    assert.equal(ar.verify.ok, false);
+    assert.ok(ar.verify.diffs.some((d) => d.why === "received"), JSON.stringify(ar.verify.diffs));
+    pos.reload();
+    await until(() => pos.loads >= 2);
+    pos.post(POS_AUTH);
+    const v2 = await until(() => pos.view && /chưa khớp hoàn toàn|kiểm danh sách rồi bấm HOÀN THÀNH/.test(pos.view.title || "") && pos.view);
+    assert.match(v2.title, /chưa khớp hoàn toàn/);
+    assert.equal(v2.tone, "warn");
+    assert.ok(v2.lines.some((l) => /^Lệch: .*received/.test(l)), v2.lines.join(" | "));
+  } finally {
+    b.close();
+  }
+});
+
 test("audit F4 (v0.4.0): dược sĩ đóng tab Nextwaves khi phiên còn ở bước nhận → phiên bỏ nwTabId, nhật ký nw_tab_closed, trả đầu đọc", async () => {
   const ctx = await setup({ qsl: { mode: "ok" } });
   const { b, nw } = ctx;
