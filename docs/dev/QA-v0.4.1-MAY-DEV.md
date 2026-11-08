@@ -13,7 +13,7 @@
 | # | Làm | Kỳ vọng |
 |---|---|---|
 | Q1 | `chrome://extensions` → Reload thẻ "Circa GR ← Nextwaves" | Thẻ ghi **0.4.1**, không "Errors" đỏ. Popup giữ Production, tenant trống |
-| Q2 | Phiếu Florita / Lumina **có** đơn Nextwaves chờ nhận → "Nhận hàng bằng RFID" | Khung Nextwaves "Sẵn sàng nhận hàng", kho đúng cửa hàng (không dòng "kho KHÁC"), **"Kiểm trước khi nhận: số lượng khớp phiếu — điền được N UID"** (N = số UID dự kiến). `kiem-truoc.js`: `phanConLai` null, `temBanGap` 0. Không xác nhận; xong popup → Xoá phiên |
+| Q2 | Phiếu Florita / Lumina **có** đơn Nextwaves chờ nhận → "Nhận hàng bằng RFID" | Khung Nextwaves "Sẵn sàng nhận hàng", kho đúng cửa hàng (không dòng "kho KHÁC"), **"Kiểm trước khi nhận: số lượng khớp phiếu — điền được N UID"** (N = số UID dự kiến). `kiem-truoc.js` không bắt buộc ở máy dev (Claude đọc khung; khung không có dòng "Phiếu phần còn lại" ⇔ `phanConLai` null). Không xác nhận; xong Claude huỷ phiên trên khung POS |
 | Q3 | Mở modal "Nhận hàng bằng cách quét" (từ màn quét của Q2, hoặc thẳng từ trang PO Nextwaves) khi QR Scan Log đang giữ đầu đọc | Khung "Đầu đọc…": tự bấm "Kết nối đầu đọc" (không được) → trong vài giây **"tab bán hàng (QR Scan Log) đang giữ — bấm “Lấy đầu đọc cho Nextwaves”"** + nút. Trước khi bấm: QR Scan Log vẫn kết nối (extension không tự Ngắt). Nếu tab bán hàng đã chuyển sang trang khác của POS: khung ghi "một tab POS (… đang ở trang khác trang Bán hàng) đang giữ" — vẫn bấm được |
 | Q4 | Bấm **"Lấy đầu đọc cho Nextwaves"** | Tab bán hàng: QR Scan Log chuyển **đã ngắt** (một lần). Tab Nextwaves: **"Đầu đọc: đã kết nối"** trong vài giây (Chrome hỏi chọn cổng thì operator chọn đầu đọc). Không nút nào khác của Nextwaves bị bấm |
 | Q5 | Bấm "Hủy" đóng modal | Khung nhắc **"sang tab bán hàng bấm “Kết nối RFID” (chọn cổng)"**. Operator làm theo → QR Scan Log kết nối lại, bán tiếp được |
@@ -23,7 +23,7 @@
 
 **Đạt khi:** Q1–Q6 đạt. Q7 / Q8 cần dữ liệu đúng loại; chưa có thì chuyển sang lượt đầu máy POS (có `kiem-truoc.js` / `kiem-sau.js`).
 
-**Gửi Claude một lần:** đạt / không đạt từng mục; kết quả `kiem-truoc.js` của Q2; ảnh chỉ khi một mục không đạt.
+**Gửi Claude một lần:** đạt / không đạt từng mục; ảnh chỉ khi một mục không đạt.
 
 ## Kết quả lượt 1 (08/11 tối, Claude qua Claude in Chrome, chỉ đọc)
 
