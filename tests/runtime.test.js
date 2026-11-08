@@ -25,9 +25,39 @@ const TWIN_SHIP = "00000000-0000-4000-8000-0000000000c1";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const APP_VERSION = require("../src/manifest.json").version;
 
+// v0.4.1 — phiếu phần còn lại dựng từ cặp GR03878 ↔ PO28237814: phiếu gốc GR03999 đã HOÀN THÀNH khi mới nhận 1 Soffell (lô A98, bán gấp;
+// POS gắn UID Nextwaves của tem đó lúc HOÀN THÀNH, cạnh mã QR thuocsi dược sĩ quét) → GR03878 là phiếu phần còn lại: Soffell còn 1 (chỉ lô
+// 261016KHASUFDB), 1110 / 5451 nguyên. PO có hai phiếu, Soffell đã nhận 1. Đơn Nextwaves (12 tem) không đổi.
+const REM_GR_ID = "11111111-2222-4333-8444-555555555555";
+const SOLD_UID = "1792379018917AA1";
+const soldEpc = () => H.sample("nw-stg-intertenant-PO28237814-SOBD1593858.json").units.find((u) => u.uid === SOLD_UID).epc;
+function remainderGr(gr) {
+  const sof = gr.data.items.find((i) => i.product_id === 2431732);
+  sof.quantity = 1;
+  sof.base_quantity = 1;
+  sof.details = sof.details.filter((d) => !/^A98/.test(d.lot_date));
+  return gr;
+}
+function completedGr03999(mut) {
+  const g = H.clone(H.sample("gr-stg-GR03878-20261024.json"));
+  Object.assign(g.data, { id: REM_GR_ID, code: "GR03999", status: "COMPLETED" });
+  for (const it of g.data.items) {
+    it.id = it.id.slice(0, -4) + "9999";
+    it.received_quantity = 0;
+    for (const d of it.details) Object.assign(d, { id: d.id.slice(0, -4) + "9999", received_quantity: 0, thuocsi_qr_codes: [] });
+  }
+  const sof = g.data.items.find((i) => i.product_id === 2431732);
+  sof.received_quantity = 1;
+  Object.assign(sof.details.find((d) => /^A98/.test(d.lot_date)), { received_quantity: 1, thuocsi_qr_codes: ["1783950641470X99", SOLD_UID] });
+  if (mut) mut(g.data);
+  return g;
+}
+
 function makeServer(opts = {}) {
   const it = H.sample("nw-stg-intertenant-PO28237814-SOBD1593858.json");
   const st = { gr: H.clone(H.sample("gr-stg-GR03878-20261024.json")), nwReceived: false, puts: [], log: [], putFailures: opts.putFailures || 0 };
+  if (opts.remainder) remainderGr(st.gr);
+  if (opts.remainderOpenMut) opts.remainderOpenMut(st.gr.data);
   if (opts.grNoStore) delete st.gr.data.pos_info;
   const qr = H.qrByUidPO28237814();
   const itemOf = (o) => ({ id: o.id, purchaseOrderId: o.purchaseOrderId, purchaseOrderNumber: o.purchaseOrderNumber, purchaseOrderStatus: o.purchaseOrderStatus, counterparty: o.counterparty, status: o.status, warehouse: o.warehouse, openShipmentCount: 1 });
@@ -64,12 +94,17 @@ function makeServer(opts = {}) {
         await h;
         return { status: 200, json: snap };
       }
+      if (m && req.method === "GET" && opts.remainder && m[1] === REM_GR_ID) return { status: 200, json: completedGr03999(opts.remainderDoneMut) };
       if (m && req.method === "GET") return m[1] === st.gr.data.id ? { status: 200, json: H.clone(st.gr) } : { status: 404, json: {} };
       m = /^\/backend\/v1\/pos\/([0-9a-f-]{36})\/po\/([0-9a-f-]{36})$/.exec(u.pathname);
       if (m && req.method === "GET") {
         const po = H.sample("po-stg-PO00006750-SOBD1593858.json");
         if (opts.poNoStore) delete po.data.pos_id;
         if (opts.poOtherStore) po.data.pos_id = OTHER_STORE;
+        if (opts.remainder) {
+          po.data.goods_receipts.push({ id: REM_GR_ID, code: "GR03999", status: "COMPLETED" });
+          po.data.items.find((x) => x.product_id === 2431732).received_quantity = 1;
+        }
         return { status: 200, json: po };
       }
       if (u.pathname === "/backend/v1/order/goods-receipt/search" && req.method === "GET") {
@@ -80,6 +115,11 @@ function makeServer(opts = {}) {
         if (opts.extraGr) {
           r.data.goods_receipts.push(Object.assign(H.clone(r.data.goods_receipts[0]), { id: "11111111-2222-4333-8444-555555555555", code: "GR03999", purchase_order_code: "PO00006999" }));
           r.data.total = 2;
+        }
+        if (opts.remainder) {
+          // phiếu gốc đã HOÀN THÀNH, cùng PO với phiếu phần còn lại
+          r.data.goods_receipts.push(Object.assign(H.clone(r.data.goods_receipts[0]), { id: REM_GR_ID, code: "GR03999", status: "COMPLETED" }));
+          r.data.total = r.data.goods_receipts.length;
         }
         if (opts.soSearch) opts.soSearch(r.data);
         return { status: 200, json: r };
@@ -621,6 +661,137 @@ test("Nhận thiếu 1 UID (keep_open): giữ ở Nextwaves, báo 11/12, không 
     assert.doesNotMatch(text, /Quét tiếp/);
     assert.equal(b.session(KEY).state, "nw_ready");
     assert.equal(srv.st.puts.length, 0);
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.4.1 E2E phiếu phần còn lại: cộng sổ theo PO → không khoá; Nextwaves thiếu đúng tem món đã bán gấp (Giữ đơn mở) → coi là đủ → POS TỰ điền 11 UID vào 5 lô, không điền tem đã bán", async () => {
+  const { b, srv, pos, nw } = await openToReady({ server: { remainder: true, dropReceivedEpc: soldEpc() } });
+  try {
+    const s1 = b.session(KEY);
+    assert.deepEqual(s1.remainder.completed, [{ id: REM_GR_ID, code: "GR03999" }]);
+    assert.deepEqual(s1.remainder.excludeUids.sort(), ["1783950641470X99", SOLD_UID].sort(), "mọi mã trên phiếu đã xong (QR thuocsi + UID Nextwaves POS gắn)");
+    assert.deepEqual(s1.writeLocks, [], "phiếu phần còn lại: không còn so_many_gr");
+    assert.deepEqual(s1.fingerprint.map((x) => [x.productId, x.baseQuantity]).sort(), [["1110", 12], ["2431732", 2], ["5451", 40]].sort(), "vân tay cấp PO");
+    assert.ok(srv.st.log.some((r) => r.url.endsWith(`/backend/v1/order/goods-receipt/${REM_GR_ID}`)), "GET phiếu đã xong theo id");
+    const text = nw.view.lines.join("\n");
+    assert.match(nw.view.lines[0], /11 UID cần quét \(đơn 12, trừ 1 món đã bán gấp\)/);
+    assert.match(text, /Phiếu phần còn lại — đã nhận trước ở GR03999/);
+    assert.match(text, /Giữ đơn mở/);
+    srv.st.nwReceived = true;
+    nw.post(scan(200, { onMissing: "keep_open", lines: [{ missingUnitUids: [SOLD_UID] }] }));
+    await sessionState(b, "applied");
+    await until(() => pos.reloads >= 1 && pos.loads >= 2);
+    pos.post(POS_AUTH); // trang POS tải lại sau khi điền → app gọi API → hook báo lại header
+    await until(() => pos.view && pos.view.title === "GR03878: đã điền 11 mã vào 5 lô — kiểm danh sách rồi bấm HOÀN THÀNH");
+    const codes = codesOnGr(srv);
+    assert.equal(codes.length, 11);
+    assert.ok(!codes.includes(SOLD_UID), "tem món đã bán gấp không điền vào phiếu phần còn lại");
+    const s2 = b.session(KEY);
+    assert.ok(s2.log.some((l) => l.type === "nw_result_remainder" && l.soldMissing === 1 && l.onMissing === "keep_open"));
+    assert.ok(s2.log.some((l) => l.type === "receive_scan" && l.onMissing === "keep_open" && l.nwMissing === 1));
+    assert.equal(s2.nwResult.soldMissing, 1);
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.4.1 phiếu phần còn lại — I6: Nextwaves vẫn đọc tem món đã bán gấp → vẫn điền 11 UID (bỏ tem đó), khung POS cảnh báo tồn Nextwaves dư", async () => {
+  const { b, srv, pos, nw } = await openToReady({ server: { remainder: true } });
+  try {
+    srv.st.nwReceived = true;
+    nw.post(scan(200, { onMissing: "keep_open", lines: [] }));
+    await sessionState(b, "applied");
+    await until(() => pos.reloads >= 1 && pos.loads >= 2);
+    pos.post(POS_AUTH);
+    await until(() => pos.view && /đã điền 11 mã vào 5 lô/.test(pos.view.title));
+    assert.equal(pos.view.tone, "warn");
+    assert.match(pos.view.lines.join("\n"), /Nextwaves đã nhận cả 1 tem món đã bán gấp \(1792379018917AA1\) — tồn Nextwaves dư 1/);
+    assert.ok(!codesOnGr(srv).includes(SOLD_UID));
+    assert.ok(b.session(KEY).log.some((l) => l.type === "nw_result_remainder" && l.soldRead === 1 && l.soldMissing === 0));
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.4.1 phiếu phần còn lại: tem thiếu KHÔNG phải tem món đã bán gấp → nhận thiếu thật, không về POS, không điền", async () => {
+  const other = H.sample("nw-stg-intertenant-PO28237814-SOBD1593858.json").units.find((u) => u.uid !== SOLD_UID).epc;
+  const { b, srv, nw } = await openToReady({ server: { remainder: true, dropReceivedEpc: other } });
+  try {
+    srv.st.nwReceived = true;
+    nw.post(scan(200, { onMissing: "keep_open" }));
+    await until(() => /^Nextwaves đã nhận 11\/12 UID — còn thiếu 1$/.test(viewTitle(nw) || ""));
+    await settle();
+    assert.equal(b.session(KEY).state, "nw_ready");
+    assert.equal(srv.st.puts.length, 0);
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.4.1 phiếu phần còn lại: Nextwaves tự báo thiếu một UID khác tem đã bán (response receive-scan) → không coi là đủ dù đọc lại không thấy thiếu", async () => {
+  const { b, srv, nw } = await openToReady({ server: { remainder: true, dropReceivedEpc: soldEpc() } });
+  try {
+    srv.st.nwReceived = true;
+    nw.post(scan(200, { onMissing: "keep_open", lines: [{ missingUnitUids: [SOLD_UID, "1792379055069AA1"] }] }));
+    await until(() => /^Nextwaves đã nhận 11\/12 UID/.test(viewTitle(nw) || ""));
+    await settle();
+    assert.equal(b.session(KEY).state, "nw_ready");
+    assert.equal(srv.st.puts.length, 0);
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.4.1 PO nhiều phiếu nhưng phiếu mở đã nhận tay một phần → không phải phiếu phần còn lại: khoá so_many_gr, vân tay của phiếu (lệch đơn) + lý do trên khung POS", async () => {
+  const srv = makeServer({
+    remainder: true,
+    remainderOpenMut: (g) => {
+      g.items[0].details[0].received_quantity = 1;
+      g.items[0].received_quantity = 1;
+    },
+  });
+  const b = createBrowser(srv.handle);
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    pos.post(POS_AUTH);
+    (await until(() => startBtn(pos))).onClick();
+    const nw = await until(() => b.tabs().find((t) => t.url.startsWith(NW)));
+    nw.post(NW_AUTH);
+    const s = await until(() => b.session(KEY));
+    assert.equal(s.remainder, null);
+    assert.equal(s.remainderNote, "open_gr_touched");
+    assert.deepEqual(s.writeLocks, ["so_many_gr"]);
+    assert.deepEqual(s.fingerprint.find((x) => x.productId === "2431732").baseQuantity, 1, "vân tay của phiếu (như v0.4.0), không phải cấp PO");
+    await until(() => viewTitle(nw) === "Có đơn Nextwaves của SO nhưng số lượng không khớp phiếu nhận");
+    await until(() => pos.view && pos.view.lines.some((l) => /chưa nhận ra được phiếu phần còn lại: phiếu này đã được nhận tay một phần/.test(l)));
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.4.1 phiên cũ 'không có đơn' mang khoá so_many_gr (v0.4.0) → bấm lại, POS chứng minh phiếu phần còn lại → bỏ so_many_gr, gắn remainder", async () => {
+  const { b, pos } = await openToReady({ server: { remainder: true } });
+  try {
+    await b.patchSession(KEY, { state: "no_nw_order", writeLocks: ["so_many_gr"], remainder: null });
+    const s0 = b.session(KEY);
+    const msg = { type: "session:start", envId: "STG", nwTenant: s0.nwTenant, grId: GR_ID, grCode: "GR03878", poPosId: s0.poPosId, poPosCode: s0.poPosCode, posId: STORE, deliveryCode: s0.deliveryCode, soBase: s0.soBase, fingerprint: s0.fingerprint, writeLocks: [], remainder: { completed: [{ id: REM_GR_ID, code: "GR03999" }], excludeUids: [SOLD_UID] } };
+    const r = await b.sendFromTab(pos, msg);
+    assert.ok(r && r.ok, JSON.stringify(r));
+    const s1 = b.session(KEY);
+    assert.deepEqual(s1.writeLocks, []);
+    assert.deepEqual(s1.remainder, { completed: [{ id: REM_GR_ID, code: "GR03999" }], excludeUids: [SOLD_UID] });
+    // không có remainder → khoá chỉ thêm, không bớt (review v0.4.0 P3-5 giữ nguyên)
+    await b.patchSession(KEY, { state: "no_nw_order", writeLocks: ["so_many_gr"] });
+    await b.sendFromTab(pos, Object.assign({}, msg, { remainder: null }));
+    assert.deepEqual(b.session(KEY).writeLocks, ["so_many_gr"]);
+    // remainder sai dạng → bỏ qua (null)
+    await b.patchSession(KEY, { state: "no_nw_order", writeLocks: ["so_many_gr"] });
+    await b.sendFromTab(pos, Object.assign({}, msg, { remainder: { completed: [{ id: "khong-phai-uuid", code: "GR03999" }], excludeUids: [] } }));
+    assert.equal(b.session(KEY).remainder, null);
+    assert.deepEqual(b.session(KEY).writeLocks, ["so_many_gr"]);
   } finally {
     b.close();
   }
