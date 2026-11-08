@@ -22,6 +22,7 @@
   const K = C.keys;
   const N = C.nw;
   const R = C.resolve;
+  const M = C.match;
   const T = Object.assign({ pollMs: 700, collectTries: 6, collectDelayMs: 1500, httpTimeoutMs: 30000, authWaitMs: 20000, readerPollMs: 1000, readerFirstClickMs: 1500, readerGapMs: 10000, readerMaxClicks: 3, readerRenewMs: 10 * 60 * 1000, readerRetryMs: 15000, readerRetryMax: 8 }, C.tuning || {});
   const HOOK = "cgn/nw-hook";
   const ME = "cgn/nw-content";
@@ -239,7 +240,25 @@
       // v0.4.1: phiếu phần còn lại — UID đã nằm trên phiếu đã xong của PO (món bán gấp) không cần quét lại.
       remainder: s.remainder || null,
       lastScan: null, // lượt "Xác nhận nhận hàng" 2xx gần nhất: {onMissing, missingUids[]} (đối chiếu với kết quả đọc lại)
+      grSummary: Array.isArray(s.grSummary) ? s.grSummary : null, // v0.4.1 (audit F2): kiểm trước khi xác nhận
     };
+  }
+
+  // v0.4.1 (audit v0.4.0 F2): những gì chắc chắn làm kế hoạch điền bị chặn, biết được TRƯỚC khi dược sĩ xác nhận nhận hàng.
+  const PRE_MSG = {
+    product_not_on_gr: (p) => `SP ${p.productId}: ${p.count} tem không có dòng trên phiếu`,
+    unit_unknown: (p) => `SP ${p.productId}: đơn vị “${p.unit}” của Nextwaves không có trên sản phẩm POS`,
+    fraction: (p) => `SP ${p.productId}: quy đổi ra số lẻ theo đơn vị dòng`,
+    over: (p) => `SP ${p.productId}: Nextwaves ${p.nwBase} > phiếu ${p.grBase} (đơn vị gốc)`,
+    gr_received_by_hand: (p) => `SP ${p.productId}: phiếu đã có lượng nhận tay (không mã)`,
+  };
+  function precheckLines(c) {
+    if (!c || !Array.isArray(c.grSummary) || !M || !M.precheck) return { lines: [], warn: false };
+    const pc = M.precheck(c.grSummary, c.expected, c.remainder ? c.remainder.excludeUids : []);
+    if (pc.ok) return { lines: [`Kiểm trước khi nhận: số lượng khớp phiếu — điền được ${pc.units} UID (lô kiểm sau khi nhận).`], warn: false };
+    const why = pc.problems.slice(0, 4).map((p) => (PRE_MSG[p.code] ? PRE_MSG[p.code](p) : p.code)).join("; ");
+    const hint = c.remainder && pc.problems.some((p) => p.code === "over" || p.code === "product_not_on_gr") ? " Món nhận trước (bán gấp) có thể đã nhập số tay, không quét QR." : "";
+    return { lines: [`⚠ Kiểm trước khi nhận: extension sẽ KHÔNG điền được phiếu POS — ${why}.${hint} Nhận Nextwaves vẫn được; phiếu POS nhận tay.`], warn: true };
   }
 
   // v0.4.1: UID / EPC của đơn đã nằm trên phiếu POS đã xong (bán gấp) — chỉ phần giao với UID của đơn có tác dụng.
@@ -551,6 +570,11 @@
       }
     }
     if (wh) lines.push(wh);
+    if (!note) {
+      const pre = precheckLines(ctx);
+      lines.push(...pre.lines);
+      if (pre.warn) choiceWarn = true;
+    }
     const rl = readerLine();
     if (rl) lines.push(rl);
     if (note) lines.push(note.text);

@@ -679,6 +679,8 @@ test("v0.4.1 E2E phiếu phần còn lại: cộng sổ theo PO → không khoá
     assert.match(nw.view.lines[0], /11 UID cần quét \(đơn 12, trừ 1 món đã bán gấp\)/);
     assert.match(text, /Phiếu phần còn lại — đã nhận trước ở GR03999/);
     assert.match(text, /Giữ đơn mở/);
+    assert.match(text, /Kiểm trước khi nhận: số lượng khớp phiếu — điền được 11 UID/);
+    assert.ok(Array.isArray(s1.grSummary) && s1.grSummary.length === 3);
     srv.st.nwReceived = true;
     nw.post(scan(200, { onMissing: "keep_open", lines: [{ missingUnitUids: [SOLD_UID] }] }));
     await sessionState(b, "applied");

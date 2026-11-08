@@ -443,6 +443,15 @@
         fingerprint: rem && rem.ok ? rem.source : P.grFingerprintSource(gr),
         remainder: rem && rem.ok ? { completed: rem.completed, excludeUids: rem.excludeUids } : null,
         remainderNote: rem && !rem.ok && rem.reason !== "single_gr" ? rem.reason : null,
+        // v0.4.1 (audit F2): tóm tắt phiếu để tab Nextwaves kiểm trước khi dược sĩ xác nhận (match.precheck).
+        grSummary: gr.items.map((it) => ({
+          productId: it.productId,
+          unitRate: it.unitRate,
+          baseQuantity: it.baseQuantity,
+          received: it.details.reduce((n, d) => n + (Number(d.received) || 0), 0),
+          codes: it.details.reduce((n, d) => n + d.qrCodes.length, 0),
+          ratesByUnitName: it.ratesByUnitName,
+        })),
         writeLocks: lock ? [lock] : [],
       }).catch((e) => {
         readerGiveBack(reader);

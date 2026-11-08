@@ -36,7 +36,54 @@
     return { ok: list.length > 0 && list.every((r) => r.ok), rows: list };
   }
 
-  const lib = { fingerprint };
+  // v0.4.1 (audit v0.4.0 F2, bản rẻ): kiểm TRƯỚC khi dược sĩ bấm "Xác nhận nhận hàng" — từ UID dự kiến của đơn (trừ tem món đã bán gấp
+  // của phiếu phần còn lại) và tóm tắt phiếu POS gửi lúc tạo phiên. Không tra QR (lô / tra lỗi chỉ biết sau khi nhận).
+  //   grSummary: [{productId, unitRate, baseQuantity, received, codes, ratesByUnitName}] (một mục mỗi dòng phiếu)
+  //   receiving: normalizeReceiving(...) chụp lúc khớp đơn; excludeUids: UID đã nằm trên phiếu đã xong (bán gấp)
+  // → {ok, units, problems[{code, productId, …}]} — problems = những gì CHẮC CHẮN làm kế hoạch điền bị chặn.
+  function precheck(grSummary, receiving, excludeUids) {
+    const ex = new Set(excludeUids || []);
+    const gr = new Map();
+    for (const it of grSummary || []) {
+      const g = gr.get(it.productId) || { base: 0, received: 0, codes: 0, rates: {}, unitRate: Number(it.unitRate) || 0 };
+      g.base += Number(it.baseQuantity) || 0;
+      g.received += Number(it.received) || 0;
+      g.codes += Number(it.codes) || 0;
+      Object.assign(g.rates, it.ratesByUnitName || {});
+      gr.set(it.productId, g);
+    }
+    const problems = [];
+    const nwBase = new Map();
+    let units = 0;
+    for (const s of (receiving && receiving.shipments) || []) {
+      for (const l of s.lines) {
+        if (!l.tagged) continue; // dòng không gắn tem: dược sĩ nhận tay phần này (cảnh báo "chưa nhận đủ" sau khi điền)
+        const n = l.units.filter((u) => !ex.has(u.uid)).length;
+        if (!n) continue;
+        units += n;
+        const g = gr.get(l.posProductId);
+        if (!g) {
+          problems.push({ code: "product_not_on_gr", productId: l.posProductId || "?", count: n });
+          continue;
+        }
+        const rate = g.rates[l.unit];
+        if (!rate) {
+          problems.push({ code: "unit_unknown", productId: l.posProductId, unit: l.unit });
+          continue;
+        }
+        nwBase.set(l.posProductId, (nwBase.get(l.posProductId) || 0) + n * rate);
+      }
+    }
+    for (const [pid, base] of nwBase) {
+      const g = gr.get(pid);
+      if (g.unitRate > 0 && base % g.unitRate !== 0) problems.push({ code: "fraction", productId: pid, nwBase: base, unitRate: g.unitRate });
+      if (base > g.base) problems.push({ code: "over", productId: pid, nwBase: base, grBase: g.base });
+    }
+    for (const [pid, g] of gr) if (g.received > 0 && g.codes === 0) problems.push({ code: "gr_received_by_hand", productId: pid });
+    return { ok: problems.length === 0, units, problems };
+  }
+
+  const lib = { fingerprint, precheck };
   root.__CGN__ = root.__CGN__ || {};
   root.__CGN__.match = lib;
   if (typeof module !== "undefined" && module.exports) module.exports = lib;

@@ -173,3 +173,34 @@ test("v0.4.1 tìm theo SO sau khi nhận thiếu: openShipmentCount 0 + PARTIALL
   assert.equal(nw.normalizeReceivingSearchPage(s2).items[0].openShipmentCount, null);
   assert.equal((await resolve.resolveNwOrder(args(s2))).reason, "no_match");
 });
+
+const summaryOf = (g) => g.items.map((it) => ({ productId: it.productId, unitRate: it.unitRate, baseQuantity: it.baseQuantity, received: it.details.reduce((n, d) => n + d.received, 0), codes: it.details.reduce((n, d) => n + d.qrCodes.length, 0), ratesByUnitName: it.ratesByUnitName }));
+
+test("v0.4.1 F2 kiểm trước khi xác nhận: staging GR03954 (món bán gấp NHẬP SỐ TAY) → báo trước sẽ không điền được (I4)", () => {
+  const pc = match.precheck(summaryOf(g54()), nwBefore(), []);
+  assert.equal(pc.ok, false);
+  assert.deepEqual(pc.problems.map((p) => [p.code, p.productId]), [["product_not_on_gr", "2431732"], ["over", "5451"]]);
+  assert.equal(pc.problems[1].nwBase, 40);
+  assert.equal(pc.problems[1].grBase, 30);
+});
+
+test("v0.4.1 F2 kiểm trước khi xác nhận: production GR84803 lúc vừa tách + loại tem Arrahan đã bán gấp → khớp (21 UID)", () => {
+  const { gr, done, po } = prodAtSplit();
+  const r = pos.remainderOf(gr, po, [done]);
+  const pc = match.precheck(summaryOf(gr), nwPrd(), r.excludeUids);
+  assert.equal(pc.ok, true, JSON.stringify(pc.problems));
+  assert.equal(pc.units, 21);
+  // không loại tem đã bán (như v0.4.0) → Arrahan không có dòng trên phiếu phần còn lại
+  assert.deepEqual(match.precheck(summaryOf(gr), nwPrd(), []).problems.map((p) => p.code), ["product_not_on_gr"]);
+});
+
+test("v0.4.1 F2 kiểm trước khi xác nhận: đơn vị lạ, số lẻ, phiếu đã nhận tay không mã", () => {
+  const rec = nwBefore();
+  const sum = summaryOf(g77());
+  assert.equal(match.precheck(sum.map((x) => Object.assign({}, x, { received: 0 })), rec, []).ok, true, "phiếu gốc GR03877 chưa nhận: khớp 12 UID");
+  const odd = sum.map((x) => Object.assign({}, x, { received: 0, ratesByUnitName: x.productId === "5451" ? { túi: 10 } : x.ratesByUnitName, unitRate: x.productId === "5451" ? 30 : x.unitRate }));
+  assert.ok(match.precheck(odd, rec, []).problems.some((p) => p.code === "fraction" && p.productId === "5451"));
+  const noUnit = sum.map((x) => Object.assign({}, x, { received: 0, ratesByUnitName: x.productId === "1110" ? { hộp: 6 } : x.ratesByUnitName }));
+  assert.ok(match.precheck(noUnit, rec, []).problems.some((p) => p.code === "unit_unknown" && p.unit === "vỉ"));
+  assert.ok(match.precheck(sum, rec, []).problems.some((p) => p.code === "gr_received_by_hand"), "GR03877 đã nhập số tay (không mã)");
+});

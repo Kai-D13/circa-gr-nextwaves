@@ -299,6 +299,21 @@ function remainderFrom(msg) {
   return { completed: r.completed.map((g) => ({ id: String(g.id).toLowerCase(), code: g.code })), excludeUids: [...new Set(r.excludeUids)] };
 }
 
+// v0.4.1 (audit F2): tóm tắt phiếu cho tab Nextwaves kiểm trước khi xác nhận. Chỉ để hiển thị — sai dạng → null (bỏ phần kiểm trước).
+function grSummaryFrom(msg) {
+  const a = msg && msg.grSummary;
+  if (!Array.isArray(a) || !a.length || a.length > 300) return null;
+  const num = (x) => typeof x === "number" && Number.isFinite(x) && x >= 0;
+  const out = [];
+  for (const it of a) {
+    if (!it || !/^\d{1,12}$/.test(String(it.productId)) || !num(it.baseQuantity) || !num(it.received) || !num(it.codes)) return null;
+    const rates = {};
+    for (const [k, v] of Object.entries(it.ratesByUnitName || {})) if (k.length <= 20 && num(v) && v > 0) rates[k] = v;
+    out.push({ productId: String(it.productId), unitRate: num(it.unitRate) && it.unitRate > 0 ? it.unitRate : null, baseQuantity: it.baseQuantity, received: it.received, codes: it.codes, ratesByUnitName: rates });
+  }
+  return out;
+}
+
 async function startSession(msg, sender) {
   const base = E.envById(msg.envId);
   if (!base) throw new Error("env");
@@ -320,6 +335,7 @@ async function startSession(msg, sender) {
   }
   const remainder = remainderFrom(msg);
   const remainderNote = shortStr(msg.remainderNote, 40) || null;
+  const grSummary = grSummaryFrom(msg);
   let s;
   if (cur && isCurrent(cur) && cur.state === "no_nw_order") {
     // Bấm lại phiếu "không có đơn": tìm lại trên Nextwaves (giữ phiên, giữ khoá).
@@ -327,7 +343,7 @@ async function startSession(msg, sender) {
     // trường hợp (v0.4.1): POS vừa chứng minh đây là phiếu phần còn lại (cộng sổ theo dòng PO đạt) → bỏ so_many_gr cũ.
     const keep = (cur.writeLocks || []).filter((l) => !(remainder && l === "so_many_gr"));
     const locks = [...new Set([].concat(keep, Array.isArray(msg.writeLocks) ? msg.writeLocks.map(String) : []))];
-    s = Object.assign(cur, { state: "waiting_nw", updatedAt: Date.now(), reader: reader || cur.reader || null, writeLocks: locks, fingerprint: msg.fingerprint || cur.fingerprint || [], remainder, remainderNote, posTabId: sender && sender.tab ? sender.tab.id : cur.posTabId });
+    s = Object.assign(cur, { state: "waiting_nw", updatedAt: Date.now(), reader: reader || cur.reader || null, writeLocks: locks, fingerprint: msg.fingerprint || cur.fingerprint || [], remainder, remainderNote, grSummary, posTabId: sender && sender.tab ? sender.tab.id : cur.posTabId });
     s.log = (s.log || []).concat([{ at: new Date().toISOString(), type: "nw_retry", writeLocks: locks, remainder: remainder ? remainder.completed.map((g) => g.code) : null }]).slice(-LOG_MAX);
   } else {
     const replaced = cur && !isCurrent(cur) ? { type: "replaced_outdated", oldState: cur.state, oldCreatedBy: cur.createdBy || null } : null;
@@ -351,6 +367,7 @@ async function startSession(msg, sender) {
       nwWriteLocks: [], // khoá ghi phía Nextwaves: chỉ session:nwMatched đặt, một lần
       remainder, // v0.4.1: phiếu phần còn lại {completed[{id, code}], excludeUids[]} | null
       remainderNote, // v0.4.1: PO nhiều phiếu nhưng cộng sổ không đạt (lý do ngắn) — chỉ để hiển thị
+      grSummary, // v0.4.1 (audit F2): tóm tắt phiếu để tab Nextwaves kiểm trước khi xác nhận
       returnUrl,
       posTabId: sender && sender.tab ? sender.tab.id : null,
       nwTabId: null,
