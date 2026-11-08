@@ -101,7 +101,7 @@ const matchFromA1 = (extra) =>
 // POS mở GR03887 → bấm "Nhận hàng bằng RFID" (mượn đầu đọc) → tab Nextwaves → (khớp đơn bằng message như tab Nextwaves) → nw_ready.
 async function setup(o = {}) {
   const srv = makeServer(o.server);
-  const b = createBrowser(srv.handle, { tuning: Object.assign({ uiWaitMs: 300 }, o.tuning || {}), bgTuning: o.bgTuning, qsl: o.qsl });
+  const b = createBrowser(srv.handle, { tuning: Object.assign({ uiWaitMs: 300 }, o.tuning || {}), bgTuning: o.bgTuning, qsl: o.qsl, interceptBg: o.interceptBg });
   try {
     await b.setConfig({ mode: "STG", url: "" });
     const pos = b.openTab(GR_PAGE);
@@ -831,6 +831,92 @@ test("review P3-6: phiếu HOÀN THÀNH trên POS khi phiên còn ở bước Ne
     const r = await b.sendFromTab(pos, { type: "session:reopenNw", key: KEY });
     assert.equal(r.ok, false);
     assert.match(r.error, /không còn ở bước nhận trên Nextwaves/);
+  } finally {
+    b.close();
+  }
+});
+
+// ---------- audit v0.4.0 P3-6 / P3-7 / P3-8 (sửa ở v0.4.1) ----------
+const OTHER_KEY = "STG:11111111-2222-4333-8444-555555555555";
+const twinSession = (b, extra) =>
+  b.patchSession(OTHER_KEY, Object.assign(H.clone(session(b)), { key: OTHER_KEY, grId: OTHER_KEY.slice(4), grCode: "GR03999", shipmentIds: [TWIN_SHIP], nwTabId: null, scanOk: undefined, returnUrl: `${POS}/danh-sach-phieu-nhan-hang`, updatedAt: Date.now() }, extra || {}));
+const routeFrom = (b, t) => b.sendFromTab(t, { type: "session:routeScan", envId: "STG", tenant: "circa-stg", scan: { shipmentId: TWIN_SHIP, httpStatus: 200, sentEpcs: 3 } });
+
+test("audit v0.4.0 P3-6: routeScan không để hai phiên chung một tab; nhận xong đóng cả tab gửi lẫn tab cũ của phiên — tab cũ cùng SO với phiếu khác còn ở bước Nextwaves thì giữ", async () => {
+  // (a) Dược sĩ tự mở tab nhận cho SO của phiếu kia (khác SO với phiên của tab extension mở).
+  const ctx = await setup();
+  const { b, nw } = ctx;
+  try {
+    const own2 = b.openTab(`${NW}/vi/purchases/receive?po=SOBD7777777`);
+    await twinSession(b, { soBase: "SOBD7777777", nwPoId: "aaaaaaaa-0000-4000-8000-000000000077", nwPoNumber: "PO77777777", nwTabId: own2.id });
+    const manual = b.openTab(`${NW}/vi/purchases/receive?po=PO77777777`);
+    assert.equal((await routeFrom(b, manual)).data.key, OTHER_KEY);
+    assert.deepEqual([session(b, OTHER_KEY).nwTabId, session(b, OTHER_KEY).nwTabPrev], [manual.id, own2.id]);
+    assert.equal(session(b).nwTabId, nw.id, "phiên của tab khác không đổi");
+    const r = await b.sendFromTab(manual, { type: "session:received", key: OTHER_KEY, payload: H.clone(A1.nwResult) });
+    assert.equal(r.ok, true, r.error);
+    await until(() => manual.closed && own2.closed, 2000);
+    assert.equal(nw.closed, false, "tab Nextwaves của phiếu khác giữ nguyên");
+    assert.deepEqual([session(b, OTHER_KEY).nwTabId, session(b, OTHER_KEY).nwTabPrev], [null, null]);
+  } finally {
+    b.close();
+  }
+  // (b) SO tách giao: lượt ở tab của phiên kia → tab về phiên được giao, phiên kia mất tab (không chung); tab cũ cùng SO giữ.
+  const c2 = await setup();
+  try {
+    const own2 = c2.b.openTab(`${NW}/vi/purchases/receive?po=SOBD1594095`);
+    await twinSession(c2.b, { nwTabId: own2.id });
+    assert.equal((await routeFrom(c2.b, c2.nw)).data.key, OTHER_KEY);
+    assert.equal(session(c2.b).nwTabId, null, "không hai phiên chung một tab");
+    assert.ok(session(c2.b).log.some((l) => l.type === "nw_tab_reused" && l.by === "GR03999"));
+    assert.deepEqual([session(c2.b, OTHER_KEY).nwTabId, session(c2.b, OTHER_KEY).nwTabPrev], [c2.nw.id, own2.id]);
+    const r = await c2.b.sendFromTab(c2.nw, { type: "session:received", key: OTHER_KEY, payload: H.clone(A1.nwResult) });
+    assert.equal(r.ok, true, r.error);
+    await until(() => c2.nw.closed, 2000);
+    await settle(200);
+    assert.equal(own2.closed, false, "tab cùng SO — phiếu kia còn ở bước Nextwaves → giữ");
+  } finally {
+    c2.b.close();
+  }
+});
+
+test("audit v0.4.0 P3-7: không tái dùng tab Nextwaves đang có lượt nhận (đã 2xx chưa đọc xong / modal quét đang mở) → mở tab mới, phiên kia giữ tab", async () => {
+  for (const kind of ["scanOk", "modal"]) {
+    const ctx = await setup();
+    const { b, pos, nw } = ctx;
+    try {
+      const url0 = nw.url;
+      if (kind === "scanOk") await b.patchSession(KEY, { scanOk: { shipmentId: A1.shipmentIds[0], httpStatus: 200, sentEpcs: 15, at: Date.now() } });
+      else nw.dom.byId["scan-receive-qr"] = { closest: (sel) => (sel === '[role="dialog"]' ? { textContent: "Quét tem của phiếu gửi IT-BUYMED-STAG-1" } : null) };
+      const n0 = b.tabs().filter((t) => t.url.startsWith(NW) && !t.closed).length;
+      const other = "33333333-2222-4333-8444-555555555555";
+      const r = await b.sendFromTab(pos, { type: "session:start", envId: "STG", nwTenant: "circa-stg", grId: other, grCode: "GR03777", posId: STORE, soBase: "SOBD1" });
+      assert.equal(r.ok, true, r.error);
+      assert.equal(b.tabs().filter((t) => t.url.startsWith(NW) && !t.closed).length, n0 + 1, `${kind}: mở tab Nextwaves mới`);
+      assert.equal(nw.url, url0, `${kind}: tab đang nhận không bị điều hướng`);
+      assert.equal(session(b).nwTabId, nw.id);
+      assert.notEqual(session(b, `STG:${other}`).nwTabId, nw.id);
+      assert.ok(!session(b).log.some((l) => l.type === "nw_tab_reused"));
+    } finally {
+      b.close();
+    }
+  }
+});
+
+test("audit v0.4.0 P3-8: session:noOrder lỗi (phiên vẫn waiting_nw) → latch giữ view 'chưa có đơn'; vẽ lại không ra khung rỗng, không tìm lại", async () => {
+  const ctx = await setup({ match: false, server: { nw: nwEmpty }, interceptBg: (msg) => (msg.type === "session:noOrder" ? { ok: false, error: "lỗi giả" } : undefined) });
+  const { b, srv, nw } = ctx;
+  try {
+    nw.post(NW_AUTH());
+    await until(() => viewTitle(nw) === "Nextwaves chưa có đơn chờ nhận cho SOBD1594095");
+    assert.equal(session(b).state, "waiting_nw");
+    const n = nw.views.length;
+    await b.patchSession(KEY, { reader: Object.assign({}, session(b).reader || {}, { state: "x-test" }) });
+    await until(() => nw.views.length > n);
+    await settle(100);
+    assert.ok(nw.view, "không vẽ khung rỗng");
+    assert.equal(viewTitle(nw), "Nextwaves chưa có đơn chờ nhận cho SOBD1594095");
+    assert.equal(srv.st.nwSearches, 1, "vẽ lại từ latch, không tìm lại");
   } finally {
     b.close();
   }

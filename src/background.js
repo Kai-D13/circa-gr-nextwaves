@@ -32,7 +32,7 @@
 importScripts("lib/env.js", "lib/keys.js");
 const E = self.__CGN__.env;
 const K = self.__CGN__.keys;
-const T = Object.assign({ leaseMs: 90 * 1000, retryCooldownMs: 60 * 1000, readerTtlMs: 15 * 60 * 1000, readerRelayMs: 7000, nwCloseDelayMs: 500, readerReturnTries: 5, readerReturnGapMs: 2000, qslStatusMs: 1200, qslReleaseWaitMs: 7500 }, self.__CGN__.tuning || {});
+const T = Object.assign({ leaseMs: 90 * 1000, retryCooldownMs: 60 * 1000, readerTtlMs: 15 * 60 * 1000, readerRelayMs: 7000, nwCloseDelayMs: 500, readerReturnTries: 5, readerReturnGapMs: 2000, qslStatusMs: 1200, qslReleaseWaitMs: 7500, nwBusyAskMs: 800 }, self.__CGN__.tuning || {});
 // Lượt mượn đầu đọc còn hiệu lực (chưa trả / chưa bị QR Scan Log coi là lạ) → dùng lại leaseId để gia hạn; ngược lại lượt mới.
 const LEASE_DONE = new Set(["returned", "return_failed", "unknown_lease"]);
 const newLeaseId = () => "gr" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
@@ -132,7 +132,7 @@ async function contentUpdate(key, patch, logEvent) {
   if (state === "applied" && !(["received", "apply_stopped"].includes(s.state) || stale)) throw new Error(`Không chuyển ${s.state} → applied`);
   const s2 = await updateSession(key, { state }, logEvent);
   // Review v0.4.0 P3-6: phiếu xong trên POS khi phiên còn ở bước Nextwaves → tab nhận hàng không còn việc: đóng rồi trả đầu đọc.
-  if (state === "done" && (NW_OPEN.has(s.state) || s.state === "no_nw_order")) laterCloseNwAndReturn(s2, s.nwTabId, "gr_done");
+  if (state === "done" && (NW_OPEN.has(s.state) || s.state === "no_nw_order")) laterCloseNwAndReturn(s2, s.nwTabId, "gr_done", [s.nwTabPrev]);
   return s2;
 }
 
@@ -266,13 +266,26 @@ async function openNwFor(all, s) {
   }
   for (const o of Object.values(all)) {
     if (o.key === s.key || !o.nwTabId) continue;
+    // Audit v0.4.0 P3-7: không điều hướng tab đang có lượt nhận — phiên đã có lượt 2xx chưa đọc xong kết quả, hoặc tab đang mở modal
+    // quét / đang đọc kết quả / không trả lời → mở tab mới thay vì làm mất lượt "Xác nhận nhận hàng".
+    if (o.state === "nw_ready" && o.scanOk) continue;
     const t = await tabOrNull(o.nwTabId);
     if (t && E.classifyNwPage(tabUrl(t), env)) {
+      const busy = await sendToTab(o.nwTabId, { type: "cgn:nw-busy" }, T.nwBusyAskMs);
+      if (!busy || busy.ok !== true || busy.busy !== false) continue;
       const id = await openOrFocus(o.nwTabId, url);
       return { tabId: id, reusedFrom: o.key };
     }
   }
   return { tabId: await openOrFocus(null, url), reusedFrom: null };
+}
+
+// Trang nhận hàng Nextwaves `?po=` thuộc phiên: đúng SO gốc, id PO hoặc số PO Nextwaves của phiên.
+function matchesNwPo(s, po) {
+  const p = String(po || "").trim();
+  if (!p) return false;
+  const base = K.soBase(p);
+  return (!!base && s.soBase === base) || (!!s.nwPoId && s.nwPoId === p.toLowerCase()) || (!!s.nwPoNumber && s.nwPoNumber.toUpperCase() === p.toUpperCase());
 }
 
 function readerFrom(msg) {
@@ -391,16 +404,7 @@ async function findByNw(envId, tenant, po, sender) {
   const env = E.envFor(envId, tenant);
   if (!env) return null;
   const all = await getSessions();
-  const p = String(po || "").trim();
-  const base = K.soBase(p);
-  const list = Object.values(all).filter(
-    (s) =>
-      isCurrent(s) &&
-      s.envId === env.id &&
-      s.nwTenant === env.nwTenant &&
-      ACTIVE.has(s.state) &&
-      ((base && s.soBase === base) || (s.nwPoId && s.nwPoId === p.toLowerCase()) || (s.nwPoNumber && s.nwPoNumber.toUpperCase() === p.toUpperCase()))
-  );
+  const list = Object.values(all).filter((s) => isCurrent(s) && s.envId === env.id && s.nwTenant === env.nwTenant && ACTIVE.has(s.state) && matchesNwPo(s, po));
   list.sort((a, b) => b.updatedAt - a.updatedAt);
   const tabId = sender && sender.tab ? sender.tab.id : null;
   const own = tabId === null || tabId === undefined ? [] : list.filter((s) => s.nwTabId === tabId);
@@ -496,11 +500,15 @@ async function routeScan(msg, sender) {
   const s = hits[0];
   if (s.scanOk) return s;
   const tabId = sender && sender.tab ? sender.tab.id : null;
-  return updateSession(
-    s.key,
-    Object.assign({ scanOk: { shipmentId: sid, httpStatus: scan.httpStatus, sentEpcs: scan.sentEpcs === undefined ? null : scan.sentEpcs, at: Date.now() }, scanOkAt: Date.now() }, tabId !== null ? { nwTabId: tabId } : {}),
-    { type: "scan_ok", shipmentId: sid, httpStatus: scan.httpStatus, routed: true }
-  );
+  // Audit v0.4.0 P3-6: tab gửi lượt này thành tab của phiên s. Không để hai phiên chung một tab: phiên khác đang trỏ tab này mất tab (như
+  // C1 tái dùng — mở lại được từ POS). Tab cũ của s (nếu khác) nhớ ở nwTabPrev để đóng khi nhận xong.
+  const patch = { scanOk: { shipmentId: sid, httpStatus: scan.httpStatus, sentEpcs: scan.sentEpcs === undefined ? null : scan.sentEpcs, at: Date.now() }, scanOkAt: Date.now() };
+  if (tabId !== null) {
+    for (const o of Object.values(all)) if (o.key !== s.key && o.nwTabId === tabId) await updateSession(o.key, { nwTabId: null }, { type: "nw_tab_reused", by: s.grCode });
+    patch.nwTabId = tabId;
+    if (s.nwTabId !== null && s.nwTabId !== undefined && s.nwTabId !== tabId) patch.nwTabPrev = s.nwTabId;
+  }
+  return updateSession(s.key, patch, { type: "scan_ok", shipmentId: sid, httpStatus: scan.httpStatus, routed: true });
 }
 
 // Nextwaves đã nhận đủ: chỉ khi phiên nw_ready + đã ghi nhận lượt 2xx. Đưa dược sĩ về đúng trang phiếu POS (tab gốc nếu đang ở danh sách
@@ -525,8 +533,9 @@ async function received(key, payload, sender) {
   }
   if (!posTabId) posTabId = await openOrFocus(null, s.returnUrl);
   const nwTabId = sender && sender.tab ? sender.tab.id : s.nwTabId;
-  const s2 = await updateSession(key, { posTabId, nwTabId: null }, { type: "pos_focused", tabId: posTabId, reusedTab: posTabId === s.posTabId });
-  laterCloseNwAndReturn(s2, nwTabId, "received");
+  const s2 = await updateSession(key, { posTabId, nwTabId: null, nwTabPrev: null }, { type: "pos_focused", tabId: posTabId, reusedTab: posTabId === s.posTabId });
+  // Audit v0.4.0 P3-6: đóng tab gửi VÀ tab Nextwaves extension mở cho phiên (nếu khác) — tab còn mở có thể tự kết nối lại, giữ cổng đầu đọc.
+  laterCloseNwAndReturn(s2, nwTabId, "received", [s.nwTabId, s.nwTabPrev]);
   return s2;
 }
 
@@ -564,7 +573,7 @@ async function cancelSession(key) {
   delete all[key];
   await saveSessions(all);
   // Review v0.4.0 P2-3: màn quét có thể đang giữ cổng → đóng tab Nextwaves của phiên trước, rồi mới trả đầu đọc.
-  laterCloseNwAndReturn(s, s.nwTabId, "cancel");
+  laterCloseNwAndReturn(s, s.nwTabId, "cancel", [s.nwTabPrev]);
   return true;
 }
 
@@ -665,19 +674,33 @@ function laterLend(s, why) {
   }, 0);
 }
 
-function laterCloseNwAndReturn(s, nwTabId, why) {
+// Đóng tab Nextwaves của phiên rồi trả đầu đọc. `nwTabId` (tab chính / tab gửi lệnh): đóng khi còn là trang nhận hàng. `extra` (tab
+// extension mở cho phiên trước khi routeScan đổi tab — audit v0.4.0 P3-6): chỉ đóng khi trang còn đúng đơn của phiên VÀ không phiên nào
+// khác đang ở bước Nextwaves cùng đơn đó (dược sĩ có thể đang dùng tab đó cho phiếu kia của SO tách giao).
+function laterCloseNwAndReturn(s, nwTabId, why, extra) {
   if (!s) return;
   const env = envOf(s);
   setTimeout(async () => {
-    const tab = await tabOrNull(nwTabId);
-    if (tab && E.classifyNwPage(tabUrl(tab), env)) {
+    const ids = [nwTabId].concat(extra || []).filter((x, i, a) => x !== null && x !== undefined && a.indexOf(x) === i);
+    let closed = false;
+    for (const id of ids) {
+      const tab = await tabOrNull(id);
+      const page = tab ? E.classifyNwPage(tabUrl(tab), env) : null;
+      if (!page) continue;
+      if (id !== nwTabId) {
+        if (!matchesNwPo(s, page.po)) continue;
+        const all = await getSessions();
+        const others = Object.values(all).filter((o) => o.key !== s.key && isCurrent(o) && o.envId === s.envId && o.nwTenant === s.nwTenant && (NW_OPEN.has(o.state) || o.state === "no_nw_order"));
+        if (others.some((o) => matchesNwPo(o, page.po))) continue;
+      }
+      closed = true;
       try {
-        await chrome.tabs.remove(nwTabId);
+        await chrome.tabs.remove(id);
       } catch (_) {
         /* đã đóng */
       }
-      await new Promise((r) => setTimeout(r, T.nwCloseDelayMs));
     }
+    if (closed) await new Promise((r) => setTimeout(r, T.nwCloseDelayMs));
     laterReturnReader(s, why || "received");
   }, 0);
 }

@@ -24,10 +24,12 @@
   const GAP = 12; // khoảng hở phía trên nút được tránh
   const MIN_TOP = 8; // khung không vượt mép trên cửa sổ
 
+  // Audit v0.4.0 P3-9 (QA 07/11): khung nổi cao tối đa 45vh (trước 70vh) — modal nhận hàng Nextwaves ở giữa màn, khung thấp hơn thì không
+  // che nút "Kết nối đầu đọc"; không thêm nút đó vào danh sách né (liftFor sẽ đẩy khung ra ngoài màn). Nội dung dài cuộn trong khung.
   const CSS = `
     :host { all: initial; }
     .box { position: fixed; right: ${BASE}px; bottom: ${BASE}px; z-index: 2147483646; width: min(460px, calc(100vw - 32px));
-      max-height: 70vh; overflow: auto; background: #fff; color: #111; border: 1px solid #d0d0d0; border-radius: 10px;
+      max-height: 45vh; overflow: auto; background: #fff; color: #111; border: 1px solid #d0d0d0; border-radius: 10px;
       box-shadow: 0 6px 24px rgba(0,0,0,.18); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
     .hd { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid #eee; }
     .dot { width: 9px; height: 9px; border-radius: 50%; background: #999; flex: none; }

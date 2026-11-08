@@ -280,9 +280,15 @@
   }
 
   function showNoOrder(s, reports) {
+    const view = noOrderView(s, reports);
+    panel.show(view);
+    return view;
+  }
+
+  function noOrderView(s, reports) {
     const rows = reports || (latch && latch.reports) || [];
     const partial = s.noOrderReason === "nw_partial_received";
-    panel.show({
+    return {
       tone: "warn",
       title: partial ? `Nextwaves đã nhận một phần đơn của ${s.soBase} trước đó — không nhận tiếp được` : `Nextwaves chưa có đơn chờ nhận cho ${s.soBase}`,
       lines: partial
@@ -311,7 +317,7 @@
         },
         { label: "Về POS", secondary: true, onClick: () => bg("session:focusPos", { key: s.key }) },
       ],
-    });
+    };
   }
 
   async function resolveOrder(env, s, po) {
@@ -340,8 +346,10 @@
         } catch (_) {
           s2 = null;
         }
-        latch = { sig: sigOf(s2 || s), view: null, reports: r.reports };
-        showNoOrder(s2 || s, r.reports);
+        // Audit v0.4.0 P3-8: latch luôn có view — session:noOrder lỗi (phiên vẫn waiting_nw) thì lần vẽ lại dùng latch.view, không "Lỗi extension".
+        const view = noOrderView(s2 || s, r.reports);
+        latch = { sig: sigOf(s2 || s), view, reports: r.reports };
+        panel.show(view);
         return null;
       }
       const facts = [`SO ${s.soBase}: kết quả tìm total = ${r.total === null ? "?" : r.total}, đã đọc ${r.read}; ứng viên Buymed ${r.candidates}; refId đúng SO ${r.verified}.`];
@@ -1047,6 +1055,14 @@
     }
   }, T.pollMs);
   setInterval(readerTick, T.readerPollMs);
+
+  // Audit v0.4.0 P3-7: background hỏi trước khi tái dùng tab này cho phiếu khác (C1) — đang mở modal quét / đang đọc kết quả / có lượt
+  // chờ xử lý thì "bận" (background mở tab mới, không điều hướng tab này). Chỉ trả lời background của chính extension.
+  chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+    if (!msg || msg.type !== "cgn:nw-busy" || !sender || sender.id !== chrome.runtime.id || sender.tab) return undefined;
+    reply({ ok: true, busy: !!(receiveModal().open || collecting || pendingScan) });
+    return undefined;
+  });
 
   bg("config:get")
     .then((c) => {
