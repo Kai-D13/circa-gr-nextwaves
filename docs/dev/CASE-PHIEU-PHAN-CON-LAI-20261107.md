@@ -37,7 +37,15 @@ Phía POS:
   - **chỉ có các dòng chưa nhận đủ** (17/18), `quantity` = phần còn lại;
   - `item.ref_id` giữ nguyên (cùng dòng PO), lô giữ nguyên (`lot_id`, `lot_date`), id chi tiết mới.
 - **P3.** Không có trường nào trỏ về phiếu gốc; hai phiếu chỉ nối với nhau qua PO. PO liệt kê cả hai phiếu (`goods_receipts`), vẫn **một** mã giao / SO. Trang PO ghi "Đã nhập kho"; "PO con" để trống.
-- **P4.** Sau COMPLETED, mỗi đơn vị có 2 mã: UID đã quét và 1 mã POS tự sinh (dạng `17939…C11`), không phải UID Nextwaves. Hiện tượng này đã biết từ R5 / D1.
+- **P4 (sửa 08/11 — bản đầu ghi ngược).** Sau COMPLETED, mỗi đơn vị **đã quét QR** có 2 mã:
+  - mã đầu = mã QR thuocsi mà dược sĩ quét (mã gốc, ví dụ `1783950641470B34`), **không** có trong Nextwaves;
+  - mã thứ hai = mã POS gắn lúc HOÀN THÀNH (ví dụ `1793929018293B31`), **chính là `unitUid` (tem con) của Nextwaves**.
+
+  Kiểm với `samples/nw-prd-receiving-PO-2026-000001-20261106.json`:
+  - Arrahan trên GR84673: mã thứ hai có trong Nextwaves;
+  - GR84803: 20/40 mã là UID Nextwaves, luôn là các mã POS gắn thêm.
+
+  Nhập số tay thì không có mã nào (§8 S6).
 - **P5.** Dòng Femalto trên GR84803 có chi tiết `quantity` 0, `received_quantity` 1, không mã. Trang PO hiện hai dòng lô "010826" (1 và 0). **Đã rõ (§8, S4 + S10): không phải POS sinh lúc tách.** Phiếu phần còn lại lúc vừa sinh luôn có SL lô = phần còn lại và dùng lại đúng dòng lô của PO (`ref_id` chi tiết). Trên GR84803, 16/17 dòng dùng lại `ref_id` lô của GR84673; riêng Femalto mang một dòng lô PO **mới** (`358e29ce…` ≠ `f52af836…`, cùng `lot_id`). Nghĩa là lô đó được thêm lại bằng tay sau khi tách. Trang POS production không có nhật ký hoạt động, nên không biết chính xác thao tác.
 
 Phía Nextwaves:
@@ -191,7 +199,7 @@ Việc này để sau, khi v0.4.1 đã code.
 | N4 | Phần thiếu chỉ nhận được nếu **bên bán (Buymed) đẩy phiếu gửi mới**. Trang PO ghi: trước khi nhận phiếu cuối "không thể nhận, đóng hoặc hủy đơn thủ công" |
 | N5 | Tìm theo SO (`inter-tenant-orders/receiving?q=SOBD1594067`, đúng API extension dùng) **vẫn trả đơn**: `purchaseOrderStatus PARTIALLY_RECEIVED`, `openShipmentCount 0`. So với nhận đủ: `total 0` (T3 25/10) |
 | N6 | Hai lựa chọn khi thiếu: `keep_open` ("Giữ đơn mở": phần thiếu chờ phiếu gửi sau, không báo ai) / `close_short` ("Đóng đơn dù còn thiếu": đóng đơn, **nhà cung cấp được báo phần thiếu**) — chữ của Nextwaves; `close_short` chưa thử |
-| N7 | `unitUid` Nextwaves cùng dạng mã QR Circa: 13 chữ số + chữ + số (vd `1792984580371AA1`). Mã POS tự sinh (`1793929119118C11`) cũng dạng đó → **không phân biệt được bằng dạng mã** (§11, P4) |
+| N7 | `unitUid` Nextwaves có dạng mã QR Circa: 13 chữ số + chữ + số (vd `1792984580371AA1`). Mã thuocsi dược sĩ quét cũng dạng đó, nên **không phân biệt được bằng dạng mã**; chỉ so giao với UID của đơn (§11, P4) |
 
 PO69611541 giờ đã nhận một phần, không còn dùng được cho E2E. Đơn staging chờ nhận còn lại cho E2E: PO-2026-000001 ↔ SOBD1594228 (+3 đơn 12/10).
 
@@ -206,7 +214,7 @@ Mẫu (đã kiểm SHA-256 với trang, đã bỏ tên người): `samples/nw-st
 
 | Mục | Phản hồi | Kết luận |
 |---|---|---|
-| P4 (mã POS tự sinh) | Mẫu GR84803 / Alpha choay: `thuocsi_qr_codes` = `1789404808860C1270` (mã QR thuocsi, duy nhất) + `1793929119118C11` (POS sinh). Hai mã nằm **cùng mảng** | **Không ảnh hưởng extension**, với điều kiện: chỉ so **giao** giữa UID của đơn Nextwaves và mã trên phiếu (không coi "mã lạ" là đơn vị), đếm đã nhận bằng `received_quantity` (không đếm mã). Không tách được bằng dạng mã (N7). Phiếu phần còn lại không mang mã sang (S4), mã POS chỉ thêm lúc COMPLETED → không đụng lượt điền |
+| P4 (mã POS tự sinh) | Mẫu GR84803 / Alpha choay: `thuocsi_qr_codes` = `1789404808860C1270` (mã QR thuocsi, duy nhất) + `1793929119118C11` (POS gắn). Hai mã nằm **cùng mảng** | **Sửa 08/11:** `1793929119118C11` **là UID Nextwaves** (có trong đơn PO-2026-000001); `1789404808860C1270` không có trong Nextwaves. POS gắn UID Nextwaves lúc HOÀN THÀNH cho đơn vị đã quét QR. Đây chính là cách extension biết **món nào đã bán gấp**: giao mã trên phiếu đã xong với UID của đơn. **Không ảnh hưởng xấu** với điều kiện: chỉ so giao (không coi "mã lạ" là đơn vị), đếm đã nhận bằng `received_quantity`. Phiếu phần còn lại không mang mã sang (S4); POS chỉ gắn lúc COMPLETED nên không đụng lượt điền. Món bán gấp nhập số tay → không có UID → extension dừng an toàn (I4) |
 | P5 | Dược sĩ không quét QR, nhập tay đủ số lượng | Khớp §8 S10. I5 giữ P3, dừng an toàn |
 | I2 | Để sau | — |
 | I4 | Operator đảm bảo món bán gấp phải quét QR rồi mới HOÀN THÀNH | Extension không làm thêm |
