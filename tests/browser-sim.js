@@ -231,7 +231,21 @@ function createBrowser(server, opts = {}) {
       });
     };
     // DOM tối thiểu (v0.4.0): nút của trang do test đặt ở t.dom.buttons ({textContent, disabled, click}) — đủ cho nw-content tìm nút đầu đọc.
-    win.document = { get visibilityState() { return t.dom.hidden ? "hidden" : "visible"; }, querySelectorAll: (sel) => (sel === "button" ? t.dom.buttons.slice() : []) };
+    // v0.4.1: thêm getElementById / querySelector (test đặt phần tử ở t.dom.byId / t.dom.query — modal nhận hàng Nextwaves, khung QR Scan Log)
+    // và navigator.locks (t.dom.locks = () => [{name}] — Web Lock của QR Scan Log).
+    win.document = {
+      get visibilityState() {
+        return t.dom.hidden ? "hidden" : "visible";
+      },
+      querySelectorAll: (sel) => (sel === "button" ? t.dom.buttons.slice() : []),
+      getElementById: (id) => (t.dom.byId && t.dom.byId[id]) || null,
+      querySelector: (sel) => (t.dom.query && t.dom.query[sel]) || null,
+    };
+    win.navigator = {
+      get locks() {
+        return t.dom.locks ? { query: async () => ({ held: t.dom.locks(), pending: [] }) } : undefined;
+      },
+    };
     win.sessionStorage = {
       getItem: (k) => (t.ss.has(k) ? t.ss.get(k) : null),
       setItem: (k, v) => t.ss.set(k, String(v)),
@@ -410,7 +424,7 @@ function createBrowser(server, opts = {}) {
   }
 
   function openTab(url) {
-    const t = { id: nextTabId++, url, closed: false, ctx: null, view: null, viewKind: null, views: [], loads: 0, reloads: 0, focusCount: 0, ss: new Map(), post: () => {}, grListCtrl: null, grListActive: false, grListModel: null, grListModels: [], grListNotice: null, grListNotices: [], anchor: true, floatViews: [], inlineViews: [], dom: { buttons: [], hidden: false } };
+    const t = { id: nextTabId++, url, closed: false, ctx: null, view: null, viewKind: null, views: [], loads: 0, reloads: 0, focusCount: 0, ss: new Map(), post: () => {}, grListCtrl: null, grListActive: false, grListModel: null, grListModels: [], grListNotice: null, grListNotices: [], anchor: true, floatViews: [], inlineViews: [], dom: { buttons: [], hidden: false, byId: {}, query: {}, locks: null } };
     // Trang phiếu có / mất chỗ gắn khung (#all-receipt của đúng phiếu). Có lại khi khung đang chờ → onFound như trình duyệt thật.
     t.setAnchor = (on) => {
       t.anchor = !!on;
