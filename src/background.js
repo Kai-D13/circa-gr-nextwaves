@@ -349,15 +349,18 @@ async function startSession(msg, sender) {
   const remainder = remainderFrom(msg);
   const remainderNote = shortStr(msg.remainderNote, 40) || null;
   const grSummary = grSummaryFrom(msg);
+  // Review v0.4.1 P3-6: trang gửi remainder (nên đã bỏ khoá so_many_gr) mà background không nhận (sai dạng / quá giới hạn) → khoá lại.
+  const remainderRejected = !!msg.remainder && !remainder;
+  const msgLocks = (Array.isArray(msg.writeLocks) ? msg.writeLocks.map(String) : []).concat(remainderRejected ? ["so_many_gr"] : []);
   let s;
   if (cur && isCurrent(cur) && cur.state === "no_nw_order") {
     // Bấm lại phiếu "không có đơn": tìm lại trên Nextwaves (giữ phiên, giữ khoá).
     // Review v0.4.0 P3-5: dữ liệu vừa đọc lại ở POS (khoá ghi, vân tay, tab) thắng; khoá chỉ thêm, không bao giờ bớt — trừ một
     // trường hợp (v0.4.1): POS vừa chứng minh đây là phiếu phần còn lại (cộng sổ theo dòng PO đạt) → bỏ so_many_gr cũ.
     const keep = (cur.writeLocks || []).filter((l) => !(remainder && l === "so_many_gr"));
-    const locks = [...new Set([].concat(keep, Array.isArray(msg.writeLocks) ? msg.writeLocks.map(String) : []))];
+    const locks = [...new Set([].concat(keep, msgLocks))];
     s = Object.assign(cur, { state: "waiting_nw", updatedAt: Date.now(), reader: reader || cur.reader || null, writeLocks: locks, fingerprint: msg.fingerprint || cur.fingerprint || [], remainder, remainderNote, grSummary, posTabId: sender && sender.tab ? sender.tab.id : cur.posTabId });
-    s.log = (s.log || []).concat([{ at: new Date().toISOString(), type: "nw_retry", writeLocks: locks, remainder: remainder ? remainder.completed.map((g) => g.code) : null }]).slice(-LOG_MAX);
+    s.log = (s.log || []).concat([{ at: new Date().toISOString(), type: "nw_retry", writeLocks: locks, remainder: remainder ? remainder.completed.map((g) => g.code) : null, remainderRejected }]).slice(-LOG_MAX);
   } else {
     const replaced = cur && !isCurrent(cur) ? { type: "replaced_outdated", oldState: cur.state, oldCreatedBy: cur.createdBy || null } : null;
     s = {
@@ -376,7 +379,7 @@ async function startSession(msg, sender) {
       soBase: K.soBase(msg.soBase),
       warehouseId: null, // v0.4.0: đặt từ đơn Nextwaves đã khớp (session:nwMatched)
       fingerprint: msg.fingerprint || [],
-      writeLocks: Array.isArray(msg.writeLocks) ? msg.writeLocks.map(String) : [], // khoá ghi phía POS: đặt lúc tạo phiên, không đổi được
+      writeLocks: [...new Set(msgLocks)], // khoá ghi phía POS: đặt lúc tạo phiên, không đổi được
       nwWriteLocks: [], // khoá ghi phía Nextwaves: chỉ session:nwMatched đặt, một lần
       remainder, // v0.4.1: phiếu phần còn lại {completed[{id, code}], excludeUids[]} | null
       remainderNote, // v0.4.1: PO nhiều phiếu nhưng cộng sổ không đạt (lý do ngắn) — chỉ để hiển thị
@@ -388,7 +391,7 @@ async function startSession(msg, sender) {
       state: "waiting_nw",
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      log: [replaced, { type: "start", deliveryCode: msg.deliveryCode, writeLocks: msg.writeLocks || [], reader: reader ? reader.state : null, remainder: remainder ? { completed: remainder.completed.map((g) => g.code), excluded: remainder.excludeUids.length } : null, remainderNote }].filter(Boolean).map((l) => Object.assign({ at: new Date().toISOString() }, l)),
+      log: [replaced, { type: "start", deliveryCode: msg.deliveryCode, writeLocks: [...new Set(msgLocks)], reader: reader ? reader.state : null, remainder: remainder ? { completed: remainder.completed.map((g) => g.code), excluded: remainder.excludeUids.length } : null, remainderNote, remainderRejected }].filter(Boolean).map((l) => Object.assign({ at: new Date().toISOString() }, l)),
     };
   }
   all[key] = s;
@@ -472,6 +475,14 @@ async function finishApply(msg, sender) {
 }
 
 // Lượt "Xác nhận nhận hàng" 2xx của đúng phiếu gửi thuộc đơn đã khớp.
+// Review v0.4.1 P3-8: lựa chọn khi thiếu + UID Nextwaves tự báo thiếu của lượt 2xx (response receive-scan) — lưu trong phiên để F5 / lượt
+// giao từ tab khác vẫn đối chiếu được. Sai dạng → null (đối chiếu chỉ còn dựa vào kết quả đọc lại).
+function scanExtra(scan) {
+  const onMissing = typeof scan.onMissing === "string" && /^[a-z_]{1,20}$/.test(scan.onMissing) ? scan.onMissing : null;
+  const missingUids = Array.isArray(scan.missingUids) && scan.missingUids.length <= 2000 && scan.missingUids.every((u) => isStr(u) && u.length <= 64) ? scan.missingUids.slice() : null;
+  return { onMissing, missingUids };
+}
+
 async function scanOk(msg, sender) {
   const s = (await getSessions())[msg.key];
   if (!s) throw new Error("Không có phiên — Nextwaves đã nhận nhưng extension không còn phiên của phiếu này");
@@ -482,7 +493,8 @@ async function scanOk(msg, sender) {
   if (!Array.isArray(s.shipmentIds) || !s.shipmentIds.includes(String(scan.shipmentId || "").toLowerCase())) throw new Error("session:scanOk: phiếu gửi không thuộc đơn đã khớp");
   if (!(scan.httpStatus >= 200 && scan.httpStatus < 300)) throw new Error("session:scanOk: không phải lượt 2xx");
   const scanAt = Number.isFinite(scan.at) ? new Date(scan.at).toISOString() : null;
-  return updateSession(msg.key, { scanOk: scan, scanOkAt: Date.now() }, { type: "scan_ok", shipmentId: scan.shipmentId, httpStatus: scan.httpStatus, sentEpcs: scan.sentEpcs === undefined ? null : scan.sentEpcs, scanAt });
+  const ok = Object.assign({ shipmentId: String(scan.shipmentId).toLowerCase(), httpStatus: scan.httpStatus, sentEpcs: scan.sentEpcs === undefined ? null : scan.sentEpcs, at: Number.isFinite(scan.at) ? scan.at : Date.now() }, scanExtra(scan));
+  return updateSession(msg.key, { scanOk: ok, scanOkAt: Date.now() }, { type: "scan_ok", shipmentId: scan.shipmentId, httpStatus: scan.httpStatus, sentEpcs: scan.sentEpcs === undefined ? null : scan.sentEpcs, scanAt });
 }
 
 // A7 (review lượt 2 P2-A): lượt 2xx ở một tab Nextwaves mà phiếu gửi KHÔNG thuộc phiên của tab đó (SO tách giao, tab tự mở, nhiều phiên
@@ -502,7 +514,7 @@ async function routeScan(msg, sender) {
   const tabId = sender && sender.tab ? sender.tab.id : null;
   // Audit v0.4.0 P3-6: tab gửi lượt này thành tab của phiên s. Không để hai phiên chung một tab: phiên khác đang trỏ tab này mất tab (như
   // C1 tái dùng — mở lại được từ POS). Tab cũ của s (nếu khác) nhớ ở nwTabPrev để đóng khi nhận xong.
-  const patch = { scanOk: { shipmentId: sid, httpStatus: scan.httpStatus, sentEpcs: scan.sentEpcs === undefined ? null : scan.sentEpcs, at: Date.now() }, scanOkAt: Date.now() };
+  const patch = { scanOk: Object.assign({ shipmentId: sid, httpStatus: scan.httpStatus, sentEpcs: scan.sentEpcs === undefined ? null : scan.sentEpcs, at: Date.now() }, scanExtra(scan)), scanOkAt: Date.now() };
   if (tabId !== null) {
     for (const o of Object.values(all)) if (o.key !== s.key && o.nwTabId === tabId) await updateSession(o.key, { nwTabId: null }, { type: "nw_tab_reused", by: s.grCode });
     patch.nwTabId = tabId;
@@ -728,8 +740,13 @@ async function dropOutdated(details) {
   const all = await getSessions();
   const removed = [];
   for (const k of Object.keys(all)) {
-    if (!isCurrent(all[k])) {
-      removed.push({ key: k, state: all[k].state });
+    const s = all[k];
+    // Review v0.4.1 P3-7: phiên của bản trước còn chờ Nextwaves (chưa khớp đơn, chưa nhận, chưa ghi) mà đang khoá so_many_gr — vd. phiếu phần
+    // còn lại mở bằng v0.4.0 → xoá để bấm lại "Nhận hàng bằng RFID" chạy luật mới. Chưa ghi gì nên xoá an toàn.
+    const stuck =
+      isCurrent(s) && details.reason === "update" && s.createdBy !== appVersion() && ["waiting_nw", "no_nw_order"].includes(s.state) && (s.writeLocks || []).includes("so_many_gr") && !s.remainder && !s.scanOk && !s.nwPoId;
+    if (!isCurrent(s) || stuck) {
+      removed.push({ key: k, state: s.state, why: stuck ? "locked_old_version" : "schema" });
       delete all[k];
     }
   }
@@ -776,20 +793,29 @@ async function qslStatusAll(env) {
   } catch (_) {
     tabs = [];
   }
+  // Review v0.4.1 P3-11: hỏi các tab SONG SONG — chờ từng tab nối tiếp có thể đẩy cú bấm Kết nối ra ngoài hiệu lực cú bấm của dược sĩ.
+  const rs = await Promise.all(tabs.filter((t) => Number.isInteger(t.id)).map((t) => sendToTab(t.id, { type: "cgn:qsl-status" }, T.qslStatusMs).then((r) => ({ t, r }))));
   const out = [];
-  for (const t of tabs) {
-    if (!Number.isInteger(t.id)) continue;
-    const r = await sendToTab(t.id, { type: "cgn:qsl-status" }, T.qslStatusMs);
-    if (r && r.ok && r.present) out.push({ tabId: t.id, displayed: !!r.displayed, connection: shortStr(r.connection, 20), state: shortStr(r.state, 20), holding: !!r.holding, busy: !!r.busy, canRelease: !!r.canRelease });
+  for (const { t, r } of rs) {
+    if (r && r.ok && r.present) out.push({ tabId: t.id, displayed: !!r.displayed, connection: shortStr(r.connection, 20), state: shortStr(r.state, 20), holding: !!r.holding, hiddenHolding: !!r.hiddenHolding, lockHeld: r.lockHeld === true, busy: !!r.busy, canRelease: !!r.canRelease });
   }
   return out;
+}
+
+// Tab đang giữ đầu đọc = khung QR Scan Log đang hiện + trạng thái giữ. Không tab nào như vậy → review v0.4.1 P2-1: QR Scan Log 0.9.6 vẫn
+// giữ cổng khi tab rời trang Bán hàng bằng điều hướng trong trang (khung ẩn, thuộc tính đứng ở trạng thái cuối) — chỉ tin tab có khung ẩn
+// ở trạng thái giữ KHI Web Lock của QR Scan Log đang bị giữ (đọc ở chính tab đó). Nhiều tab như vậy → không đoán.
+function qslHolders(all) {
+  const shown = all.filter((x) => x.holding);
+  if (shown.length) return shown;
+  return all.filter((x) => x.hiddenHolding && x.lockHeld).map((x) => Object.assign({}, x, { hidden: true }));
 }
 
 async function readerQslStatus(msg, sender) {
   const env = await nwEnvOfSender(sender, "reader:qslStatus");
   const all = await qslStatusAll(env);
-  const holders = all.filter((x) => x.holding);
-  return { present: all.length, holders: holders.length, busy: holders.some((x) => x.busy), canRelease: holders.length === 1 && holders[0].canRelease };
+  const holders = qslHolders(all);
+  return { present: all.length, holders: holders.length, hidden: holders.length === 1 && !!holders[0].hidden, busy: holders.some((x) => x.busy), canRelease: holders.length === 1 && holders[0].canRelease };
 }
 
 async function readerTakeFromQsl(msg, sender) {
@@ -801,21 +827,24 @@ async function readerTakeFromQsl(msg, sender) {
     if (s && isCurrent(s) && envOf(s).nwUiOrigin.toLowerCase() === env.nwUiOrigin.toLowerCase()) key = s.key;
   }
   const done = async (r) => {
-    if (key) await serial(() => updateSession(key, r.ok ? { readerTakenAt: Date.now() } : null, { type: "reader_qsl_release", ok: !!r.ok, reason: r.reason || null })).catch(() => {});
+    if (key) await serial(() => updateSession(key, r.ok || r.clicked ? { readerTakenAt: Date.now() } : null, { type: "reader_qsl_release", ok: !!r.ok, clicked: !!r.clicked, hidden: !!r.hidden, reason: r.reason || null })).catch(() => {});
     return r;
   };
-  const holders = (await qslStatusAll(env)).filter((x) => x.holding);
+  const holders = qslHolders(await qslStatusAll(env));
   if (holders.length !== 1) return done({ ok: false, reason: holders.length ? "many_holders" : "no_holder", holders: holders.length });
   if (holders[0].busy) return done({ ok: false, reason: "busy" });
-  const r = await sendToTab(holders[0].tabId, { type: "cgn:qsl-release" }, T.qslReleaseWaitMs);
-  return done(r ? { ok: !!r.ok, reason: r.ok ? null : shortStr(r.reason, 30) || "error", released: !!r.released } : { ok: false, reason: "no_answer" });
+  const hidden = !!holders[0].hidden;
+  const r = await sendToTab(holders[0].tabId, { type: "cgn:qsl-release", hidden }, T.qslReleaseWaitMs);
+  // clicked: đã bấm Ngắt (kể cả khi QR Scan Log chưa kịp nhả lock — review v0.4.1 P3-5).
+  return done(r ? { ok: !!r.ok, reason: r.ok ? null : shortStr(r.reason, 30) || "error", released: !!r.released, clicked: !!(r.ok || r.clicked), hidden } : { ok: false, reason: "no_answer" });
 }
 
 // "Mở tab bán hàng": tab đang giữ đầu đọc (đúng một) → tab có khung QR Scan Log đang hiện → tab /ban-hang bất kỳ.
 async function readerFocusSale(msg, sender) {
   const env = await nwEnvOfSender(sender, "reader:focusSale");
   const all = await qslStatusAll(env);
-  const holders = all.filter((x) => x.holding);
+  const holders = qslHolders(all);
+  const hidden = holders.length === 1 && !!holders[0].hidden;
   let tabId = holders.length === 1 ? holders[0].tabId : (all.find((x) => x.displayed) || {}).tabId;
   if (!Number.isInteger(tabId)) {
     try {
@@ -827,7 +856,7 @@ async function readerFocusSale(msg, sender) {
   }
   if (!Number.isInteger(tabId)) return { ok: false, reason: "no_sale_tab" };
   await openOrFocus(tabId, null);
-  return { ok: true };
+  return { ok: true, hidden: hidden && tabId === holders[0].tabId };
 }
 
 const OUTSIDE = { "reader:lend": readerLendFromNw, "reader:qslStatus": readerQslStatus, "reader:takeFromQsl": readerTakeFromQsl, "reader:focusSale": readerFocusSale };

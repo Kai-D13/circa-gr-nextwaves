@@ -1,0 +1,93 @@
+{
+ "_note": "STG 08/11 ~14:30 sau lượt nhận thiếu 1/12 keep_open (11:20): GET purchase-orders/<id> (đúng API collect() đọc), chụp chỉ đọc trong trang PO Nextwaves staging. RÚT GỌN còn trường extension đọc (normalizePoDetail) + trạng thái; bỏ người tạo / người nhận. receivedUnits CHỈ có tem đã nhận thật (Soffell 1), 11 tem 'Thất lạc' KHÔNG nằm trong receivedUnits; 1 biên nhận GRN-2026-000002 chứa đúng EPC đó, kho FLORITA. _trim_sha256 = SHA-256 chuỗi JSON rút gọn tính trong trang, khớp file.",
+ "_trim_sha256": "35ab0a578673c0f30e3e3018aeb2509ef39abd2db34780721ebfb7265769a7ca",
+ "method": "GET",
+ "path": "/api/v1/purchase-orders/8abcf006-3126-4d2d-b80d-5a591a0276c2",
+ "status": 200,
+ "request": null,
+ "response": {
+  "id": "8abcf006-3126-4d2d-b80d-5a591a0276c2",
+  "poNumber": "PO69611541",
+  "status": "PARTIALLY_RECEIVED",
+  "externalStatus": null,
+  "warehouseId": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57",
+  "items": [
+   {
+    "id": "bf7f6528-296b-49e8-acc1-94480e1542db",
+    "productId": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+    "productSku": "CIRCA-1110",
+    "quantity": 12,
+    "receivedQuantity": 0,
+    "remainingQuantity": 12,
+    "product": {
+     "id": "8bb49cbf-b5ae-482e-8f47-d20d4f0f44e7",
+     "sku": "CIRCA-1110",
+     "productIdentifier": "CIRCA-1110",
+     "externalProductId": null,
+     "barcode": null
+    },
+    "receivedUnits": []
+   },
+   {
+    "id": "8fdffd2e-8738-47b1-804c-8e42d46cd45b",
+    "productId": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+    "productSku": "CIRCA-5451",
+    "quantity": 40,
+    "receivedQuantity": 0,
+    "remainingQuantity": 40,
+    "product": {
+     "id": "1aeaee00-d840-4a47-a36c-1823712a45d8",
+     "sku": "CIRCA-5451",
+     "productIdentifier": "CIRCA-5451",
+     "externalProductId": null,
+     "barcode": null
+    },
+    "receivedUnits": []
+   },
+   {
+    "id": "9193e45a-a591-4b05-a76f-601eb84dd61a",
+    "productId": "3b250a6b-d64b-46fb-b389-b02f6f1c6368",
+    "productSku": "CIRCA-2431732",
+    "quantity": 2,
+    "receivedQuantity": 1,
+    "remainingQuantity": 1,
+    "product": {
+     "id": "3b250a6b-d64b-46fb-b389-b02f6f1c6368",
+     "sku": "CIRCA-2431732",
+     "productIdentifier": "CIRCA-2431732",
+     "externalProductId": "2431732",
+     "barcode": null
+    },
+    "receivedUnits": [
+     {
+      "epc": "53494D0030136C6ECFF8C05D",
+      "unitUid": "1792984580371AA1",
+      "receiptId": "a0d6bff1-1641-4d6a-bbcd-1662f86060f7",
+      "receiptNumber": "GRN-2026-000002"
+     }
+    ]
+   }
+  ],
+  "receipts": [
+   {
+    "id": "a0d6bff1-1641-4d6a-bbcd-1662f86060f7",
+    "receiptNumber": "GRN-2026-000002",
+    "purchaseOrderId": "8abcf006-3126-4d2d-b80d-5a591a0276c2",
+    "warehouseId": "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57",
+    "receivedAt": "2026-11-08T04:20:46.315Z",
+    "items": [
+     {
+      "id": "aa1b0cfc-97b1-413e-ba01-51f54b47e35d",
+      "purchaseOrderItemId": "9193e45a-a591-4b05-a76f-601eb84dd61a",
+      "productId": "3b250a6b-d64b-46fb-b389-b02f6f1c6368",
+      "quantity": 1,
+      "batchNumber": null,
+      "epcs": [
+       "53494D0030136C6ECFF8C05D"
+      ]
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -286,7 +286,7 @@
   const QSL_HOLDING = new Set(["connected", "waiting_clear", "paused"]);
   function qslView(doc) {
     const host = doc && typeof doc.getElementById === "function" ? doc.getElementById(QSL_HOST_ID) : null;
-    if (!host) return { present: false, displayed: false, connection: "", state: "", holding: false, busy: false, button: null };
+    if (!host) return { present: false, displayed: false, connection: "", state: "", holding: false, hiddenHolding: false, busy: false, button: null };
     const displayed = !(host.style && host.style.display === "none");
     const root = host.shadowRoot || null;
     const q = (sel) => (root && typeof root.querySelector === "function" ? root.querySelector(sel) : null);
@@ -295,7 +295,9 @@
     const connection = attr("data-connection");
     const state = attr("data-state");
     const btn = q('button[data-action="disconnect"]');
-    return { present: true, displayed, connection, state, holding: displayed && QSL_HOLDING.has(connection), busy: state === "processing", button: btn && !btn.disabled ? btn : null };
+    // hiddenHolding (review v0.4.1 P2-1): khung ẩn (tab đã rời trang Bán hàng) mà thuộc tính cuối là trạng thái giữ — QR Scan Log 0.9.6
+    // vẫn giữ cổng tới khi tab đóng / tải lại. Chỉ dùng khi Web Lock của QR Scan Log đang bị giữ (background + tab POS kiểm).
+    return { present: true, displayed, connection, state, holding: displayed && QSL_HOLDING.has(connection), hiddenHolding: !displayed && QSL_HOLDING.has(connection), busy: state === "processing", button: btn && !btn.disabled ? btn : null };
   }
 
   const lib = { normalizeGr, normalizePo, normalizeGrSearch, normalizeGrSearchPage, checkSoGrs, soWriteLock, remainderOf, isReceivable, resolveDelivery, grFingerprintSource, normalizeQrLookup, grPageAnchor, qslView, QSL_LOCK, RECEIVABLE };

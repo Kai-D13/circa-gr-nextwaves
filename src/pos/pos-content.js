@@ -226,6 +226,19 @@
   // Nextwaves" trên tab Nextwaves). Background hỏi trạng thái (chỉ đọc) rồi nhờ đúng MỘT tab bấm. QR Scan Log đang gửi tem vào giỏ
   // (data-state = processing) → không bấm (Ngắt của QR Scan Log 0.9.6 huỷ lượt đang gửi). Bấm xong chờ QR Scan Log nhả Web Lock (cổng
   // đã đóng) rồi mới trả lời — tab Nextwaves kết nối ngay sau đó.
+  // Web Lock của QR Scan Log đang bị giữ (theo origin — mọi tab POS cùng thấy)? true / false; không đọc được → null.
+  async function qslLockHeld() {
+    const nav = typeof navigator !== "undefined" ? navigator : null;
+    try {
+      if (nav && nav.locks && typeof nav.locks.query === "function") {
+        const q = await nav.locks.query();
+        return ((q && q.held) || []).some((l) => l && l.name === P.QSL_LOCK);
+      }
+    } catch (_) {
+      /* không đọc được khoá */
+    }
+    return null;
+  }
   async function qslLockFree() {
     const nav = typeof navigator !== "undefined" ? navigator : null;
     try {
@@ -242,12 +255,20 @@
     if (!msg || (msg.type !== "cgn:qsl-status" && msg.type !== "cgn:qsl-release") || !sender || sender.id !== chrome.runtime.id || sender.tab) return undefined;
     if (msg.type === "cgn:qsl-status") {
       const v = P.qslView(document);
-      reply({ ok: true, present: v.present, displayed: v.displayed, connection: v.connection, state: v.state, holding: v.holding, busy: v.busy, canRelease: !!v.button });
-      return undefined;
+      const base = { ok: true, present: v.present, displayed: v.displayed, connection: v.connection, state: v.state, holding: v.holding, hiddenHolding: v.hiddenHolding, busy: v.busy, canRelease: !!v.button };
+      if (!v.hiddenHolding) {
+        reply(Object.assign(base, { lockHeld: null }));
+        return undefined;
+      }
+      // Khung ẩn ở trạng thái giữ: kèm Web Lock để background biết tab này còn giữ cổng thật (review v0.4.1 P2-1).
+      qslLockHeld().then((held) => reply(Object.assign(base, { lockHeld: held })), () => reply(Object.assign(base, { lockHeld: null })));
+      return true;
     }
     (async () => {
       const v = P.qslView(document);
-      if (!v.holding) return { ok: false, reason: "not_holding" };
+      // Tab có khung ẩn (đã rời trang Bán hàng) chỉ được bấm khi background chọn nó là tab giữ VÀ Web Lock vẫn đang bị giữ.
+      const hiddenOk = msg.hidden === true && v.hiddenHolding && (await qslLockHeld()) === true;
+      if (!v.holding && !hiddenOk) return { ok: false, reason: "not_holding" };
       if (v.busy) return { ok: false, reason: "busy" };
       if (!v.button) return { ok: false, reason: "no_button" };
       try {
@@ -259,7 +280,7 @@
       for (;;) {
         await new Promise((r) => setTimeout(r, T.qslPollMs));
         if (await qslLockFree()) return { ok: true, released: true, ms: Date.now() - t0 };
-        if (Date.now() - t0 >= T.qslReleaseMs) return { ok: false, reason: "lock_timeout" };
+        if (Date.now() - t0 >= T.qslReleaseMs) return { ok: false, reason: "lock_timeout", clicked: true };
       }
     })().then(reply, () => reply({ ok: false, reason: "error" }));
     return true;
@@ -369,7 +390,7 @@
     return gr ? showGr(gr, v) : panel.show(v);
   }
 
-  const sessionSig = (s) => JSON.stringify([s.state, (s.nwResult && s.nwResult.at) || null, s.applyError || null, !!s.scanOk, s.retryNotBefore || null]);
+  const sessionSig = (s) => JSON.stringify([s.state, (s.nwResult && s.nwResult.at) || null, s.applyError || null, !!s.scanOk, s.retryNotBefore || null, s.readerTakenAt || null]);
   const unwatch = () => (watched = { key: null, sig: null, envId: null, grCode: null });
 
   // ---------- header cửa hàng (Spec v0.2 S3) ----------
@@ -461,6 +482,8 @@
       const found = await searchGrsOfSo(env, storeId, link.soBase, signal);
       guard();
       const rem = await remainderFor(env, gr, po, signal, guard);
+      // Review v0.4.1 P3-7: không đọc được phiếu đã xong (mạng / máy chủ) là lỗi tạm — không tạo phiên khoá "nhận tay", bảo bấm lại.
+      if (rem && !rem.ok && (rem.reason === "completed_read_failed" || rem.reason === "completed_unreadable")) return fail(`${gr.code}: không đọc được phiếu đã xong ${rem.code || ""} của cùng PO — thử bấm lại.`);
       const lock = P.soWriteLock(found, gr.id, rem);
       guard();
       // Mượn đầu đọc TRƯỚC khi mở Nextwaves (màn quét tự kết nối lúc mở). Không có QR Scan Log hỗ trợ → đi tiếp.
@@ -984,9 +1007,11 @@
         if (s.noOrderReason === "nw_partial_received") {
           return showGr(gr, {
             tone: "warn",
-            title: `${gr.code}: Nextwaves đã nhận một phần đơn này trước đó — nhận tay`,
-            lines: sessionLines(s).concat(["Phiếu gửi Nextwaves chỉ nhận được MỘT lần; lần nhận thiếu trước đã dùng phiếu gửi đó. Nhận phiếu này trên POS như hiện nay và báo vận hành (phần còn lại chưa vào kho Nextwaves)."]),
-            buttons: [cancelButton(env, s)],
+            title: `${gr.code}: Nextwaves không còn phiếu gửi chờ nhận cho SO này — nhận tay`,
+            // Review v0.4.1 P3-9: không khẳng định "phần còn lại không vào kho Nextwaves" (có thể chỉ là hàng không tem, hoặc lần giao khác chưa
+            // lên Nextwaves) — cho Tìm lại.
+            lines: sessionLines(s).concat(["Đơn Nextwaves của SO này đã được nhận một phần trước đó (mỗi phiếu gửi chỉ nhận một lần). Nhận phiếu này trên POS như hiện nay. Nếu SO còn lần giao khác chưa lên Nextwaves: bấm “Tìm lại trên Nextwaves” sau."]),
+            buttons: [{ label: "Tìm lại trên Nextwaves", onClick: () => reopenNw(s).catch(() => {}) }, cancelButton(env, s)],
           });
         }
         return showGr(gr, {
@@ -1026,7 +1051,7 @@
     return {
       tone: "warn",
       title: `${gr.code}: đã điền nhưng đọc lại chưa khớp hoàn toàn — kiểm từng lô trước khi HOÀN THÀNH`,
-      lines: (lead || []).concat([`Lệch: ${(diffs || []).slice(0, 6).map((d) => d.why + (d.detailId ? " " + String(d.detailId).slice(0, 8) : "")).join(", ")}.`, "Dược sĩ kiểm số lượng / mã từng lô trên phiếu; đúng thì bấm HOÀN THÀNH, sai thì báo dev."]),
+      lines: (lead || []).concat([`Lệch: ${(diffs || []).slice(0, 6).map((d) => d.why + (d.detailId ? " " + String(d.detailId).slice(0, 8) : "")).join(", ")}.`, "Dược sĩ kiểm số lượng / mã từng lô trên phiếu; đúng thì bấm HOÀN THÀNH, sai thì báo dev. Cảnh báo này là kết quả lúc điền — giữ tới khi phiếu HOÀN THÀNH (tải lại không xoá)."]),
       buttons: [{ label: "Tải lại phiếu", onClick: () => location.reload() }],
     };
   }

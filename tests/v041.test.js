@@ -111,6 +111,15 @@ test("v0.4.1 remainderOf: thiếu / lệch bất kỳ điều kiện nào → kh
   assert.equal(run((x) => (x.done[0].items.find((i) => i.productId === "1110").ratesByUnitName["vỉ"] = 3)).reason, "rate_conflict");
   assert.equal(run((x) => x.gr.items.push(Object.assign(H.clone(x.gr.items[0]), { id: "dup" }))).reason, "line_split");
   assert.equal(pos.remainderOf(null, po45(), []).reason, "data");
+  assert.equal(run((x) => (x.gr.id = "00000000-0000-4000-8000-0000000000aa")).reason, "gr_not_in_po", "phiếu mở không nằm trong danh sách phiếu của PO");
+  assert.equal(run((x) => (x.po.items[0].baseQuantity = 0)).reason, "po_line_unreadable");
+  assert.equal(run((x) => (x.po.items[0].quantity = null)).reason, "po_line_unreadable");
+  assert.equal(run((x) => (x.gr.items[0].details[0].internalCodes = ["1793929018293B31"])).reason, "open_gr_touched", "phiếu mở đã có UID Nextwaves");
+  assert.equal(run((x) => x.done.push(Object.assign(H.clone(x.done[0]), { id: "00000000-0000-4000-8000-0000000000bb" }))).reason, "completed_unread", "thừa phiếu đã xong ngoài danh sách phiếu của PO");
+  // Mã nội bộ trên phiếu đã xong (POS có thể gắn UID Nextwaves ở đây) cũng vào excludeUids.
+  const withInternal = run((x) => (x.done[0].items[0].details[0].internalCodes = ["INT-UID-1"]));
+  assert.equal(withInternal.ok, true);
+  assert.ok(withInternal.excludeUids.includes("INT-UID-1"));
 });
 
 test("v0.4.1 remainderOf: chuỗi tách (GR → GR′ → GR″) cộng mọi phiếu đã xong", () => {
@@ -172,6 +181,12 @@ test("v0.4.1 tìm theo SO sau khi nhận thiếu: openShipmentCount 0 + PARTIALL
   delete s2.items[0].openShipmentCount;
   assert.equal(nw.normalizeReceivingSearchPage(s2).items[0].openShipmentCount, null);
   assert.equal((await resolve.resolveNwOrder(args(s2))).reason, "no_match");
+  // openShipmentCount 0 nhưng đơn KHÔNG ở PARTIALLY_RECEIVED (vd. đã nhận đủ / chưa giao) → không kết luận 'đã nhận một phần'.
+  const s3 = H.clone(search);
+  s3.items[0].purchaseOrderStatus = "RECEIVED";
+  const order3 = Object.assign({}, order, { purchaseOrderStatus: "RECEIVED" });
+  const r3 = await resolve.resolveNwOrder(Object.assign(args(s3), { getOrder: async () => ({ ok: true, json: order3 }) }));
+  assert.notEqual(r3.reason, "nw_partial_received");
 });
 
 const summaryOf = (g) => g.items.map((it) => ({ productId: it.productId, unitRate: it.unitRate, baseQuantity: it.baseQuantity, received: it.details.reduce((n, d) => n + d.received, 0), codes: it.details.reduce((n, d) => n + d.qrCodes.length, 0), ratesByUnitName: it.ratesByUnitName }));
@@ -203,4 +218,29 @@ test("v0.4.1 F2 kiểm trước khi xác nhận: đơn vị lạ, số lẻ, phi
   const noUnit = sum.map((x) => Object.assign({}, x, { received: 0, ratesByUnitName: x.productId === "1110" ? { hộp: 6 } : x.ratesByUnitName }));
   assert.ok(match.precheck(noUnit, rec, []).problems.some((p) => p.code === "unit_unknown" && p.unit === "vỉ"));
   assert.ok(match.precheck(sum, rec, []).problems.some((p) => p.code === "gr_received_by_hand"), "GR03877 đã nhập số tay (không mã)");
+});
+
+test("v0.4.1 review P2-3: dữ liệu THẬT sau lượt nhận thiếu (staging 08/11, PO69611541 keep_open 1/12) — PO + phiếu gửi vẫn đọc được; chỉ tem đã nhận nằm trong receivedUnits / receivedEpcs; 11 tem thất lạc là 'thiếu', không lỗi bằng chứng", () => {
+  const poJ = H.sample("nw-stg-po-PO69611541-sau-nhan-thieu-20261108.json");
+  const shJ = H.sample("nw-stg-shipment-PO69611541-sau-nhan-thieu-20261108.json");
+  const crypto = require("node:crypto");
+  for (const j of [poJ, shJ]) assert.equal(crypto.createHash("sha256").update(JSON.stringify(j.response)).digest("hex"), j._trim_sha256, "mẫu = chuỗi đã kiểm SHA-256 trong trang");
+  const po = nw.normalizePoDetail(poJ.response);
+  const sh = nw.normalizeShipment(shJ.response);
+  assert.equal(po.status, "PARTIALLY_RECEIVED");
+  assert.equal(sh.status, "received");
+  assert.ok(sh.lines.every((l) => Array.isArray(l.receivedEpcs)), "receivedEpcs là mảng ở mọi dòng (không null)");
+  const exp = nwBefore();
+  const rec = nw.buildReceivedUnits(po, [sh], exp, { receiptIdsBefore: [], warehouseId: "82bf85e4-84e2-4158-ae27-1aaa6fe1bc57" });
+  assert.deepEqual(rec.problems, []);
+  assert.deepEqual(rec.unexpected, []);
+  assert.equal(rec.units.length, 1);
+  assert.deepEqual([rec.units[0].epc, rec.units[0].uid, rec.units[0].posProductId, rec.units[0].unitName], ["53494D0030136C6ECFF8C05D", "1792984580371AA1", "2431732", "chai"]);
+  assert.equal(rec.missing.length, 11, "11 tem thất lạc = thiếu");
+  assert.deepEqual(rec.receiptIds, ["a0d6bff1-1641-4d6a-bbcd-1662f86060f7"]);
+  // Phiếu phần còn lại giả định: 11 tem thiếu đều là món đã bán gấp (UID nằm trên phiếu đã xong) → quy tắc đủ coi là đủ.
+  const uidOf = new Map(exp.shipments.flatMap((x) => x.lines.flatMap((l) => l.units)).map((u) => [u.epc, u.uid]));
+  const sold = new Set(rec.missing.map((e) => uidOf.get(e)));
+  assert.equal(sold.size, 11);
+  assert.ok([...sold].every(Boolean), "mỗi tem thiếu có UID để so với mã phiếu đã xong");
 });

@@ -172,9 +172,15 @@ test("v0.4.1 bấm hộ Ngắt nhưng QR Scan Log không nhả lock → báo đ�
     const connect = nwConnect(nw, () => !q.lock);
     await until(() => btn(nw, "Lấy đầu đọc cho Nextwaves"), 3000);
     btn(nw, "Lấy đầu đọc cho Nextwaves").onClick();
-    await until(() => nw.view && nw.view.lines.some((l) => /chưa nhả đầu đọc — đợi vài giây rồi bấm lại/.test(l)), 3000);
+    // Review v0.4.1 P3-5: đã bấm Ngắt (dù lock chưa nhả) = đã lấy: thử kết nối nhanh thêm vài lần, báo rõ; sau lượt vẫn nhắc Kết nối RFID.
+    await until(() => nw.view && nw.view.lines.some((l) => /đã bấm Ngắt nhưng tab bán hàng chưa nhả đầu đọc — extension thử kết nối thêm vài lần/.test(l)), 3000);
+    assert.equal(q.clicks, 1, "không bấm Ngắt lần hai");
+    const n0 = connect.clicks;
+    await until(() => connect.clicks > n0, 2000);
+    assert.equal(connect.textContent, "Kết nối đầu đọc", "cổng vẫn bị giữ → chưa kết nối");
+    closeModal(nw);
+    await until(() => nw.view && nw.view.title === "Đầu đọc: nhận hàng xong", 3000);
     assert.equal(q.clicks, 1);
-    assert.equal(connect.textContent, "Kết nối đầu đọc");
   } finally {
     b.close();
   }
@@ -206,6 +212,185 @@ test("v0.4.1 không mở modal → readerTick không quét / bấm nút đầu �
     const connect = nwConnect(nw, () => true);
     await settle(300);
     assert.equal(connect.clicks, 0);
+  } finally {
+    b.close();
+  }
+});
+
+// Bọc listener của tab POS: đếm lệnh Ngắt (cgn:qsl-release) background gửi; `before()` chạy ngay trước khi tab POS xử lý lệnh (mô phỏng
+// QR Scan Log đổi trạng thái giữa lúc background hỏi và lúc tab POS bấm).
+function spyRelease(t, before) {
+  const spy = { releases: 0 };
+  const ls = t.ctx.runtimeListeners;
+  for (let i = 0; i < ls.length; i++) {
+    const l = ls[i];
+    ls[i] = (msg, s, r) => {
+      // Một message tới MỌI listener của tab (cùng lượt) → đếm / chạy before() một lần cho mỗi message.
+      if (msg && msg.type === "cgn:qsl-release" && !spy.busy) {
+        spy.busy = true;
+        setImmediate(() => (spy.busy = false));
+        spy.releases += 1;
+        if (before) before();
+      }
+      return l(msg, s, r);
+    };
+  }
+  return spy;
+}
+
+test("v0.4.1 QR Scan Log đổi trạng thái ngay trước cú bấm: bắt đầu gửi tem → background đọc lại, KHÔNG gửi lệnh Ngắt; lệnh đã gửi mà tab POS thấy đang gửi tem / thôi giữ cổng → KHÔNG bấm", async () => {
+  for (const kind of ["bg_busy", "pos_busy", "pos_not_holding"]) {
+    const b = createBrowser(server, { tuning });
+    try {
+      await b.setConfig({ mode: "STG", url: "" });
+      const pos = b.openTab(SALE(1));
+      const q = fakeQsl(pos);
+      const nw = b.openTab(NW_PO);
+      nwModal(nw, SHIP);
+      const connect = nwConnect(nw, () => !q.lock);
+      await until(() => btn(nw, "Lấy đầu đọc cho Nextwaves"), 3000);
+      const spy = spyRelease(pos, kind === "pos_busy" ? () => (q.state = "processing") : kind === "pos_not_holding" ? () => (q.conn = "disconnected") : null);
+      if (kind === "bg_busy") q.state = "processing";
+      btn(nw, "Lấy đầu đọc cho Nextwaves").onClick();
+      const want = kind === "pos_not_holding" ? /tab bán hàng không còn giữ đầu đọc/ : /tab bán hàng đang gửi tem vào giỏ — đợi gửi xong rồi bấm lại/;
+      await until(() => nw.view && nw.view.lines.some((l) => want.test(l)), 3000);
+      assert.equal(q.clicks, 0, `${kind}: không bấm Ngắt`);
+      assert.equal(spy.releases, kind === "bg_busy" ? 0 : 1, `${kind}: số lệnh Ngắt background gửi tới tab POS`);
+      assert.equal(connect.textContent, "Kết nối đầu đọc");
+    } finally {
+      b.close();
+    }
+  }
+});
+
+test("review v0.4.1 P2-1: tab POS đã rời trang Bán hàng (khung QR Scan Log ẩn) mà Web Lock vẫn bị giữ → nhận ra tab giữ, nút 'Lấy đầu đọc' bấm hộ Ngắt tab đó; lock KHÔNG bị giữ → không coi khung ẩn là đang giữ", async () => {
+  // (a) khung ẩn + lock giữ → đúng một tab giữ (ẩn) → bấm hộ được
+  {
+    const b = createBrowser(server, { tuning });
+    try {
+      await b.setConfig({ mode: "STG", url: "" });
+      const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang`); // tab bán hàng đã chuyển sang trang khác bằng điều hướng trong trang
+      const q = fakeQsl(pos, { displayed: false, releaseMs: 40 });
+      const nw = b.openTab(NW_PO);
+      nwModal(nw, SHIP);
+      const connect = nwConnect(nw, () => !q.lock);
+      await until(() => btn(nw, "Lấy đầu đọc cho Nextwaves"), 3000);
+      assert.match(nw.view.lines.join("\n"), /một tab POS \(QR Scan Log, đang ở trang khác trang Bán hàng\) đang giữ/);
+      assert.equal(q.clicks, 0);
+      btn(nw, "Lấy đầu đọc cho Nextwaves").onClick();
+      await until(() => connect.textContent === "Bắt đầu quét", 3000);
+      assert.equal(q.clicks, 1, "bấm hộ nút Ngắt (đang ẩn) của đúng tab đó một lần");
+    } finally {
+      b.close();
+    }
+  }
+  // (b) khung ẩn nhưng lock KHÔNG bị giữ (thuộc tính cũ) → không phải tab giữ → không nút bấm hộ, không bấm
+  {
+    const b = createBrowser(server, { tuning });
+    try {
+      await b.setConfig({ mode: "STG", url: "" });
+      const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang`);
+      const q = fakeQsl(pos, { displayed: false });
+      q.lock = false;
+      const nw = b.openTab(NW_PO);
+      nwModal(nw, SHIP);
+      nwConnect(nw, () => false);
+      await until(() => nw.view && nw.view.lines.some((l) => /chưa kết nối được\. Nếu tab bán hàng đang dùng RFID/.test(l)), 3000);
+      assert.ok(!btn(nw, "Lấy đầu đọc cho Nextwaves"));
+      assert.equal(q.clicks, 0);
+    } finally {
+      b.close();
+    }
+  }
+});
+
+test("review v0.4.1 P3-12: biết QR Scan Log đang giữ ngay sau lần tự bấm đầu tiên → nút 'Lấy đầu đọc' hiện sớm, không đợi hết 3 lần (mỗi lần cách 10 s)", async () => {
+  const b = createBrowser(server, { tuning: Object.assign({}, tuning, { readerGapMs: 60000 }) });
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const pos = b.openTab(SALE(1));
+    const q = fakeQsl(pos);
+    const nw = b.openTab(NW_PO);
+    nwModal(nw, SHIP);
+    const connect = nwConnect(nw, () => !q.lock);
+    await until(() => btn(nw, "Lấy đầu đọc cho Nextwaves"), 2000);
+    assert.equal(connect.clicks, 1, "mới tự bấm một lần");
+    assert.equal(q.clicks, 0, "chưa Ngắt khi dược sĩ chưa bấm");
+  } finally {
+    b.close();
+  }
+});
+
+test("review v0.4.1: tab thứ hai bắt đầu giữ đầu đọc ngay trước cú bấm → background đọc lại thấy hai tab → KHÔNG gửi lệnh Ngắt; 'Mở tab bán hàng' không có tab nào → nói rõ trên khung", async () => {
+  const b = createBrowser(server, { tuning });
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const p1 = b.openTab(SALE(1));
+    const q1 = fakeQsl(p1);
+    const nw = b.openTab(NW_PO);
+    nwModal(nw, SHIP);
+    nwConnect(nw, () => !q1.lock);
+    await until(() => btn(nw, "Lấy đầu đọc cho Nextwaves"), 3000);
+    const p2 = b.openTab(SALE(2));
+    const q2 = fakeQsl(p2);
+    const s1 = spyRelease(p1);
+    const s2 = spyRelease(p2);
+    btn(nw, "Lấy đầu đọc cho Nextwaves").onClick();
+    await until(() => nw.view && nw.view.lines.some((l) => /có nhiều tab bán hàng đang mở/.test(l)), 3000);
+    assert.deepEqual([s1.releases, s2.releases, q1.clicks, q2.clicks], [0, 0, 0, 0]);
+  } finally {
+    b.close();
+  }
+  // Không còn tab POS nào → "Mở tab bán hàng" báo rõ (trước: im lặng).
+  const c = createBrowser(server, { tuning });
+  try {
+    await c.setConfig({ mode: "STG", url: "" });
+    const nw = c.openTab(NW_PO);
+    nwModal(nw, SHIP);
+    nwConnect(nw, () => false);
+    await until(() => btn(nw, "Mở tab bán hàng"), 3000);
+    btn(nw, "Mở tab bán hàng").onClick();
+    await until(() => nw.view && nw.view.lines.some((l) => /không thấy tab POS nào đang mở trang Bán hàng/.test(l)), 3000);
+  } finally {
+    c.close();
+  }
+});
+
+test("review v0.4.1 P3-15: màn quét /receive KHÔNG có phiên mà modal nhận hàng mở → vẫn có khung đầu đọc (không bị ẩn khi trang đánh giá lại)", async () => {
+  const b = createBrowser(server, { tuning });
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const pos = b.openTab(SALE(1));
+    const q = fakeQsl(pos);
+    const nw = b.openTab(`${NW}/vi/purchases/receive?po=SOBD7777777`);
+    nwModal(nw, SHIP);
+    nwConnect(nw, () => !q.lock);
+    await until(() => btn(nw, "Lấy đầu đọc cho Nextwaves"), 3000);
+    assert.equal(nw.view.title, "Đầu đọc cho màn nhận hàng");
+    // Trang đánh giá lại (đổi cấu hình → refresh) khi modal còn mở: khung đầu đọc phải còn (trước: panel.hide()).
+    const n = nw.views.length;
+    await b.setConfig({ mode: "STG", url: "", nwTenant: "" });
+    await until(() => nw.views.length > n, 2000);
+    await settle(60);
+    assert.ok(btn(nw, "Lấy đầu đọc cho Nextwaves"), "khung đầu đọc còn sau khi trang đánh giá lại");
+  } finally {
+    b.close();
+  }
+});
+
+test("review v0.4.1 P3-10: QR Scan Log đang giữ nhưng nút Ngắt của nó đang tắt → không đưa nút 'Lấy đầu đọc' (bấm sẽ hỏng), hướng dẫn mở tab bán hàng", async () => {
+  const b = createBrowser(server, { tuning });
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const pos = b.openTab(SALE(1));
+    const q = fakeQsl(pos, { disabled: true });
+    const nw = b.openTab(NW_PO);
+    nwModal(nw, SHIP);
+    nwConnect(nw, () => !q.lock);
+    await until(() => nw.view && nw.view.lines.some((l) => /nút Ngắt của QR Scan Log đang tắt — bấm “Mở tab bán hàng”/.test(l)), 3000);
+    assert.ok(!btn(nw, "Lấy đầu đọc cho Nextwaves"));
+    assert.ok(btn(nw, "Mở tab bán hàng"));
+    assert.equal(q.clicks, 0);
   } finally {
     b.close();
   }

@@ -95,7 +95,7 @@ function makeServer(opts = {}) {
         await h;
         return { status: 200, json: snap };
       }
-      if (m && req.method === "GET" && opts.remainder && m[1] === REM_GR_ID) return { status: 200, json: completedGr03999(opts.remainderDoneMut) };
+      if (m && req.method === "GET" && opts.remainder && m[1] === REM_GR_ID) return opts.remainderGetFail ? { status: 500, json: { message: "lỗi giả" } } : { status: 200, json: completedGr03999(opts.remainderDoneMut) };
       if (m && req.method === "GET") return m[1] === st.gr.data.id ? { status: 200, json: H.clone(st.gr) } : { status: 404, json: {} };
       m = /^\/backend\/v1\/pos\/([0-9a-f-]{36})\/po\/([0-9a-f-]{36})$/.exec(u.pathname);
       if (m && req.method === "GET") {
@@ -209,7 +209,7 @@ async function openToReady(opts = {}) {
     const nw = await until(() => b.tabs().find((t) => t.url.startsWith(NW)));
     nw.post(NW_AUTH);
     await sessionState(b, "nw_ready");
-    await until(() => viewTitle(nw) === "Sẵn sàng nhận hàng");
+    await until(() => viewTitle(nw) === (opts.readyTitle || "Sẵn sàng nhận hàng"));
     return { b, srv, pos, nw };
   } catch (err) {
     b.close();
@@ -686,8 +686,14 @@ test("v0.4.1 E2E phiếu phần còn lại: cộng sổ theo PO → không khoá
     const truoc = JSON.parse(await H.runKiem("kiem-truoc.js", b, "GR03878", until));
     assert.deepEqual([truoc.state, truoc.phanConLai, truoc.temBanGap], ["nw_ready", { phieuXong: ["GR03999"], maDaXong: 2 }, 1], "kiem-truoc: phiếu phần còn lại, 1 tem món đã bán gấp");
     srv.st.nwReceived = true;
+    const logAt = srv.st.log.length;
     nw.post(scan(200, { onMissing: "keep_open", lines: [{ missingUnitUids: [SOLD_UID] }] }));
     await sessionState(b, "applied");
+    // Vòng đọc kết quả thoát ngay ở lần đầu (thiếu đúng món đã bán = đủ), không đọc lại PO thêm lần nào.
+    const poGets = srv.st.log.slice(logAt).filter((r) => r.method === "GET" && /\/api\/v1\/purchase-orders\/[0-9a-f-]{36}$/.test(new URL(r.url).pathname)).length;
+    assert.equal(poGets, 1, "đọc PO Nextwaves đúng một lần sau lượt nhận");
+    // Review v0.4.1 P3-8: lựa chọn khi thiếu + UID Nextwaves báo thiếu lưu cùng lượt 2xx.
+    assert.deepEqual([b.session(KEY).scanOk.onMissing, b.session(KEY).scanOk.missingUids], ["keep_open", [SOLD_UID]]);
     await until(() => pos.reloads >= 1 && pos.loads >= 2);
     pos.post(POS_AUTH); // trang POS tải lại sau khi điền → app gọi API → hook báo lại header
     await until(() => pos.view && pos.view.title === "GR03878: đã điền 11 mã vào 5 lô — kiểm danh sách rồi bấm HOÀN THÀNH");
@@ -718,6 +724,33 @@ test("v0.4.1 phiếu phần còn lại — I6: Nextwaves vẫn đọc tem món �
     assert.match(pos.view.lines.join("\n"), /Nextwaves đã nhận cả 1 tem món đã bán gấp \(1792379018917AA1\) — tồn Nextwaves dư 1/);
     assert.ok(!codesOnGr(srv).includes(SOLD_UID));
     assert.ok(b.session(KEY).log.some((l) => l.type === "nw_result_remainder" && l.soldRead === 1 && l.soldMissing === 0));
+  } finally {
+    b.close();
+  }
+});
+
+test("v0.4.1 phiếu phần còn lại — chọn 'Đóng đơn dù còn thiếu': khung Nextwaves cảnh báo trước khi xác nhận (đổi lại Giữ đơn mở → hết); vẫn xác nhận → POS điền 11 UID + cảnh báo báo vận hành", async () => {
+  const { b, srv, pos, nw } = await openToReady({ server: { remainder: true, dropReceivedEpc: soldEpc() } });
+  try {
+    const CLOSE = 'input[type="radio"][value="close_short"]';
+    const KEEP = 'input[type="radio"][value="keep_open"]';
+    const choose = (v) => Object.assign(nw.dom.query, { [CLOSE]: { checked: v === "close_short" }, [KEEP]: { checked: v === "keep_open" } });
+    choose("close_short");
+    await until(() => nw.view && nw.view.lines.some((l) => /ĐANG CHỌN “Đóng đơn dù còn thiếu”/.test(l)), 4000);
+    assert.equal(nw.view.tone, "err", "review v0.4.1 P3-14: đỏ");
+    assert.equal(nw.view.title, "Đang chọn “Đóng đơn dù còn thiếu” — chọn “Giữ đơn mở”");
+    choose("keep_open");
+    await until(() => nw.view && !nw.view.lines.some((l) => /ĐANG CHỌN/.test(l)), 4000);
+    choose("close_short"); // dược sĩ vẫn chọn đóng đơn rồi xác nhận
+    srv.st.nwReceived = true;
+    nw.post(scan(200, { onMissing: "close_short", lines: [{ missingUnitUids: [SOLD_UID] }] }));
+    await sessionState(b, "applied");
+    await until(() => pos.reloads >= 1 && pos.loads >= 2);
+    pos.post(POS_AUTH);
+    await until(() => pos.view && /đã điền 11 mã vào 5 lô/.test(pos.view.title));
+    assert.equal(pos.view.tone, "warn");
+    assert.match(pos.view.lines.join("\n"), /Lượt nhận Nextwaves chọn “Đóng đơn dù còn thiếu” — Nextwaves đã báo Buymed giao thiếu/);
+    assert.equal(b.session(KEY).nwResult.onMissing, "close_short");
   } finally {
     b.close();
   }
@@ -806,13 +839,15 @@ test("v0.4.1 phiên cũ 'không có đơn' mang khoá so_many_gr (v0.4.0) → b�
 });
 
 test("v0.4.1 audit F3: cửa hàng đã biết (2222) mà đơn Nextwaves khớp nằm kho KHÁC → khoá ghi warehouse_mismatch, khung Nextwaves + POS báo, không điền", async () => {
-  const { b, srv, pos, nw } = await openToReady({ server: { nwWarehouseId: "99999999-9999-4999-8999-999999999999" } });
+  const { b, srv, pos, nw } = await openToReady({ server: { nwWarehouseId: "99999999-9999-4999-8999-999999999999" }, readyTitle: "Đơn Nextwaves ở kho KHÁC cửa hàng — không xác nhận nhận hàng" });
   try {
     const s = b.session(KEY);
     assert.deepEqual(s.nwWriteLocks, ["warehouse_mismatch"]);
     assert.ok(s.log.some((l) => l.type === "nw_matched" && l.warehouseKnown === true && l.warehouseOk === false));
-    assert.match(nw.view.lines.join("\n"), /kho KHÁC kho của cửa hàng này — extension sẽ không điền/);
-    assert.equal(nw.view.tone, "warn");
+    // Review v0.4.1 P3-14: nhận vào nhầm kho không đảo ngược được → đỏ, dòng ĐẦU, tiêu đề nói không xác nhận.
+    assert.match(nw.view.lines[0], /kho KHÁC kho của cửa hàng này — KHÔNG bấm “Xác nhận nhận hàng” ở đây; extension không điền phiếu POS/);
+    assert.equal(nw.view.tone, "err");
+    assert.equal(nw.view.title, "Đơn Nextwaves ở kho KHÁC cửa hàng — không xác nhận nhận hàng");
     srv.st.nwReceived = true;
     nw.post(scan(200));
     await until(() => pos.view && pos.view.title === "Chỉ xem kế hoạch — chưa được điền phiếu", 5000);
@@ -1914,6 +1949,43 @@ test("review P3-9 (v0.4.0): hai tab Nextwaves cùng phiên — cả hai đọc k
     const red = [nw, nw2].flatMap((t) => t.views).filter((v) => v && /POS CHƯA điền/.test(v.title || ""));
     assert.deepEqual(red.map((v) => v.title), [], "không báo đỏ sai");
     assert.equal(srv.st.puts.length, 6);
+  } finally {
+    b.close();
+  }
+});
+
+test("review v0.4.1 P3-7: không đọc được phiếu đã xong của cùng PO (lỗi tạm) → KHÔNG tạo phiên khoá 'nhận tay', báo bấm lại; không mở Nextwaves", async () => {
+  const srv = makeServer({ remainder: true, remainderGetFail: true });
+  const b = createBrowser(srv.handle);
+  try {
+    await b.setConfig({ mode: "STG", url: "" });
+    const pos = b.openTab(`${POS}/danh-sach-phieu-nhan-hang/${GR_ID}`);
+    pos.post(POS_AUTH);
+    (await until(() => startBtn(pos))).onClick();
+    await until(() => pos.view && [pos.view.title].concat(pos.view.lines || []).some((l) => /không đọc được phiếu đã xong GR03999 của cùng PO — thử bấm lại/.test(l || "")), 4000);
+    await settle(150);
+    assert.equal(b.session(KEY), null, "không tạo phiên");
+    assert.ok(!b.tabs().some((t) => t.url.startsWith(NW)), "không mở Nextwaves");
+  } finally {
+    b.close();
+  }
+});
+
+test("review v0.4.1 P3-7: nâng bản → xoá phiên bản trước còn chờ Nextwaves, chưa khớp đơn, đang khoá so_many_gr (vd. phiếu phần còn lại mở bằng v0.4.0); giữ phiên đã khớp đơn và phiên của bản hiện hành", async () => {
+  const { b } = await openToReady();
+  try {
+    await settle(50);
+    const cur = JSON.parse(JSON.stringify(b.store.sessions[KEY]));
+    const stuck = "STG:99999999-0000-4000-8000-0000000000cc";
+    const fresh = "STG:99999999-0000-4000-8000-0000000000dd";
+    const base = { state: "waiting_nw", writeLocks: ["so_many_gr"], nwPoId: null, remainder: null, scanOk: undefined };
+    b.store.sessions[stuck] = Object.assign({}, cur, base, { key: stuck, grId: stuck.slice(4), grCode: "GR09996", createdBy: "0.4.0" });
+    b.store.sessions[fresh] = Object.assign({}, cur, base, { key: fresh, grId: fresh.slice(4), grCode: "GR09995", createdBy: APP_VERSION });
+    b.store.sessions[KEY].createdBy = "0.4.0"; // phiên đã khớp đơn (nw_ready, nwPoId) của bản trước → giữ
+    b.fireInstalled({ reason: "update", previousVersion: "0.4.0" });
+    await until(() => b.store.lastUpgrade);
+    assert.deepEqual(Object.keys(b.store.sessions).sort(), [KEY, fresh].sort());
+    assert.deepEqual(b.store.lastUpgrade.removedSessions, [{ key: stuck, state: "waiting_nw", why: "locked_old_version" }]);
   } finally {
     b.close();
   }

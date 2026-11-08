@@ -1,6 +1,6 @@
 /*
- * Màn quét Nextwaves /vi/purchases/receive?po=<SO | số PO> (ISOLATED world), chỉ trên tenant Nextwaves đang chọn. Chỉ chạy khi có
- * phiên do tab POS mở.
+ * Màn quét Nextwaves /vi/purchases/receive?po=<SO | số PO> (ISOLATED world), chỉ trên tenant Nextwaves đang chọn. Luồng nhận chạy khi
+ * có phiên do tab POS mở; riêng phần đầu đọc (v0.4.1) chạy cả khi modal "Nhận hàng bằng cách quét" mở ở trang khác / không có phiên.
  *  1. Tìm đơn liên kết theo SO trên TOÀN BỘ ứng viên (lib/resolve.js): refId / bên bán / huỷ / cùng kho / dấu vân tay. MỘT lần mỗi lượt
  *     (v0.4.0 A1): lỗi giữ nguyên trên khung, chỉ tìm lại khi bấm "Tìm lại", đổi URL, phiên đổi, hoặc có token mới sau 401.
  *     Không có đơn nào cùng SO → phiên "no_nw_order": nhận tay trên POS.
@@ -67,6 +67,9 @@
   let lastChoice = null; // lựa chọn khi thiếu trên modal nhận hàng đã vẽ gần nhất (v0.4.1)
   // v0.4.1 — đầu đọc cho modal nhận hàng (kể cả không phiên): modal mở / phiếu gửi, trạng thái QR Scan Log, đang lấy / đã lấy đầu đọc.
   const rh = { open: false, shipment: null, status: null, asking: false, lastAsk: 0, taking: false, taken: false, msg: null, reminder: false };
+  // Review v0.4.1 P2-2: khung của phiên khi CHƯA có ctx (lỗi tìm đơn / chưa có đơn / chờ dữ liệu / đã nhận xong…). Modal nhận hàng mở thì
+  // GIỮ khung này và chỉ thêm dòng + nút đầu đọc — không thay bằng khung đầu đọc (dược sĩ phải thấy lỗi trước khi xác nhận).
+  let baseView = null;
 
   async function bg(type, extra) {
     const r = await chrome.runtime.sendMessage(Object.assign({ type }, extra || {}));
@@ -146,19 +149,22 @@
       ctx = null;
       curSession = null;
       pendingScan = null;
-      // v0.4.1: trang khác màn quét (vd. trang PO Nextwaves) — chỉ còn khung đầu đọc khi đang mở modal nhận hàng (readerTick vẽ).
-      return rh.open ? renderHelper() : panel.hide();
+      baseView = null;
+      // v0.4.1: trang khác màn quét (vd. trang PO Nextwaves) — chỉ còn khung đầu đọc khi đang mở modal nhận hàng (readerTick vẽ) hoặc
+      // còn lời nhắc "Kết nối RFID" của lượt vừa lấy đầu đọc (review v0.4.1 P3-15).
+      return rh.open || rh.reminder ? renderHelper() : panel.hide();
     }
     const s = await bg("session:findByNw", { envId: env.id, tenant: env.nwTenant, po: page.po });
     curSession = s;
     if (!s) {
       ctx = null;
+      baseView = null;
       if (pendingScan) {
         const p = pendingScan;
         pendingScan = null;
         return onReceiveScan(p, true);
       }
-      return panel.hide();
+      return rh.open || rh.reminder ? renderHelper() : panel.hide();
     }
     if (s.state === "no_nw_order") {
       ctx = null;
@@ -166,7 +172,7 @@
     }
     if (!OPEN.has(s.state)) {
       ctx = null;
-      return panel.show({
+      return showBase({
         tone: "ok",
         title: `${s.grCode}: Nextwaves đã nhận xong`,
         lines: ["Phiếu nhận trên POS đang được điền / đã điền. Dược sĩ kiểm danh sách trên POS rồi bấm HOÀN THÀNH."],
@@ -181,12 +187,13 @@
       ctx = ctxFromSession(env, s, page.po);
     } else {
       // A1: lỗi tìm đơn của đúng phiên này còn giữ → chỉ vẽ lại, không gọi API lại.
-      if (latch && latch.sig === sigOf(s) && !force) return panel.show(latch.view);
+      if (latch && latch.sig === sigOf(s) && !force) return showBase(latch.view);
       force = false;
       const found = await resolveOrder(env, s, page.po);
       if (!found) return;
       ctx = found;
     }
+    baseView = null;
     latch = null;
     if (pendingScan) {
       const p = pendingScan;
@@ -202,12 +209,12 @@
 
   // A4: chưa thấy web Nextwaves gọi API (chưa có token) — quá authWaitMs thì hướng dẫn F5 / đăng nhập đúng tenant.
   function waitAuth(env) {
-    panel.show({ tone: "busy", title: "Đang chờ Nextwaves tải dữ liệu…", lines: [] });
+    showBase({ tone: "busy", title: "Đang chờ Nextwaves tải dữ liệu…", lines: [] });
     if (!authWaitTimer) {
       authWaitTimer = setTimeout(() => {
         authWaitTimer = null;
         if (authOf(env)) return;
-        panel.show({
+        showBase({
           tone: "warn",
           title: "Chưa thấy Nextwaves tải dữ liệu",
           lines: [`Bấm F5 tab này. Vẫn vậy: kiểm tra đã đăng nhập Nextwaves (${env.nwUiOrigin}) bằng tài khoản thấy được kho của cửa hàng.`],
@@ -220,6 +227,10 @@
     if (authWaitTimer) clearTimeout(authWaitTimer);
     authWaitTimer = null;
   }
+
+  // Lượt 2xx đã lưu trong phiên (review v0.4.1 P3-8) → {onMissing, missingUids} | null.
+  const lastScanOf = (s) =>
+    s && s.scanOk && (s.scanOk.onMissing || Array.isArray(s.scanOk.missingUids)) ? { onMissing: s.scanOk.onMissing || null, missingUids: Array.isArray(s.scanOk.missingUids) ? s.scanOk.missingUids : null } : null;
 
   function ctxFromSession(env, s, po) {
     return {
@@ -242,7 +253,7 @@
       nwSearch: s.nwSearch || null,
       // v0.4.1: phiếu phần còn lại — UID đã nằm trên phiếu đã xong của PO (món bán gấp) không cần quét lại.
       remainder: s.remainder || null,
-      lastScan: null, // lượt "Xác nhận nhận hàng" 2xx gần nhất: {onMissing, missingUids[]} (đối chiếu với kết quả đọc lại)
+      lastScan: lastScanOf(s), // lượt "Xác nhận nhận hàng" 2xx gần nhất: {onMissing, missingUids[]} (đối chiếu với kết quả đọc lại)
       grSummary: Array.isArray(s.grSummary) ? s.grSummary : null, // v0.4.1 (audit F2): kiểm trước khi xác nhận
       posId: s.posId || "", // v0.4.1 (audit F3): cửa hàng của phiếu — đối chiếu bảng kho đã biết
     };
@@ -281,8 +292,22 @@
 
   function showNoOrder(s, reports) {
     const view = noOrderView(s, reports);
-    panel.show(view);
+    showBase(view);
     return view;
+  }
+
+  // Khung của phiên khi chưa có ctx: nhớ làm khung gốc, modal nhận hàng đang mở thì thêm dòng + nút đầu đọc (review v0.4.1 P2-2).
+  function showBase(view) {
+    baseView = view;
+    panel.show(withReader(view));
+  }
+  function withReader(view) {
+    if (!view || !rh.open) return view;
+    const rl = readerLine();
+    return Object.assign({}, view, {
+      lines: (view.lines || []).concat(rl ? [rl] : [], rh.shipment ? [`Phiếu gửi ${rh.shipment}.`] : []),
+      buttons: readerButtons().concat(view.buttons || []),
+    });
   }
 
   function noOrderView(s, reports) {
@@ -290,11 +315,12 @@
     const partial = s.noOrderReason === "nw_partial_received";
     return {
       tone: "warn",
-      title: partial ? `Nextwaves đã nhận một phần đơn của ${s.soBase} trước đó — không nhận tiếp được` : `Nextwaves chưa có đơn chờ nhận cho ${s.soBase}`,
+      title: partial ? `Nextwaves không còn phiếu gửi chờ nhận cho ${s.soBase} (đơn đã nhận một phần)` : `Nextwaves chưa có đơn chờ nhận cho ${s.soBase}`,
+      // Review v0.4.1 P3-9: không khẳng định "phần còn lại không vào kho Nextwaves" — có thể chỉ là hàng không tem, hoặc lần giao khác chưa lên.
       lines: partial
         ? [
             `Phiếu ${s.grCode} (${s.deliveryCode || s.soBase}): nhận tay trên POS.`,
-            "Phiếu gửi Nextwaves chỉ nhận được MỘT lần; lần nhận thiếu trước đã dùng phiếu gửi đó. Phần còn lại không vào kho Nextwaves được nữa — báo vận hành.",
+            "Mỗi phiếu gửi Nextwaves chỉ nhận được một lần; đơn của SO này đã được nhận một phần trước đó. Nếu SO còn lần giao khác chưa lên Nextwaves, bấm “Tìm lại” sau.",
           ]
         : [
             `Phiếu ${s.grCode} (${s.deliveryCode || s.soBase}): nhận tay trên POS như hiện nay.`,
@@ -321,7 +347,7 @@
   }
 
   async function resolveOrder(env, s, po) {
-    panel.show({ tone: "busy", title: `Đang tìm đơn Nextwaves cho ${s.soBase}…`, lines: [] });
+    showBase({ tone: "busy", title: `Đang tìm đơn Nextwaves cho ${s.soBase}…`, lines: [] });
     let search;
     try {
       search = await nwGet(env, E.api.nwReceivingSearch(env, s.soBase));
@@ -349,7 +375,7 @@
         // Audit v0.4.0 P3-8: latch luôn có view — session:noOrder lỗi (phiên vẫn waiting_nw) thì lần vẽ lại dùng latch.view, không "Lỗi extension".
         const view = noOrderView(s2 || s, r.reports);
         latch = { sig: sigOf(s2 || s), view, reports: r.reports };
-        panel.show(view);
+        showBase(view);
         return null;
       }
       const facts = [`SO ${s.soBase}: kết quả tìm total = ${r.total === null ? "?" : r.total}, đã đọc ${r.read}; ứng viên Buymed ${r.candidates}; refId đúng SO ${r.verified}.`];
@@ -362,7 +388,7 @@
         buttons: [{ label: "Tìm lại", onClick: retry }, { label: "Về POS", secondary: true, onClick: () => bg("session:focusPos", { key: s.key }) }],
       };
       latch = { sig: sigOf(s), view, status: search && search.status, authKey: authKeyOf(env) + "|" + ((authOf(env) || {}).authorization || "") };
-      panel.show(view);
+      showBase(view);
       return null;
     }
     const g = r.chosen;
@@ -377,7 +403,7 @@
     if (!poDetail) {
       const view = { tone: "err", title: "Không đọc được PO Nextwaves", lines: [httpError("Đọc PO", pd)], buttons: [{ label: "Tìm lại", onClick: retry }] };
       latch = { sig: sigOf(s), view, status: pd && pd.status, authKey: authKeyOf(env) + "|" + ((authOf(env) || {}).authorization || "") };
-      panel.show(view);
+      showBase(view);
       return null;
     }
     // v0.4.1 (audit F3): cửa hàng đã biết mà đơn đã khớp nằm kho khác → khoá ghi (cửa hàng lạ: chỉ cảnh báo trên khung).
@@ -410,7 +436,7 @@
         log: { type: "nw_matched", nwPoNumber: g.order.poNumber, refId: g.order.refId, warehouseId: r.warehouseId, warehouseKnown: wc.known, warehouseOk: wc.ok, shipments: shipmentIds.length, total: r.total, candidates: r.candidates, verified: r.verified, receiptsBefore: receiptIdsBefore.length, preReceived, writeLocks: nwLocks },
       });
     } catch (err) {
-      panel.show({ tone: "err", title: "Không ghi được kết quả khớp đơn vào phiên", lines: [String((err && err.message) || err), "Huỷ phiên ở tab POS rồi mở lại phiếu."], buttons: [{ label: "Tìm lại", onClick: retry }] });
+      showBase({ tone: "err", title: "Không ghi được kết quả khớp đơn vào phiên", lines: [String((err && err.message) || err), "Huỷ phiên ở tab POS rồi mở lại phiếu."], buttons: [{ label: "Tìm lại", onClick: retry }] });
       return null;
     }
     if (preReceived > 0) note = { tone: "warn", title: "Đơn đã có hàng nhận trước khi mở phiên", text: `Nextwaves đã ghi nhận ${preReceived} UID trước lượt này. Extension chỉ chuyển về POS sau một lượt “Xác nhận nhận hàng” mới trong phiên.` };
@@ -484,11 +510,12 @@
     busy: "tab bán hàng đang gửi tem vào giỏ — đợi gửi xong rồi bấm lại",
     no_holder: "không thấy tab bán hàng nào đang giữ đầu đọc",
     many_holders: "có nhiều tab bán hàng đang mở — bấm “Mở tab bán hàng” rồi Ngắt kết nối ở đó",
-    lock_timeout: "đã bấm Ngắt nhưng tab bán hàng chưa nhả đầu đọc — đợi vài giây rồi bấm lại",
+    lock_timeout: "đã bấm Ngắt nhưng tab bán hàng chưa nhả đầu đọc — extension thử kết nối thêm vài lần; vẫn chưa được thì đợi vài giây rồi bấm lại",
     not_holding: "tab bán hàng không còn giữ đầu đọc",
     no_button: "không bấm được nút Ngắt của QR Scan Log — mở tab bán hàng để Ngắt tay",
     click_failed: "không bấm được nút Ngắt của QR Scan Log — mở tab bán hàng để Ngắt tay",
     no_answer: "tab bán hàng không trả lời — mở tab bán hàng để Ngắt tay",
+    no_sale_tab: "không thấy tab POS nào đang mở trang Bán hàng — mở trang Bán hàng của POS rồi Ngắt kết nối RFID ở đó",
   };
 
   function readerLine() {
@@ -504,15 +531,17 @@
         return "Đầu đọc: đã kết nối." + lent + (rh.taken ? " Đã lấy từ tab bán hàng — xong việc, sang tab bán hàng bấm “Kết nối RFID” để bán tiếp." : "");
       case "disconnected": {
         if (rh.taking) return "Đầu đọc: đang lấy từ tab bán hàng…";
-        if (!rd.gaveUp) return "Đầu đọc: chưa kết nối — extension đang tự kết nối…";
-        if (sup && sup.supported) return "Đầu đọc: chưa kết nối được — bấm “Mượn lại đầu đọc”, hoặc bấm “Kết nối đầu đọc” của Nextwaves.";
+        if (sup && sup.supported) return rd.gaveUp ? "Đầu đọc: chưa kết nối được — bấm “Mượn lại đầu đọc”, hoặc bấm “Kết nối đầu đọc” của Nextwaves." : "Đầu đọc: chưa kết nối — extension đang tự kết nối…";
         const why = rh.msg ? ` (${rh.msg})` : "";
         const st = rh.status;
+        // Review v0.4.1 P3-12: đã biết QR Scan Log đang giữ thì báo + đưa nút ngay, không đợi hết lượt tự bấm.
         if (st && st.holders === 1) {
-          return st.busy
-            ? `Đầu đọc: tab bán hàng (QR Scan Log) đang giữ và đang gửi tem vào giỏ — đợi xong rồi bấm “Lấy đầu đọc cho Nextwaves”.${why}`
-            : `Đầu đọc: tab bán hàng (QR Scan Log) đang giữ — bấm “Lấy đầu đọc cho Nextwaves”.${why}`;
+          const who = st.hidden ? "một tab POS (QR Scan Log, đang ở trang khác trang Bán hàng)" : "tab bán hàng (QR Scan Log)";
+          if (st.busy) return `Đầu đọc: ${who} đang giữ và đang gửi tem vào giỏ — đợi xong rồi bấm “Lấy đầu đọc cho Nextwaves”.${why}`;
+          if (!st.canRelease) return `Đầu đọc: ${who} đang giữ nhưng nút Ngắt của QR Scan Log đang tắt — bấm “Mở tab bán hàng” rồi Ngắt kết nối ở đó.${why}`;
+          return `Đầu đọc: ${who} đang giữ — bấm “Lấy đầu đọc cho Nextwaves”.${why}`;
         }
+        if (!rd.gaveUp) return `Đầu đọc: chưa kết nối — extension đang tự kết nối…${why}`;
         if (st && st.holders > 1) return `Đầu đọc: nhiều tab bán hàng đang mở — bấm “Mở tab bán hàng”, Ngắt kết nối ở đó rồi quay lại tab này (extension tự kết nối).${why}`;
         // Không thấy QR Scan Log giữ (hoặc QR Scan Log đổi giao diện — extension không nhận ra): vẫn giữ hướng dẫn cũ + khả năng khác.
         if (st && st.holders === 0) return `Đầu đọc: chưa kết nối được. Nếu tab bán hàng đang dùng RFID: bấm “Mở tab bán hàng”, Ngắt kết nối ở đó rồi quay lại tab này (extension tự kết nối). Nếu không: kiểm cáp đầu đọc, hoặc bấm “Kết nối đầu đọc” của Nextwaves (lần đầu chọn cổng).${why}`;
@@ -523,28 +552,44 @@
     }
   }
 
-  // Nút đầu đọc trên khung (có phiên: renderReady; không phiên: renderHelper). Chỉ khi đã tự bấm hết lượt mà vẫn chưa kết nối.
+  // Nút đầu đọc trên khung (có phiên: renderReady; không phiên: renderHelper / khung của phiên). "Lấy đầu đọc" khi biết đúng MỘT tab
+  // QR Scan Log đang giữ, không đang gửi tem, nút Ngắt bấm được (review v0.4.1 P3-10); "Mở tab bán hàng" khi hết lượt tự bấm / có tab giữ.
   function readerButtons() {
     const out = [];
-    if (rd.state !== "disconnected" || !rd.gaveUp || rh.taking) return out;
+    if (rd.state !== "disconnected" || rh.taking) return out;
     const sup = curSession && curSession.reader && curSession.reader.supported;
     if (sup) return out;
-    if (rh.status && rh.status.holders === 1 && !rh.status.busy) out.push({ label: "Lấy đầu đọc cho Nextwaves", onClick: () => takeFromQsl() });
-    out.push({ label: "Mở tab bán hàng", secondary: true, onClick: () => bg("reader:focusSale").catch(() => {}) });
+    const st = rh.status;
+    if (st && st.holders === 1 && !st.busy && st.canRelease) out.push({ label: "Lấy đầu đọc cho Nextwaves", onClick: () => takeFromQsl() });
+    if (rd.gaveUp || (st && st.holders >= 1)) out.push({ label: "Mở tab bán hàng", secondary: true, onClick: () => focusSale() });
     return out;
+  }
+
+  // "Mở tab bán hàng": background đưa lên tab đang giữ đầu đọc / tab bán hàng. Không có → nói rõ trên khung (review v0.4.1 P2-1).
+  async function focusSale() {
+    let r = null;
+    try {
+      r = await bg("reader:focusSale");
+    } catch (_) {
+      r = null;
+    }
+    if (!r || !r.ok) rh.msg = RH_REASON[(r && r.reason) || "no_sale_tab"] || RH_REASON.no_sale_tab;
+    else rh.msg = r.hidden ? "tab POS vừa mở đang giữ đầu đọc ở trang khác trang Bán hàng — bấm “Lấy đầu đọc cho Nextwaves”, hoặc chuyển tab đó về trang Bán hàng rồi Ngắt kết nối" : null;
+    rerender();
   }
 
   // Khung khi KHÔNG có phiên mà đang mở modal nhận hàng (vd. trang PO Nextwaves): chỉ lo đầu đọc. Có phiên → renderReady lo.
   function renderHelper() {
     if (ctx) return renderReady();
+    if (baseView) return panel.show(withReader(baseView)); // review v0.4.1 P2-2: khung của phiên giữ nguyên, chỉ thêm phần đầu đọc
     if (!rh.open) {
       if (rh.reminder) {
         return panel.show({
           tone: "info",
           title: "Đầu đọc: nhận hàng xong",
-          lines: ["Extension đã lấy đầu đọc từ tab bán hàng cho lượt nhận này. Sang tab bán hàng bấm “Kết nối RFID” (chọn cổng) để bán tiếp."],
+          lines: ["Extension đã lấy đầu đọc từ tab bán hàng cho lượt nhận này. Sang tab bán hàng bấm “Kết nối RFID” (chọn cổng) để bán tiếp."].concat(rh.msg ? [rh.msg] : []),
           buttons: [
-            { label: "Mở tab bán hàng", onClick: () => bg("reader:focusSale").catch(() => {}) },
+            { label: "Mở tab bán hàng", onClick: () => focusSale() },
             {
               label: "Đóng",
               secondary: true,
@@ -561,7 +606,7 @@
     const line = readerLine();
     // Đầu đọc đã kết nối / đang quét và không có gì để báo → không che màn quét.
     if (!line || ((rd.state === "connected" || rd.state === "reading") && !rh.taken)) return panel.hide();
-    const warn = rd.state === "disconnected" && rd.gaveUp;
+    const warn = rd.state === "disconnected" && (rd.gaveUp || !!(rh.status && rh.status.holders >= 1));
     panel.show({ tone: warn ? "warn" : "info", title: "Đầu đọc cho màn nhận hàng", lines: [line].concat(rh.shipment ? [`Phiếu gửi ${rh.shipment}.`] : []), buttons: readerButtons() });
   }
   const rerender = () => (ctx ? renderReady() : renderHelper());
@@ -598,8 +643,12 @@
       r = { ok: false, reason: "no_answer" };
     }
     rh.taking = false;
-    if (r && r.ok) {
+    // Review v0.4.1 P3-5: đã bấm Ngắt mà QR Scan Log chưa kịp nhả lock (lock_timeout) vẫn là "đã lấy" — thử kết nối nhanh vài lần, nhắc
+    // Kết nối RFID lại sau lượt.
+    if (r && (r.ok || r.clicked)) {
       rh.taken = true;
+      rh.status = null; // trạng thái "đang giữ" vừa đọc không còn đúng
+      if (!r.ok) rh.msg = RH_REASON[r.reason] || null;
       rd.clicks = [];
       rd.gaveUp = false;
       rd.lastClick = 0;
@@ -679,10 +728,10 @@
       }
     }
     if (r.state !== "disconnected" || !r.btn || hidden) return;
-    if (rd.gaveUp) {
-      if (!(curSession && curSession.reader && curSession.reader.supported)) askQsl(now);
-      return;
-    }
+    // Review v0.4.1 P3-12: lần tự bấm đầu tiên không kết nối được → hỏi QR Scan Log (chỉ đọc, tối đa mỗi qslAskMs) để nút "Lấy đầu đọc"
+    // hiện sớm; vẫn tự bấm đủ lượt như cũ (cổng có thể vừa trống).
+    if (!(curSession && curSession.reader && curSession.reader.supported) && (rd.gaveUp || rd.clicks.length >= 1)) askQsl(now);
+    if (rd.gaveUp) return;
     // Cho màn quét tự kết nối trước (autoConnect của Nextwaves), rồi mới bấm; tối đa readerMaxClicks lần cho MỘT lượt mất kết nối,
     // cách readerGapMs (ngay sau khi lấy đầu đọc từ tab bán hàng: cách readerFastGapMs). Hết lượt: hỏi QR Scan Log, chờ dược sĩ bấm.
     const fast = now < (rd.fastUntil || 0);
@@ -735,11 +784,12 @@
     ];
     // v0.4.1 — phiếu phần còn lại (operator 08/11: thiếu đúng món bán gấp → "Giữ đơn mở").
     let choiceWarn = false;
+    let closeShort = false;
     if (ctx.remainder) {
       lines.push(`Phiếu phần còn lại — đã nhận trước ở ${ctx.remainder.completed.map((g) => g.code).join(", ")}.`);
       if (sold.uids.size) lines.push(`Màn quét sẽ báo thiếu ${sold.uids.size} tem món đã bán gấp: để “Giữ đơn mở” rồi bấm “Xác nhận nhận hàng”.`);
       if (missingChoice() === "close_short") {
-        choiceWarn = true;
+        closeShort = true; // review v0.4.1 P3-14: đỏ (plan) — chọn sai thì Nextwaves báo Buymed giao thiếu, không sửa lại được
         lines.push("ĐANG CHỌN “Đóng đơn dù còn thiếu”: Nextwaves sẽ báo Buymed giao thiếu (sai — món đã giao và đã bán). Chọn “Giữ đơn mở”.");
       }
     }
@@ -756,9 +806,10 @@
     const q = ctx.nwSearch;
     if (q) lines.push(`Tìm theo ${ctx.soBase}: total ${q.total}, đã đọc ${q.read}; ứng viên Buymed ${q.candidates}; refId đúng SO ${q.verified}.`);
     const locks = ctx.nwWriteLocks || [];
-    if (locks.includes("warehouse_mismatch")) {
-      choiceWarn = true;
-      lines.push("⚠ Đơn Nextwaves đã khớp nằm ở kho KHÁC kho của cửa hàng này — extension sẽ không điền phiếu POS (nhận tay, báo vận hành).");
+    // Review v0.4.1 P3-14: nhận vào nhầm kho Nextwaves không đảo ngược được → đỏ, dòng đầu.
+    const whWrong = locks.includes("warehouse_mismatch");
+    if (whWrong) {
+      lines.unshift("⛔ Đơn Nextwaves đã khớp nằm ở kho KHÁC kho của cửa hàng này — KHÔNG bấm “Xác nhận nhận hàng” ở đây; extension không điền phiếu POS. Báo vận hành.");
     } else if (!E.warehouseCheck(ctx.env.id, ctx.posId, ctx.warehouseId).known) lines.push("Cửa hàng chưa có trong bảng kho đã biết — kiểm “Kho Nextwaves” ở trên đúng là kho của cửa hàng này.");
     if (locks.includes("nw_many_orders")) lines.push("Lưu ý: Nextwaves có nhiều đơn cùng SO chưa so được — điền phiếu POS sẽ bị khoá (chỉ xem).");
     else if (q && q.verified > 1) lines.push(`Nextwaves có ${q.verified} đơn cùng SO (tách giao): trên màn quét chọn ĐÚNG đơn ${ctx.nwPoNumber} — đơn khớp số lượng phiếu ${ctx.grCode}.`);
@@ -772,9 +823,10 @@
     ];
     if (rd.state === "disconnected" && rd.gaveUp && curSession && curSession.reader && curSession.reader.supported) buttons.unshift({ label: "Mượn lại đầu đọc", onClick: () => lendAgain() });
     buttons.unshift(...readerButtons()); // v0.4.1: "Lấy đầu đọc cho Nextwaves" / "Mở tab bán hàng" (QR Scan Log chưa có circa-reader/v1)
+    const danger = wrongShipment ? `Đang mở nhầm phiếu gửi ${rh.shipment}` : whWrong && !note ? "Đơn Nextwaves ở kho KHÁC cửa hàng — không xác nhận nhận hàng" : closeShort && !note ? "Đang chọn “Đóng đơn dù còn thiếu” — chọn “Giữ đơn mở”" : null;
     panel.show({
-      tone: wrongShipment ? "err" : note ? note.tone : choiceWarn ? "warn" : "info",
-      title: wrongShipment ? `Đang mở nhầm phiếu gửi ${rh.shipment}` : note ? note.title : "Sẵn sàng nhận hàng",
+      tone: danger ? "err" : note ? note.tone : choiceWarn ? "warn" : "info",
+      title: danger || (note ? note.title : "Sẵn sàng nhận hàng"),
       lines,
       table: ctx.fingerprint && ctx.fingerprint.length ? { head: ["Sản phẩm POS", "SL GR (gốc)", "SL Nextwaves (gốc)"], rows: ctx.fingerprint.map((r) => [r.productId, String(r.grBase), String(r.nwBase)]) } : null,
       buttons,
@@ -926,6 +978,11 @@
       return;
     }
     const ok2xx = p.httpStatus >= 200 && p.httpStatus < 300;
+    const resp = p.response || null;
+    // v0.4.1: lựa chọn khi thiếu (keep_open / close_short) + UID Nextwaves tự báo là thiếu — đối chiếu với kết quả đọc lại (collect).
+    // Review v0.4.1 P3-8: gửi kèm lượt 2xx để background lưu vào phiên (F5 / lượt giao từ tab khác vẫn còn).
+    const missingUids = ok2xx && resp && Array.isArray(resp.lines) ? resp.lines.flatMap((l) => (l && Array.isArray(l.missingUnitUids) ? l.missingUnitUids.map(String) : [])) : null;
+    const onMissing = resp && typeof resp.onMissing === "string" ? resp.onMissing.slice(0, 20) : null;
     if (!ctx || !ctx.shipmentIds.includes(p.shipmentId)) {
       if (!ok2xx) {
         if (ctx) {
@@ -937,7 +994,7 @@
       // A7: lượt 2xx của phiếu gửi thuộc phiên khác (SO tách giao / tab tự mở) → giao đúng phiên đó, rồi đọc kết quả cho phiên đó.
       let s2 = null;
       try {
-        s2 = await bg("session:routeScan", { envId: env.id, tenant: env.nwTenant, scan: { shipmentId: p.shipmentId, httpStatus: p.httpStatus, sentEpcs: p.sentEpcs === undefined ? null : p.sentEpcs } });
+        s2 = await bg("session:routeScan", { envId: env.id, tenant: env.nwTenant, scan: { shipmentId: p.shipmentId, httpStatus: p.httpStatus, sentEpcs: p.sentEpcs === undefined ? null : p.sentEpcs, onMissing, missingUids } });
       } catch (_) {
         s2 = null;
       }
@@ -945,7 +1002,7 @@
         if (ctx) logTo(ctx.key, { type: "receive_scan_other_shipment", shipmentId: p.shipmentId, httpStatus: p.httpStatus });
         note = { tone: "err", title: "Nextwaves ĐÃ nhận một phiếu gửi không gắn được phiếu POS", text: "Extension không biết phiếu POS nào ứng với phiếu gửi vừa nhận — nhận tay trên POS (hoặc mở phiếu đó từ POS rồi bấm “Đọc lại kết quả nhận”)." };
         if (ctx) return renderReady();
-        return panel.show({ tone: note.tone, title: note.title, lines: [note.text] });
+        return showBase({ tone: note.tone, title: note.title, lines: [note.text] });
       }
       ctx = ctxFromSession(env, s2, ctx ? ctx.po : s2.soBase);
       curSession = s2;
@@ -955,10 +1012,6 @@
       if (ctx) renderReady();
       return;
     }
-    const resp = p.response || null;
-    // v0.4.1: lựa chọn khi thiếu (keep_open / close_short) + UID Nextwaves tự báo là thiếu — đối chiếu với kết quả đọc lại (collect).
-    const missingUids = ok2xx && resp && Array.isArray(resp.lines) ? resp.lines.flatMap((l) => (l && Array.isArray(l.missingUnitUids) ? l.missingUnitUids.map(String) : [])) : null;
-    const onMissing = resp && typeof resp.onMissing === "string" ? resp.onMissing.slice(0, 20) : null;
     if (ok2xx) ctx.lastScan = { onMissing, missingUids };
     logTo(ctx.key, {
       type: "receive_scan",
@@ -971,7 +1024,7 @@
     });
     if (ok2xx) {
       try {
-        await bg("session:scanOk", { key: ctx.key, scan: { shipmentId: p.shipmentId, httpStatus: p.httpStatus, sentEpcs: p.sentEpcs === undefined ? null : p.sentEpcs, at: Date.now() } });
+        await bg("session:scanOk", { key: ctx.key, scan: { shipmentId: p.shipmentId, httpStatus: p.httpStatus, sentEpcs: p.sentEpcs === undefined ? null : p.sentEpcs, at: Date.now(), onMissing, missingUids } });
       } catch (e) {
         note = { tone: "err", title: "Nextwaves ĐÃ nhận — POS CHƯA điền", text: `${String((e && e.message) || e)}\nNhận tay phiếu ${ctx.grCode} trên POS.` };
         return renderReady();
