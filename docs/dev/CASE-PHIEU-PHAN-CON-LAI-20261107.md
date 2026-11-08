@@ -200,6 +200,7 @@ Việc này để sau, khi v0.4.1 đã code.
 | N5 | Tìm theo SO (`inter-tenant-orders/receiving?q=SOBD1594067`, đúng API extension dùng) **vẫn trả đơn**: `purchaseOrderStatus PARTIALLY_RECEIVED`, `openShipmentCount 0`. So với nhận đủ: `total 0` (T3 25/10) |
 | N6 | Hai lựa chọn khi thiếu: `keep_open` ("Giữ đơn mở": phần thiếu chờ phiếu gửi sau, không báo ai) / `close_short` ("Đóng đơn dù còn thiếu": đóng đơn, **nhà cung cấp được báo phần thiếu**) — chữ của Nextwaves; `close_short` chưa thử |
 | N7 | `unitUid` Nextwaves có dạng mã QR Circa: 13 chữ số + chữ + số (vd `1792984580371AA1`). Mã thuocsi dược sĩ quét cũng dạng đó, nên **không phân biệt được bằng dạng mã**; chỉ so giao với UID của đơn (§11, P4) |
+| N8 | (chụp chỉ đọc 08/11 ~14:30, review v0.4.1 P2-3) Hai API `collect()` đọc sau lượt nhận thiếu: `GET purchase-orders/<id>` → `items[].receivedUnits` chỉ có **1** tem đã nhận (11 tem thất lạc không có), 1 biên nhận GRN-2026-000002 đúng EPC, kho FLORITA; `GET inter-tenant-shipments/<id>` → phiếu gửi **vẫn đọc được**, `status` "received", mọi dòng giữ `epcs`, `receivedEpcs` là mảng (Soffell 1, dòng khác `[]`), `variance` null. `buildReceivedUnits` → 1 nhận / 11 thiếu / 0 lỗi bằng chứng. Mẫu `samples/nw-stg-po-…` + `nw-stg-shipment-PO69611541-sau-nhan-thieu-20261108.json` (trên nhánh `batch/v0.4.1`) |
 
 PO69611541 giờ đã nhận một phần, không còn dùng được cho E2E. Đơn staging chờ nhận còn lại cho E2E: PO-2026-000001 ↔ SOBD1594228 (+3 đơn 12/10).
 

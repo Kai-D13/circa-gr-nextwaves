@@ -1,9 +1,9 @@
 # Luồng nghiệp vụ — nhận hàng bằng RFID (circa-gr-nextwaves)
 
-Hiện hành: **v0.4.0** (07/11/2026). Tài liệu này là nguồn chuẩn của luồng nghiệp vụ. Đổi luồng thì sửa file này cùng lượt với `agent.md` §3 / `state.md`.
+Hiện hành trên máy POS: **v0.4.0** (Florita, 07/11/2026). **v0.4.1** (08/11) đã đóng gói, chờ QA máy dev rồi mới cài máy POS. Tài liệu này là nguồn chuẩn của luồng nghiệp vụ (đã ghi luồng v0.4.1). Đổi luồng thì sửa file này cùng lượt với `agent.md` §3 / `state.md`.
 
-- Chi tiết mã: `docs/dev/DESIGN-v0.4.0.md` (nhánh), `docs/dev/BATCH-v0.4.0.md`.
-- Hướng dẫn vận hành: `docs/dev/RUNBOOK-v0.4.0.md`.
+- Chi tiết mã: `docs/dev/BATCH-v0.4.1.md` (trước: `BATCH-v0.4.0.md`, `DESIGN-v0.4.0.md` trên nhánh).
+- Hướng dẫn vận hành: `docs/dev/RUNBOOK-v0.4.1.md` (thay `RUNBOOK-v0.4.0.md`).
 
 ## 1. Bối cảnh
 
@@ -27,18 +27,18 @@ Hiện hành: **v0.4.0** (07/11/2026). Tài liệu này là nguồn chuẩn củ
   Mã không cần khai trong extension: kho lấy từ đơn Nextwaves khớp SO. Thêm cửa hàng mới không cần sửa mã, chỉ cần tenant đúng (popup).
 - **Staging:** cửa hàng 2222 ↔ `circa-stg`. Từ 30/10 hết phiếu POS staging có SO mà đơn Nextwaves còn chờ nhận. Nextwaves staging vẫn còn đơn buymed-stag chờ nhận (ví dụ SOBD1594228, SOBD1594067; 07/11), nhưng POS chưa có phiếu cho các SO đó.
 
-## 3. Luồng chuẩn (v0.4.0)
+## 3. Luồng chuẩn (v0.4.1)
 
 | # | Ai | Bước | Extension làm |
 |---|---|---|---|
 | 1 | Dược sĩ | POS → Danh sách phiếu nhận hàng → tìm phiếu (ô SO có sẵn của POS) → bấm **"Nhận hàng bằng RFID"** trên dòng phiếu | Kiểm phiếu thuộc cửa hàng đang đăng nhập, PO, SO, khoá (SO / PO nhiều phiếu); tạo phiên; mở **một** tab Nextwaves `…/purchases/receive?po=<SO>` |
-| 2 | Extension | Tìm đơn Nextwaves | Tìm theo SO **một lần**: đúng SO + bên bán Buymed + số lượng từng sản phẩm khớp phiếu; mọi đơn ứng viên cùng một kho. Khung: "Sẵn sàng nhận hàng", phiếu, đơn, số UID, **kho Nextwaves**. Không có đơn → mục 4 |
-| 3 | Extension / dược sĩ | Kết nối đầu đọc | Extension bấm "Kết nối đầu đọc" của Nextwaves (tối đa 3 lần mỗi lượt). Đầu đọc đang bị tab bán hàng giữ → khung hướng dẫn: **sang tab bán hàng bấm Ngắt RFID rồi quay lại**; quay lại tab Nextwaves thì extension tự kết nối lại. **Không bao giờ** bấm "Xác nhận nhận hàng" |
+| 2 | Extension | Tìm đơn Nextwaves | Tìm theo SO **một lần**: đúng SO + bên bán Buymed + số lượng từng sản phẩm khớp phiếu (phiếu phần còn lại: khớp theo **cả PO**); mọi đơn ứng viên cùng một kho; kho phải đúng cửa hàng đã biết (Florita / Lumina — lệch thì đỏ, không điền). Khung: "Sẵn sàng nhận hàng", phiếu, đơn, số UID, **kho Nextwaves**, **"Kiểm trước khi nhận: điền được N UID"** (hoặc lý do sẽ không điền được). Không có đơn → mục 4 |
+| 3 | Extension / dược sĩ | Kết nối đầu đọc | Extension bấm "Kết nối đầu đọc" của Nextwaves (tối đa 3 lần mỗi lượt). Đầu đọc đang bị QR Scan Log giữ (tab bán hàng, kể cả tab POS đã chuyển trang khác) → khung có nút **"Lấy đầu đọc cho Nextwaves"**: dược sĩ bấm thì extension bấm hộ "Ngắt kết nối" của QR Scan Log ở đúng tab đó (không khi QR Scan Log đang gửi tem vào giỏ), chờ nhả cổng, kết nối Nextwaves. Không xác định được tab → "Mở tab bán hàng" (Ngắt tay). Dùng được cả khi mở modal nhận hàng thẳng từ trang PO Nextwaves. **Không bao giờ** bấm "Xác nhận nhận hàng" |
 | 4 | Dược sĩ | Đặt hàng lên đầu đọc tới khi **còn lại 0, ngoài phiếu 0** → bấm **"Xác nhận nhận hàng"** một lần | Đọc kết quả nhận (2xx), đối chiếu biên nhận với đơn đã khớp |
 | 5 | Extension | Về POS | Đóng tab Nextwaves; đưa tab POS về đúng phiếu (tab POS đang làm việc khác thì mở tab mới) |
 | 6 | Extension | **Tự điền cả phiếu** (một lần) | Lập kế hoạch (UID → lô); không có điểm chặn → điền từng lô (`PUT …/detail`), đọc lại sau mỗi lô; khung "Đang điền i/n — CHƯA bấm HOÀN THÀNH". Xong: khớp cuối cả phiếu → tải lại → "đã điền N mã vào M lô — kiểm danh sách rồi bấm HOÀN THÀNH" |
 | 7 | Dược sĩ | Kiểm số lượng từng lô → bấm **HOÀN THÀNH** của POS | Không gửi HOÀN THÀNH. Thấy phiếu COMPLETED → phiên xong |
-| 8 | Dược sĩ | Tab bán hàng: bấm **Kết nối RFID** của QR Scan Log để bán tiếp | — |
+| 8 | Dược sĩ | Tab bán hàng: bấm **Kết nối RFID** của QR Scan Log để bán tiếp (QR Scan Log hỏi chọn cổng) | Đã lấy đầu đọc ở bước 3 → khung POS / Nextwaves nhắc bước này |
 
 **Nguyên tắc không đổi:**
 - Extension chỉ ghi GR **sau khi Nextwaves đã nhận** và kết quả khớp đúng đơn. Mọi điều kiện không khớp → dừng, không ghi.
@@ -54,18 +54,21 @@ Hiện hành: **v0.4.0** (07/11/2026). Tài liệu này là nguồn chuẩn củ
 | SO tách giao: nhiều đơn cùng SO | "trên màn quét chọn ĐÚNG đơn PO-…" | Chọn đúng đơn. Nhận nhầm đơn của phiếu khác đang mở → extension giao kết quả cho đúng phiếu đó |
 | Hai đơn cùng khớp / đơn khác kho / phiếu bị khoá | "Chỉ xem kế hoạch — chưa được điền phiếu" hoặc lý do khoá | Nhận tay, báo Claude |
 | Nextwaves đã nhận nhưng phiên mất | "Nextwaves ĐÃ nhận — POS CHƯA điền" (đỏ) | Nhận tay phiếu đó |
-| Có sản phẩm Nextwaves không gắn tem (thiếu lượng) | Vàng: "còn K sản phẩm CHƯA nhận đủ" + tên | Nhận tay phần thiếu rồi HOÀN THÀNH |
+| Có sản phẩm Nextwaves không gắn tem (thiếu lượng) | Vàng: "còn K sản phẩm CHƯA nhận đủ" + tên + "bấm HOÀN THÀNH bây giờ thì POS tách phần chưa đủ sang một phiếu mới" | Nhận tay phần thiếu rồi HOÀN THÀNH (hoặc chấp nhận POS tách phiếu) |
+| Đơn Nextwaves đã khớp nằm kho khác kho của cửa hàng (Florita / Lumina) | **Đỏ**: "Đơn Nextwaves ở kho KHÁC cửa hàng — không xác nhận nhận hàng" | Không xác nhận trên Nextwaves; nhận tay, báo vận hành |
+| Nextwaves không còn phiếu gửi chờ nhận (đơn đã nhận một phần trước đó) | "Nextwaves không còn phiếu gửi chờ nhận cho SO… (đơn đã nhận một phần)" | Nhận tay; SO còn lần giao khác chưa lên Nextwaves thì "Tìm lại" sau |
+| Modal đang mở nhầm phiếu gửi của đơn khác (SO tách giao) | **Đỏ**: "Đang mở nhầm phiếu gửi IT-…" | Đóng hộp thoại, chọn đúng phiếu gửi khung ghi |
 | Chưa thấy token Nextwaves | "Chưa thấy Nextwaves tải dữ liệu — F5" | F5, kiểm đăng nhập đúng địa chỉ |
-| **Bán gấp** (07/11): nhận một vài món, bấm HOÀN THÀNH → POS tự sinh **phiếu phần còn lại** cùng PO. POS **không hỏi xác nhận**; phiếu mới chỉ có phần chưa nhận, cùng lô (staging 07/11) | v0.4.0 chưa hỗ trợ: phiếu phần còn lại báo "số lượng không khớp" / "chưa có đơn chờ nhận" (dừng an toàn) | Món bán gấp: **bắt buộc quét QR** trên phiếu POS rồi mới HOÀN THÀNH (operator 08/11). **Không mở Nextwaves nhận riêng món bán gấp**: Nextwaves chỉ nhận một lần mỗi phiếu gửi, nhận thiếu là phần còn lại không nhận được nữa (staging 08/11). Phần còn lại: hiện nhận tay; từ v0.4.1 bấm "Nhận hàng bằng RFID" trên phiếu mới, Nextwaves nhận một lần (vd 21/22). `docs/dev/CASE-PHIEU-PHAN-CON-LAI-20261107.md` |
+| **Bán gấp** (07/11): nhận một vài món, bấm HOÀN THÀNH → POS tự sinh **phiếu phần còn lại** cùng PO. POS **không hỏi xác nhận**; phiếu mới chỉ có phần chưa nhận, cùng lô (staging 07/11) | **v0.4.1:** bấm "Nhận hàng bằng RFID" trên phiếu mới → extension cộng sổ theo dòng PO, nhận ra phiếu phần còn lại; khung Nextwaves "Phiếu phần còn lại — đã nhận trước ở GR…", "N UID cần quét (đơn M, trừ K món đã bán gấp)", "để **Giữ đơn mở**". Chọn "Đóng đơn dù còn thiếu" → đỏ. Nextwaves thiếu **đúng** món đã bán → coi là đủ, POS tự điền phần còn lại (không điền tem đã bán). Không chứng minh được → dừng an toàn như v0.4.0 | Món bán gấp: **bắt buộc quét QR** trên phiếu POS rồi mới HOÀN THÀNH (operator 08/11) — nhập số tay thì kiểm trước báo "sẽ KHÔNG điền được" → nhận tay. **Không mở Nextwaves nhận riêng món bán gấp** (mỗi phiếu gửi chỉ nhận một lần). Nextwaves vẫn đọc cả tem món đã bán (hàng còn trên đầu đọc) → khung POS báo tồn Nextwaves dư → báo vận hành. `docs/dev/CASE-PHIEU-PHAN-CON-LAI-20261107.md` |
 
 ## 5. Chưa làm / làm sau (ghi nhận 07/11)
 
 | Hạng mục | Trạng thái | Khi nào |
 |---|---|---|
-| **Đầu đọc bị QR Scan Log giữ** khi mở màn quét Nextwaves (mượn / trả `circa-reader/v1`, spec `docs/dev/SPEC-QSL-MUON-DAU-DOC-v1.md`) | Hoãn 07/11 → **operator 08/11: làm trong batch v0.4.1** (nút để dược sĩ biết + bấm lấy đầu đọc, kể cả modal mở thẳng từ trang PO Nextwaves). Phía extension đã có mã hỏi QR Scan Log; hiện hành bước 3 + 8 làm tay | v0.4.1 (phương án trong plan) |
+| **Đầu đọc bị QR Scan Log giữ** | **v0.4.1:** nút "Lấy đầu đọc cho Nextwaves" (bấm hộ Ngắt, operator 08/11). Hợp đồng `circa-reader/v1` (mượn / trả không bấm hộ, `docs/dev/SPEC-QSL-MUON-DAU-DOC-v1.md` + `REQUEST-QSL-v0.4.1-DAU-DOC.md`) chờ đội QR Scan Log | Khi QR Scan Log có bản hỗ trợ |
 | Trường mã giao `-F` / `-P1` / `-P2` trên đơn Nextwaves | Chờ Nextwaves | Bản sau: tra đơn theo mã giao thay vì vân tay số lượng |
 | Tự HOÀN THÀNH | Bỏ từ v0.4.0 (dược sĩ bấm) | Không có kế hoạch |
-| **Phiếu phần còn lại** (bán gấp → POS tách phiếu, operator 07/11: thao tác thật, lặp lại) | Đã định nghĩa (H2, D1–D8) và tái hiện trên staging 07/11 (GR03877 → GR03954); chưa code | v0.4.1 (cùng các finding audit) |
+| **Phiếu phần còn lại** (bán gấp → POS tách phiếu) | **v0.4.1** (gói chờ QA). Còn để sau: I2 — món bán gấp nhập số tay (không quét QR) | Sau lượt thật đầu tiên |
 
 ## 6. Quy trình phát hành
 
