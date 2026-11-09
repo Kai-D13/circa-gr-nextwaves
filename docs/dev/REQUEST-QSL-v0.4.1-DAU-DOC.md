@@ -206,3 +206,38 @@ Không thuộc gr, vì gr không gọi `/integrations/circa/*`. Nếu cần gử
 |---|---|---|
 | Florita | `c476efb2-415c-429a-978e-d389b4b06607` | `eb5e2b4f-6f92-413b-90ef-6be1730b94c0` |
 | Lumina | `31493e74-3404-4c0e-a906-93691a6ee319` | `3f7bd541-7370-4ce0-9048-231cf061e91a` |
+
+### 9.3 QR Scan Log v0.9.7 đã đóng gói (09/11) — gr kiểm gói
+
+**Tin của QR Scan Log:**
+- gói v0.9.7, chưa cài POS, SHA-256 `5BD2C72103106D5F27B010F37D4CB97DB6EFE46FAE6FFD7E0DD3C9195E8F19A0`;
+- có `circa-reader/v1` + v1.1, yêu cầu A / B / C;
+- **M8**: "Lấy lại đầu đọc" thắng gia hạn cùng `leaseId`;
+- hạn trả lời 4 s / 4,5 s;
+- mẫu thật gửi sau lượt thử chung.
+
+**gr kiểm (chỉ đọc).** `dist/circa-qr-scan-log-v0.9.7.zip`: SHA-256 khớp; tag `v0.9.7` = `b07a6a8`. Đọc mã trong gói (`rfid-core.js`, `rfid-content.js`):
+- **M8:** dược sĩ bấm "Lấy lại đầu đọc" lúc đang cho mượn → QSL nhớ `revoked = { leaseId }`.
+  - `lend` cùng `leaseId` khi còn tab giữ đầu đọc → `busy`, không đổi gì.
+  - Không tab nào giữ → xét như thường.
+  - `leaseId` khác → lượt mới.
+  - `return` cùng `leaseId` → `unknown_lease`, xoá `revoked`.
+  - Với gr v0.4.0 / v0.4.1: gia hạn sau "Lấy lại" nhận `busy` → `lendTick` thử lại tối đa 8 × 15 s rồi thôi. **Không giật đầu đọc giữa lúc bán.** gr bỏ việc tự kiểm `pong.lent` trước khi gia hạn (§9 cũ).
+- **Hạn trả lời:** `READER_LEND_WAIT_MS` 4000 (chờ tab chủ nhả), tab tự trả sau `READER_REPLY_TIMEOUT_MS` 4500. Cả hai về trước hạn chờ 5,5 s của gr → hết lệch ở §9.1 mục 3.
+- **Kết luận:** khớp gr v0.4.0 / v0.4.1, hai bên không sửa.
+
+**Cài POS (đổi so với §9 "chạy thử chung trước"):** không cần lượt riêng trên máy dev (máy dev chưa có đơn Nextwaves chờ nhận). Lượt nhận đầu tiên sau khi cài v0.9.7 lên POS là lượt thử chung.
+- Kỳ vọng:
+  1. bấm "Nhận hàng bằng RFID" → Nextwaves tự kết nối đầu đọc, không phải Ngắt tay;
+  2. nhận xong → tab bán hàng tự kết nối lại, không hộp chọn cổng.
+- Hỏng thì về cách tay như hiện nay. Không có đường nào làm sai dữ liệu.
+
+**gr v0.4.1 với QR Scan Log v0.9.7, chỗ chưa trơn (sửa ở gr v0.4.2):**
+- Trong phiên, bấm "Hủy" đóng modal mà để tab Nextwaves mở → tab bán hàng hiện "đang cho mượn". Cách xử lý: bấm "Lấy lại đầu đọc".
+- Sau "Lấy lại đầu đọc", nút "Mượn lại đầu đọc" của gr dùng lại `leaseId` cũ → `busy` (M8). Muốn nhận tiếp: **huỷ phiên trên khung POS rồi bấm lại "Nhận hàng bằng RFID"**. Huỷ phiên xoá phiên, nên lần bấm sau là lượt mượn mới.
+- Modal mở thẳng từ trang PO: v0.4.1 vẫn bấm hộ Ngắt → sau đó dược sĩ bấm "Kết nối RFID" (chọn cổng).
+
+**Phạm vi gr v0.4.2** (cho trơn hoàn toàn):
+1. modal mở thẳng từ trang PO: mượn / trả;
+2. trong phiên: modal đóng (≥ 1,5 s) thì trả, mở lại thì mượn lại;
+3. "Mượn lại đầu đọc" (bấm tay) luôn dùng `leaseId` mới.
