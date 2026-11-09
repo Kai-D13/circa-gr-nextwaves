@@ -14,7 +14,7 @@ Thay `RUNBOOK-v0.4.0.md`.
 
 ## 0. Cài / nâng (một lần mỗi máy)
 
-**Thứ tự:** máy dev → QA (`QA-v0.4.1-MAY-DEV.md`) đạt → operator cho phép mới cài máy POS.
+**Thứ tự:** máy dev → QA (`QA-v0.4.1-MAY-DEV.md`) đạt → operator cho phép mới cài máy POS. **09/11 PM chốt:** máy dev Q1 đạt. Q2–Q8 cần đơn Nextwaves chờ nhận, chuyển sang lượt nhận đầu trên máy POS. Cài được lên POS các cửa hàng, cùng đợt với QR Scan Log v0.9.7 (thứ tự nào cũng được).
 
 1. Không cần hoàn tất phiếu đang nhận dở: phiên v0.4.0 dùng tiếp được.
 2. Giải nén gói v0.4.1 **chép đè vào đúng thư mục đang nạp** (dòng "Tải từ" trên thẻ extension; máy POS Florita `C:\circa-gr-nextwaves`, máy dev `C:\circa-gr-nextwaves-v0.2.3`). `chrome://extensions` → **Reload (↻)**. Thẻ phải ghi **0.4.1**.

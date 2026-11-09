@@ -34,4 +34,6 @@
 | Ghi chú | Tab POS mở **trước** một lần nạp lại extension hiện "Lỗi extension — Extension context invalidated"; F5 là hết (hướng dẫn §0 bước 4 đã ghi F5 sau khi cài). Không phải lỗi v0.4.1 |
 | Q2–Q8 | **Chưa chạy được — không có dữ liệu.** Nextwaves production 08/11 tối: 14/14 đơn "Đã nhận" (gồm PO-2026-000009/10/11 nhận trong ngày), không đơn nào chờ nhận → không có phiếu để mở phiên (Q2) và không mở được modal "Nhận hàng bằng cách quét" (Q3–Q6) |
 
-**Lượt 2:** khi có đơn Nextwaves chờ nhận (giao mới + phiếu POS từ "Nhập SO thuocsi"), operator báo **trước khi dược sĩ nhận** trên máy POS. Claude chạy Q2–Q6 trên máy dev (~10 phút, không xác nhận), xoá phiên, rồi dược sĩ nhận như thường trên máy POS (v0.4.0).
+**Chốt 09/11 (PM, operator "đừng làm phức tạp"):** không chờ lượt 2 trên máy dev. Q2–Q8 chạy ở lượt nhận đầu trên máy POS (dược sĩ vẫn kiểm bằng mắt trước HOÀN THÀNH). Hỏng thì nhận tay; lùi về v0.4.0 bằng ZIP trong thư mục giao.
+
+**Lượt 2 (không còn bắt buộc):** khi có đơn Nextwaves chờ nhận (giao mới + phiếu POS từ "Nhập SO thuocsi"), operator báo **trước khi dược sĩ nhận** trên máy POS. Claude chạy Q2–Q6 trên máy dev (~10 phút, không xác nhận), xoá phiên, rồi dược sĩ nhận như thường trên máy POS (v0.4.0).
