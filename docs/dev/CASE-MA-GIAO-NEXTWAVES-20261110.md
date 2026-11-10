@@ -226,3 +226,23 @@ Các câu đã cân nhắc và không cần hỏi:
 **Cần operator:**
 1. Duyệt hướng ở §4–§5 → Claude viết plan, gộp vào v0.4.2.
 2. Quyết việc ở §6 (3 đơn Nextwaves ở Lumina): nhận bù trên Nextwaves hay nhờ Nextwaves đóng. Đây là việc vận hành, không phải việc của extension.
+
+## 8. Phản hồi operator (10/11/2026) → plan v0.4.2
+
+1. **Duyệt hướng §4–§5, ưu tiên map đúng phiếu GR ↔ PO / SO ↔ đơn Nextwaves.**
+   - Luồng: dược sĩ bấm đúng GR → vào thẳng màn quét Nextwaves → đặt hàng lên đầu đọc → "Xác nhận nhận hàng" → về POS, extension tự điền → dược sĩ bấm HOÀN THÀNH.
+   - Ví dụ operator đưa: GR85090 (Lumina, `…/danh-sach-phieu-nhan-hang/70383d57-…`) → "Nhận hàng bằng RFID" → `…/receive?po=SOBD38580216`.
+2. **Sửa khung extension trên Nextwaves (ảnh GR85090):**
+   - dòng đầu: `Phiếu GR85090 · CIRCA LUMINA ↔ Nextwaves SOBD38580216` (kèm hậu tố `-F` / `-P1` / `-P2`), thay số PO Nextwaves và số UID;
+   - dòng "⚠ Kiểm trước khi nhận: … SP 1125: phiếu đã có lượng nhận tay (không mã) …" viết lại cho dược sĩ dễ hiểu: chỉ cần biết GR nào đã xong trước và mã nào đã xong;
+   - bỏ dòng "Đầu đọc: chưa kết nối — extension đang tự kết nối…";
+   - bỏ dòng "Đặt hàng lên đầu đọc rồi bấm “Xác nhận nhận hàng”…";
+   - bỏ dòng "Tìm theo SOBD…: total …" (đã có mã giao để nhận đúng đơn).
+   - Sau "Xác nhận nhận hàng" → về POS, các luồng như hiện nay.
+3. **Đầu đọc — "rất quan trọng":** dược sĩ mở nhiều tab POS bán hàng có QR Scan Log. Mở phiên nhận Nextwaves thì 100% phải chiếm được quyền đọc, không được báo lỗi.
+4. **3 đơn Lumina (§6):** operator **nhận bù** trên Nextwaves.
+5. **Phiếu đã có mã nhập tay (GR85090 "Đang nhận"), trả lời câu hỏi của Claude:** chọn **tự điền phần còn lại**.
+   - "Chỉ điền những mã chưa nhập … sau xác nhận nhận hàng quay lại POS và nhập full GR còn lại như luồng bình thường. Chỉ khác là … đã nhập tay và done thì cho ra ngoài."
+   - Ca "Đang nhận" là lỗi vận hành; operator đảm bảo về sau không lặp lại.
+
+**Plan:** `docs/dev/PLAN-v0.4.2.md` (operator duyệt 10/11). Yêu cầu gửi QR Scan Log: `docs/dev/REQUEST-QSL-v0.4.2-NHA-DAU-DOC.md`.
